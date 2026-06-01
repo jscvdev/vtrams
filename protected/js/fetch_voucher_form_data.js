@@ -85,8 +85,17 @@ function resolveEmpTagForPayee(payee, explicitTag, empId) {
 
 function getSalaryAccountingRows(empTag) {
     const cfg = window.DV_ACCOUNTING || {};
+    const normalized = resolveServiceAccountTitle(empTag);
+    const maps = cfg.empTagSalaryMaps || {};
+    if (maps[normalized] && maps[normalized].length) {
+        return maps[normalized];
+    }
+    if (maps[empTag] && maps[empTag].length) {
+        return maps[empTag];
+    }
+
     const uacsMap = cfg.uacsMap || {};
-    const serviceTitle = resolveServiceAccountTitle(empTag);
+    const serviceTitle = normalized;
     const commonTitles = cfg.salaryCommonTitles || [
         'Due to Pag-ibig Premium',
         'Due to Pag-ibig MPL',

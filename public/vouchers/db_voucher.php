@@ -62,20 +62,24 @@ if (isset($pdo) && $pdo instanceof PDO) {
 }
 
 $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
+$dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
+    ? utilities_emp_tag_build_salary_maps($pdo)
+    : [];
 ?>
     <!--=============== MAIN ===============!-->
     <script src="../../protected/js/fetch_voucher_form_data.js"></script>
     <script>
         window.DV_ACCOUNTING = <?= json_encode([
-            'uacsMap' => dv_uacs_code_map(),
+            'uacsMap' => dv_uacs_code_map($pdo),
             'contractualTypes' => $dv_contractual_voucher_types,
-            'knownEmpTags' => dv_known_emp_tags(),
+            'knownEmpTags' => dv_known_emp_tags($pdo),
             'defaultEmpTag' => $dv_emp_tag_lookup['defaultEmpTag'],
             'loggedUserName' => $dv_emp_tag_lookup['loggedUserName'],
             'payeeEmpTags' => $dv_emp_tag_lookup['payeeEmpTags'],
             'payeeEmpTagsLower' => $dv_emp_tag_lookup['payeeEmpTagsLower'],
             'payeeEmpTagsByEmpId' => $dv_emp_tag_lookup['payeeEmpTagsByEmpId'],
-            'salaryCommonTitles' => dv_salary_common_account_titles(),
+            'salaryCommonTitles' => dv_salary_common_account_titles($pdo ?? null),
+            'empTagSalaryMaps' => $dv_emp_tag_salary_maps,
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
         window.DV_SIGNATORY = <?= json_encode([
             'options' => array_values($dv_signatory_options),

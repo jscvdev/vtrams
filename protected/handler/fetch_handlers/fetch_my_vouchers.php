@@ -97,7 +97,8 @@ try {
             $empTagLookup,
             (string) ($row['payee'] ?? ''),
             null,
-            (string) ($row['tin_employee_no'] ?? '')
+            (string) ($row['tin_employee_no'] ?? ''),
+            $pdo
         );
         array_walk_recursive($row, static function (&$item): void {
             if (is_string($item) && !mb_check_encoding($item, 'UTF-8')) {

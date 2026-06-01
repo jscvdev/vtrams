@@ -1,23 +1,54 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
+
 /** Valid user_group.emp_tag / form "tag" values for salary UACS mapping. */
-function dv_known_emp_tags(): array
+function dv_known_emp_tags(?PDO $pdo = null): array
 {
-    return [
-        'Other Professional Services',
-        'Janitorial Services',
-        'Security Services',
-    ];
+    if ($pdo instanceof PDO) {
+        try {
+            utilities_emp_tag_ensure_schema($pdo);
+            $rows = utilities_emp_tag_fetch_active($pdo);
+            $tags = [];
+            foreach ($rows as $row) {
+                $tag = trim((string) ($row['tag_value'] ?? ''));
+                if ($tag !== '') {
+                    $tags[] = $tag;
+                }
+            }
+            if ($tags) {
+                return $tags;
+            }
+        } catch (Throwable $e) {
+            // fall through to built-in defaults
+        }
+    }
+
+    return array_column(utilities_emp_tag_builtin_defaults(), 'tag_value');
 }
 
-function dv_normalize_emp_tag(?string $tag): string
+function dv_default_emp_tag(?PDO $pdo = null): string
+{
+    if ($pdo instanceof PDO) {
+        try {
+            return utilities_emp_tag_default_value($pdo);
+        } catch (Throwable $e) {
+            // fall through
+        }
+    }
+
+    return 'Other Professional Services';
+}
+
+function dv_normalize_emp_tag(?string $tag, ?PDO $pdo = null): string
 {
     $t = trim((string) $tag);
-    if (in_array($t, ['Janitorial Services', 'Security Services'], true)) {
+    if ($t !== '' && in_array($t, dv_known_emp_tags($pdo), true)) {
         return $t;
     }
-    return 'Other Professional Services';
+
+    return dv_default_emp_tag($pdo);
 }
 
 function dv_format_employee_name(string $fn, string $mi, string $ln): string
@@ -33,65 +64,93 @@ function dv_normalize_name_key(string $name): string
 }
 
 /** Account title => UACS code (salary accomplishments reference). */
-function dv_uacs_code_map(): array
+function dv_uacs_code_map(?PDO $pdo = null): array
 {
-    return [
-        'Other Professional Services' => '5021199000',
-        'Janitorial Services' => '5021202000',
-        'Security Services' => '5021203000',
-        'Due to Pag-ibig Premium' => '2020103001',
-        'Due to Pag-ibig MPL' => '2020103002',
-        'Due to Pag-ibig CAL' => '2020103002',
-        'Due to PhilHealth' => '2020104000',
-        'Due to GOCCs' => '2020106000',
-        'Cash-MDS, Regular' => '1010404000',
-    ];
+    $map = [];
+
+    if ($pdo instanceof PDO) {
+        try {
+            utilities_emp_tag_ensure_schema($pdo);
+            foreach (utilities_emp_tag_build_salary_maps($pdo) as $rows) {
+                foreach ($rows as $row) {
+                    $title = trim((string) ($row['title'] ?? ''));
+                    $uacs = trim((string) ($row['uacs'] ?? ''));
+                    if ($title !== '' && $uacs !== '') {
+                        $map[$title] = $uacs;
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            // fall through
+        }
+    }
+
+    if (!$map) {
+        foreach (utilities_emp_tag_builtin_defaults() as $row) {
+            $tag = (string) ($row['tag_value'] ?? '');
+            $uacs = (string) ($row['uacs_code'] ?? '');
+            if ($tag !== '' && $uacs !== '') {
+                $map[$tag] = $uacs;
+            }
+        }
+        foreach (utilities_emp_tag_builtin_sub_uacs() as $sub) {
+            $title = (string) ($sub['account_title'] ?? '');
+            $uacs = (string) ($sub['uacs_code'] ?? '');
+            if ($title !== '' && $uacs !== '') {
+                $map[$title] = $uacs;
+            }
+        }
+    }
+
+    return $map;
 }
 
 /** Shared liability/cash lines after the service expense row (indented on print). */
-function dv_salary_common_account_titles(): array
+function dv_salary_common_account_titles(?PDO $pdo = null, ?string $empTag = null): array
 {
-    return [
-        'Due to Pag-ibig Premium',
-        'Due to Pag-ibig MPL',
-        'Due to Pag-ibig CAL',
-        'Due to PhilHealth',
-        'Due to GOCCs',
-        'Cash-MDS, Regular',
-    ];
+    if ($pdo instanceof PDO && $empTag !== null && trim($empTag) !== '') {
+        try {
+            $tagId = utilities_emp_tag_find_id_by_value($pdo, $empTag);
+            if ($tagId !== null) {
+                $titles = [];
+                foreach (utilities_emp_tag_fetch_sub_uacs($pdo, $tagId, true) as $sub) {
+                    $title = trim((string) ($sub['account_title'] ?? ''));
+                    if ($title !== '') {
+                        $titles[] = $title;
+                    }
+                }
+                if ($titles) {
+                    return $titles;
+                }
+            }
+        } catch (Throwable $e) {
+            // fall through
+        }
+    }
+
+    return array_column(utilities_emp_tag_builtin_sub_uacs(), 'account_title');
 }
 
 /**
  * @return list<array{title: string, uacs: string, indent: bool}>
  */
-function dv_build_salary_accounting_rows(string $empTag): array
+function dv_build_salary_accounting_rows(string $empTag, ?PDO $pdo = null): array
 {
-    $map = dv_uacs_code_map();
-    $serviceTitle = dv_resolve_service_account_title($empTag);
-    $rows = [
-        [
-            'title' => $serviceTitle,
-            'uacs' => $map[$serviceTitle] ?? '',
-            'indent' => false,
-        ],
-    ];
-    foreach (dv_salary_common_account_titles() as $title) {
-        $rows[] = [
-            'title' => $title,
-            'uacs' => $map[$title] ?? '',
-            'indent' => true,
-        ];
+    if ($pdo instanceof PDO) {
+        try {
+            return utilities_emp_tag_build_salary_rows($pdo, $empTag);
+        } catch (Throwable $e) {
+            // fall through
+        }
     }
-    return $rows;
+
+    $normalized = dv_normalize_emp_tag($empTag, $pdo);
+    return utilities_emp_tag_build_salary_rows_fallback($normalized);
 }
 
-function dv_resolve_service_account_title(string $empTag): string
+function dv_resolve_service_account_title(string $empTag, ?PDO $pdo = null): string
 {
-    return dv_normalize_emp_tag($empTag) === 'Janitorial Services'
-        ? 'Janitorial Services'
-        : (dv_normalize_emp_tag($empTag) === 'Security Services'
-            ? 'Security Services'
-            : 'Other Professional Services');
+    return dv_normalize_emp_tag($empTag, $pdo);
 }
 
 /**
@@ -107,7 +166,7 @@ function dv_resolve_service_account_title(string $empTag): string
  */
 function dv_build_emp_tag_lookup(PDO $pdo, ?string $loggedEmpId = null, ?string $loggedUserName = null): array
 {
-    $defaultEmpTag = 'Other Professional Services';
+    $defaultEmpTag = dv_default_emp_tag($pdo);
     $payeeEmpTags = [];
     $payeeEmpTagsLower = [];
     $payeeEmpTagsByEmpId = [];
@@ -118,7 +177,7 @@ function dv_build_emp_tag_lookup(PDO $pdo, ?string $loggedEmpId = null, ?string 
         $tagRow = $tagStmt->fetch(PDO::FETCH_ASSOC);
         $loggedTag = trim((string) ($tagRow['emp_tag'] ?? ''));
         if ($loggedTag !== '') {
-            $defaultEmpTag = dv_normalize_emp_tag($loggedTag);
+            $defaultEmpTag = dv_normalize_emp_tag($loggedTag, $pdo);
         }
     }
 
@@ -130,7 +189,7 @@ function dv_build_emp_tag_lookup(PDO $pdo, ?string $loggedEmpId = null, ?string 
             (string) ($u['emp_mi'] ?? ''),
             (string) ($u['emp_ln'] ?? '')
         );
-        $tag = dv_normalize_emp_tag((string) ($u['emp_tag'] ?? ''));
+        $tag = dv_normalize_emp_tag((string) ($u['emp_tag'] ?? ''), $pdo);
 
         if ($empId !== '') {
             $payeeEmpTagsByEmpId[$empId] = $tag;
@@ -154,33 +213,34 @@ function dv_resolve_emp_tag_for_payee(
     array $lookup,
     ?string $payee,
     ?string $explicitTag = null,
-    ?string $empId = null
+    ?string $empId = null,
+    ?PDO $pdo = null
 ): string {
     $explicit = trim((string) $explicitTag);
-    if ($explicit !== '' && in_array($explicit, dv_known_emp_tags(), true)) {
-        return dv_normalize_emp_tag($explicit);
+    if ($explicit !== '' && in_array($explicit, dv_known_emp_tags($pdo), true)) {
+        return dv_normalize_emp_tag($explicit, $pdo);
     }
 
     $id = trim((string) $empId);
     if ($id !== '' && !empty($lookup['payeeEmpTagsByEmpId'][$id])) {
-        return dv_normalize_emp_tag($lookup['payeeEmpTagsByEmpId'][$id]);
+        return dv_normalize_emp_tag($lookup['payeeEmpTagsByEmpId'][$id], $pdo);
     }
 
     $payeeKey = dv_normalize_name_key((string) $payee);
     if ($payeeKey !== '') {
         if (!empty($lookup['payeeEmpTags'][$payeeKey])) {
-            return dv_normalize_emp_tag($lookup['payeeEmpTags'][$payeeKey]);
+            return dv_normalize_emp_tag($lookup['payeeEmpTags'][$payeeKey], $pdo);
         }
         $lower = strtolower($payeeKey);
         if (!empty($lookup['payeeEmpTagsLower'][$lower])) {
-            return dv_normalize_emp_tag($lookup['payeeEmpTagsLower'][$lower]);
+            return dv_normalize_emp_tag($lookup['payeeEmpTagsLower'][$lower], $pdo);
         }
     }
 
     $loggedName = dv_normalize_name_key((string) ($lookup['loggedUserName'] ?? ''));
     if ($loggedName !== '' && $payeeKey !== '' && strcasecmp($loggedName, $payeeKey) === 0) {
-        return dv_normalize_emp_tag($lookup['defaultEmpTag'] ?? 'Other Professional Services');
+        return dv_normalize_emp_tag($lookup['defaultEmpTag'] ?? dv_default_emp_tag($pdo), $pdo);
     }
 
-    return 'Other Professional Services';
+    return dv_default_emp_tag($pdo);
 }

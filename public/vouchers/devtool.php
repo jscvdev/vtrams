@@ -93,11 +93,25 @@ try {
 }
 
 require_once __DIR__ . '/../../protected/core/components/helpers/udc_generator_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
 $nextUdc = '';
 try {
     $nextUdc = generate_unique_udc($pdo);
 } catch (Exception $e) {
     // Handler regenerates on submit if empty
+}
+
+utilities_emp_tag_ensure_schema($pdo);
+$emp_tag_options = utilities_emp_tag_fetch_active($pdo);
+$default_emp_tag = utilities_emp_tag_default_value($pdo);
+if (!$emp_tag_options) {
+    foreach (utilities_emp_tag_builtin_defaults() as $row) {
+        $emp_tag_options[] = [
+            'tag_value' => $row['tag_value'],
+            'uacs_code' => $row['uacs_code'],
+            'is_default' => $row['is_default'],
+        ];
+    }
 }
 
 ?>
@@ -185,9 +199,15 @@ try {
                             <div class="label-input__container tag_input_container">
                                 <label for="tag">Tag</label>
                                 <select class="tag form-custom-input" name="tag" id="tag">
-                                    <option value="Other Professional Services" selected>Other Professional Services</option>
-                                    <option value="Janitorial Services">Janitorial Services</option>
-                                    <option value="Security Services">Security Services</option>
+                                    <?php foreach ($emp_tag_options as $tagRow):
+                                        $tagVal = (string) ($tagRow['tag_value'] ?? '');
+                                        if ($tagVal === '') {
+                                            continue;
+                                        }
+                                        $selected = $tagVal === $default_emp_tag ? ' selected' : '';
+                                    ?>
+                                        <option value="<?= htmlspecialchars($tagVal, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($tagVal, ENT_QUOTES, 'UTF-8') ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
@@ -385,6 +405,7 @@ try {
 <script>
     var nextEmpId = <?php echo json_encode($nextEmpId); ?>;
     var nextUdc = <?php echo json_encode($nextUdc); ?>;
+    var defaultEmpTag = <?php echo json_encode($default_emp_tag); ?>;
     var nextUdcFetchUrl = '../../protected/handler/devtool_module/add_user_module/next_udc.php';
     var nextUdcFetchInFlight = null;
 
@@ -438,7 +459,7 @@ try {
         document.querySelector('.division').value = '';
         document.querySelector('.password').value = '';
         document.querySelector('.acl').value = '';
-        document.querySelector('.tag').value = 'Other Professional Services';
+        document.querySelector('.tag').value = defaultEmpTag;
 
         var designationEl = document.querySelector('.designation');
         if (designationEl) {
@@ -473,7 +494,7 @@ try {
         var udc = row.querySelector('[data-label="udc"]').textContent.trim();
         var emp_tag_el = row.querySelector('[data-label="emp_tag"]');
         var emp_tag = emp_tag_el ? emp_tag_el.textContent.trim() : '';
-        if (!emp_tag) emp_tag = 'Other Professional Services';
+        if (!emp_tag) emp_tag = defaultEmpTag;
 
         document.querySelector('.emp_id').value = empId;
         document.querySelector('.emp_fn').value = emp_fn;
