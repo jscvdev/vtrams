@@ -2,13 +2,19 @@
   const printBtn = document.getElementById('print_forward_slip');
   if (!printBtn) return;
 
-  const natureModal = document.getElementById('natureOfClaimModal');
-  const natureOverlay = document.getElementById('nature_of_claim_modal_overlay');
-  const natureModalInput = document.getElementById('nature_of_claim_modal_input');
-  const natureFormInput = document.getElementById('nature_of_claim');
-  const natureModalConfirm = document.getElementById('nature_of_claim_modal_confirm');
-  const natureModalCancel = document.getElementById('nature_of_claim_modal_cancel');
-  const natureModalClose = document.getElementById('close_nature_of_claim_modal');
+  let natureModalListenersBound = false;
+
+  function getNatureOfClaimElements() {
+    return {
+      modal: document.getElementById('natureOfClaimModal'),
+      overlay: document.getElementById('nature_of_claim_modal_overlay'),
+      input: document.getElementById('nature_of_claim_modal_input'),
+      formInput: document.getElementById('nature_of_claim'),
+      confirmBtn: document.getElementById('nature_of_claim_modal_confirm'),
+      cancelBtn: document.getElementById('nature_of_claim_modal_cancel'),
+      closeBtn: document.getElementById('close_nature_of_claim_modal'),
+    };
+  }
 
   function escapeHtml(str) {
     return String(str ?? '')
@@ -72,7 +78,7 @@
     const processedBy = '';
     const signatureName = (window.__loggedUserEmpName || '').toString();
 
-    const nature = String(natureFormInput?.value || '').trim();
+    const nature = String(document.getElementById('nature_of_claim')?.value || '').trim();
 
     return {
       claimant,
@@ -329,28 +335,106 @@
     coaDisplayInput.addEventListener('change', syncPrintButtonState);
   }
 
+  function portalNatureOfClaimModal(modal, overlay) {
+    if (modal && modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    if (overlay && overlay.parentElement !== document.body) {
+      document.body.appendChild(overlay);
+    }
+  }
+
   function closeNatureOfClaimModal() {
-    if (natureModal) natureModal.style.display = 'none';
-    if (natureOverlay) natureOverlay.style.display = 'none';
+    const els = getNatureOfClaimElements();
+    if (els.modal) {
+      els.modal.style.display = 'none';
+    }
+    if (els.overlay) {
+      els.overlay.style.display = 'none';
+    }
+    const mainOverlay = document.getElementById('overlay');
+    if (mainOverlay && mainOverlay.dataset.naturePrevDisplay !== undefined) {
+      mainOverlay.style.display = mainOverlay.dataset.naturePrevDisplay;
+      delete mainOverlay.dataset.naturePrevDisplay;
+    }
   }
 
   function openNatureOfClaimModal() {
-    if (!natureModal || !natureOverlay) {
-      printForwardSlip();
+    const els = getNatureOfClaimElements();
+    if (!els.modal || !els.overlay) {
+      if (typeof showNotify === 'function') {
+        showNotify(
+          'Nature of Claim dialog could not be loaded. Please hard-refresh the page (Ctrl+F5) and try again.',
+          'warning',
+          4500
+        );
+      } else {
+        alert('Nature of Claim dialog could not be loaded. Please refresh the page.');
+      }
       return;
     }
-    const existing = String(natureFormInput?.value || '').trim();
-    if (natureModalInput) {
-      natureModalInput.value = existing;
+
+    portalNatureOfClaimModal(els.modal, els.overlay);
+
+    const mainOverlay = document.getElementById('overlay');
+    if (mainOverlay && mainOverlay.style.display === 'block') {
+      mainOverlay.dataset.naturePrevDisplay = 'block';
+      mainOverlay.style.display = 'none';
     }
-    natureModal.style.display = 'block';
-    natureOverlay.style.display = 'block';
-    if (natureModalInput) {
+
+    const existing = String(els.formInput?.value || '').trim();
+    if (els.input) {
+      els.input.value = existing;
+    }
+
+    els.overlay.style.display = 'block';
+    els.modal.style.display = 'block';
+    els.modal.style.visibility = 'visible';
+    els.modal.style.animation = 'slideIn 0.5s ease';
+
+    if (els.input) {
       setTimeout(function () {
-        natureModalInput.focus();
-        natureModalInput.select();
+        els.input.focus();
+        els.input.select();
       }, 50);
     }
+  }
+
+  function bindNatureOfClaimModalListeners() {
+    if (natureModalListenersBound) {
+      return;
+    }
+    natureModalListenersBound = true;
+
+    document.addEventListener('click', function (e) {
+      const target = e.target;
+      if (!target || !target.id) {
+        return;
+      }
+      if (target.id === 'nature_of_claim_modal_confirm') {
+        e.preventDefault();
+        confirmNatureOfClaimAndPrint();
+      } else if (
+        target.id === 'nature_of_claim_modal_cancel' ||
+        target.id === 'close_nature_of_claim_modal' ||
+        target.id === 'nature_of_claim_modal_overlay'
+      ) {
+        e.preventDefault();
+        closeNatureOfClaimModal();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || !e.target || e.target.id !== 'nature_of_claim_modal_input') {
+        return;
+      }
+      const els = getNatureOfClaimElements();
+      if (!els.modal || els.modal.style.display !== 'block') {
+        return;
+      }
+      e.preventDefault();
+      confirmNatureOfClaimAndPrint();
+    });
   }
 
   async function printForwardSlip() {
@@ -436,43 +520,29 @@
   });
 
   function confirmNatureOfClaimAndPrint() {
-    const value = String(natureModalInput?.value || '').trim();
+    const els = getNatureOfClaimElements();
+    const value = String(els.input?.value || '').trim();
     if (!value) {
       if (typeof showNotify === 'function') {
         showNotify('Please enter the nature of claim.', 'warning', 3000);
       } else {
         alert('Please enter the nature of claim.');
       }
-      if (natureModalInput) natureModalInput.focus();
+      if (els.input) {
+        els.input.focus();
+      }
       return;
     }
-    if (natureFormInput) {
-      natureFormInput.value = value;
+    if (els.formInput) {
+      els.formInput.value = value;
     }
     closeNatureOfClaimModal();
     printForwardSlip();
   }
 
-  if (natureModalConfirm) {
-    natureModalConfirm.addEventListener('click', confirmNatureOfClaimAndPrint);
-  }
-  if (natureModalCancel) {
-    natureModalCancel.addEventListener('click', closeNatureOfClaimModal);
-  }
-  if (natureModalClose) {
-    natureModalClose.addEventListener('click', closeNatureOfClaimModal);
-  }
-  if (natureOverlay) {
-    natureOverlay.addEventListener('click', closeNatureOfClaimModal);
-  }
-  if (natureModalInput) {
-    natureModalInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        confirmNatureOfClaimAndPrint();
-      }
-    });
-  }
+  bindNatureOfClaimModalListeners();
+  window.openNatureOfClaimModalForSlip = openNatureOfClaimModal;
+  window.closeNatureOfClaimModalForSlip = closeNatureOfClaimModal;
 
   // Enforce: slip must be printed before allowing "Forward" submit
   const forwardForm = document.getElementById('encoded_voucher_form');

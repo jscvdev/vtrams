@@ -508,7 +508,7 @@ function session_contains_phrase($phrase)
             z-index: 10001;
         }
         #natureOfClaimModal {
-            z-index: 10001;
+            z-index: 10005 !important;
         }
         #coa_modal_overlay_forward {
             position: fixed;
@@ -535,7 +535,7 @@ function session_contains_phrase($phrase)
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 10000;
+            z-index: 10004 !important;
         }
         #coa_options_list_forward label {
             display: flex;
@@ -600,35 +600,6 @@ function session_contains_phrase($phrase)
         </div>
     </div>
     <div class="overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
-    <!-- Nature of Claim (before forward slip print) -->
-    <div class="popup-form" id="natureOfClaimModal" style="display: none;">
-        <div class="popupForm-box__container">
-            <div class="popupForm-header__container">
-                <p>Nature of Claim</p>
-                <i class="ri-close-fill close-icon" id="close_nature_of_claim_modal"></i>
-            </div>
-            <div class="f-container">
-                <div class="box-body__container flex-row">
-                    <div class="popupForm-body__container" style="width: 100%;">
-                        <div class="form-container">
-                            <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Enter the nature of claim to appear on the printed forward slip.</p>
-                            <div class="label-input__container">
-                                <label for="nature_of_claim_modal_input">Nature of Claim <span style="color: red;">*</span></label>
-                                <input type="text" class="form-custom-input" id="nature_of_claim_modal_input" autocomplete="off" placeholder="e.g. Traveling Expenses, Procurement of Supplies">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="popupForm-footer__container">
-                    <div class="footer-button__container">
-                        <button class="btn primary" id="nature_of_claim_modal_confirm" type="button">Confirm &amp; Print Slip</button>
-                        <button class="btn secondary transparent" id="nature_of_claim_modal_cancel" type="button">CANCEL</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;"></div>
     <!-- DV Signatory Selection Modal (before print) -->
     <div class="popup-form" id="signatoryModal" style="display: none;">
         <div class="popupForm-box__container">
@@ -791,6 +762,36 @@ function session_contains_phrase($phrase)
         </div>
     </div>
 </div>
+
+<!-- Nature of Claim (outside .main — avoids overflow:hidden clipping on live) -->
+<div class="popup-form" id="natureOfClaimModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="nature_of_claim_modal_title">
+    <div class="popupForm-box__container">
+        <div class="popupForm-header__container">
+            <p id="nature_of_claim_modal_title">Nature of Claim</p>
+            <i class="ri-close-fill close-icon" id="close_nature_of_claim_modal"></i>
+        </div>
+        <div class="f-container">
+            <div class="box-body__container flex-row">
+                <div class="popupForm-body__container" style="width: 100%;">
+                    <div class="form-container">
+                        <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Enter the nature of claim to appear on the printed forward slip.</p>
+                        <div class="label-input__container">
+                            <label for="nature_of_claim_modal_input">Nature of Claim <span style="color: red;">*</span></label>
+                            <input type="text" class="form-custom-input" id="nature_of_claim_modal_input" autocomplete="off" placeholder="e.g. Traveling Expenses, Procurement of Supplies">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="popupForm-footer__container">
+                <div class="footer-button__container">
+                    <button class="btn primary" id="nature_of_claim_modal_confirm" type="button">Confirm &amp; Print Slip</button>
+                    <button class="btn secondary transparent" id="nature_of_claim_modal_cancel" type="button">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
 
 <script>
     // Load table rows async so the page shell renders fast (1000+ rows won't block initial render).
@@ -1833,7 +1834,11 @@ function session_contains_phrase($phrase)
     // Expose logged user name to external scripts (safe JSON encoding)
     window.__loggedUserEmpName = <?php echo json_encode($_SESSION['logged_user_emp_name'] ?? $logged_user_name ?? ''); ?>;
 </script>
-<script src="../../protected/js/forward_slip.js"></script>
+<?php
+$forwardSlipJsPath = __DIR__ . '/../../protected/js/forward_slip.js';
+$forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJsPath) : time();
+?>
+<script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
 </body>
 
 </html>
