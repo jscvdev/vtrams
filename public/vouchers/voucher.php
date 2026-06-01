@@ -445,7 +445,7 @@ function session_contains_phrase($phrase)
                                 <label for=''>Remarks</label>
                                 <input type='text' class='remarks form-custom-input' name='remarks' id='remarks' value='' placeholder='Remarks'>
                             </div>
-                            <div class='label-input__container'>
+                            <div class='label-input__container forward-only-field'>
                                 <label for='nature_of_claim'>Nature of Claim</label>
                                 <input type='text' class='form-custom-input' name='nature_of_claim' id='nature_of_claim' value='' placeholder='Set via Print Slip' readonly>
                             </div>
@@ -491,8 +491,8 @@ function session_contains_phrase($phrase)
                 </div>
                 <div class="popupForm-footer__container">
                     <div class="footer-button__container">
-                        <button class="btn primary transparent" id="confirm_forward_requirements" type="button">CONFIRM</button>
-                        <button class="btn warning transparent" id="print_forward_slip" type="button">PRINT SLIP</button>
+                        <button class="btn primary transparent forward-only-control" id="confirm_forward_requirements" type="button">CONFIRM</button>
+                        <button class="btn warning transparent forward-only-control" id="print_forward_slip" type="button">PRINT SLIP</button>
                         <button class="btn transparent btn-dynamic" name="forward_voucher" type="submit"></button>
                         <button class="btn secondary transparent" id="close_popup4" type="button">CANCEL</button>
                     </div>
@@ -880,6 +880,13 @@ function session_contains_phrase($phrase)
             });
         }
 
+        function setForwardOnlyUiVisible(show) {
+            var display = show ? '' : 'none';
+            document.querySelectorAll('.forward-only-control, .forward-only-field').forEach(function(el) {
+                el.style.display = display;
+            });
+        }
+
         function handleRowAction(row, name) {
             var processing_no = String(row.processing_no || '');
             var payee = String(row.payee || '');
@@ -927,6 +934,7 @@ function session_contains_phrase($phrase)
             if (natureOfClaimInput) natureOfClaimInput.value = '';
 
             if (name === 'btn-forward') {
+                setForwardOnlyUiVisible(true);
                 var formF = document.getElementById('encoded_voucher_form');
                 if (formF) formF.setAttribute('action', '../../protected/handler/voucher_forward_module/voucher_forward_handler.php');
                 if (document.querySelector('.btn-dynamic')) document.querySelector('.btn-dynamic').textContent = 'Forward';
@@ -945,6 +953,9 @@ function session_contains_phrase($phrase)
                     dynamicBtn.classList.add('btn-disabled-forward');
                 }
             } else if (name === 'btn-edit') {
+                setForwardOnlyUiVisible(false);
+                var coaHidden = document.getElementById('selected_coa_options_forward');
+                if (coaHidden) coaHidden.value = '';
                 var formE = document.getElementById('encoded_voucher_form');
                 if (formE) formE.setAttribute('action', '../../protected/handler/edit_module/edit_voucher_handler.php');
                 if (document.querySelector('.btn-dynamic')) document.querySelector('.btn-dynamic').textContent = 'Edit';
@@ -959,7 +970,9 @@ function session_contains_phrase($phrase)
                     dynamicBtn.disabled = false;
                     dynamicBtn.classList.remove('btn-disabled-forward');
                 }
-                document.querySelectorAll('.processing_no, .encoded_dv_no, .encoded_payee, .encoded_address, .encoded_tin_employee_no, .encoded_particulars, .encoded_amount, .encoded_voucher_date').forEach(function(input) { input.removeAttribute('readonly'); });
+                document.querySelectorAll('.encoded_dv_no, .encoded_payee, .encoded_address, .encoded_tin_employee_no, .encoded_particulars, .encoded_amount, .encoded_voucher_date').forEach(function(input) { input.removeAttribute('readonly'); });
+                var processingNoInput = document.querySelector('.processing_no');
+                if (processingNoInput) processingNoInput.setAttribute('readonly', true);
                 if (encodedTypeSelect) encodedTypeSelect.removeAttribute('disabled');
                 if (encodedTypeSelect && encodedTypeHidden) {
                     encodedTypeSelect.onchange = function() { encodedTypeHidden.value = this.value; };
@@ -1522,6 +1535,11 @@ function session_contains_phrase($phrase)
         const forwardForm = document.getElementById('encoded_voucher_form');
         if (forwardForm) {
             forwardForm.addEventListener('submit', function(e) {
+                const dynamicBtn = document.querySelector('.btn-dynamic');
+                const isForward = dynamicBtn && dynamicBtn.getAttribute('name') === 'forward_voucher';
+                if (!isForward) {
+                    return true;
+                }
                 const raw = String(hiddenSelected?.value || '').trim();
                 if (!raw) {
                     e.preventDefault();
