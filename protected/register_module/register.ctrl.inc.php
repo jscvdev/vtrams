@@ -5,7 +5,7 @@ declare(strict_types=1);
 //INPUT VALIDATOR
 function is_input_empty(string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $section, string $office, string $password)
 {
-    if (empty($emp_id) || empty($emp_fn) || empty($emp_mi) || empty($emp_ln) || empty($section) || empty($office) || empty($password)) {
+    if (empty($emp_id) || empty($emp_fn) || empty($emp_ln) || empty($section) || empty($office) || empty($password)) {
         return true;
     }
     else {
@@ -14,15 +14,18 @@ function is_input_empty(string $emp_id, string $emp_fn, string $emp_mi, string $
 }
 
 function is_name(string $emp_fn, string $emp_mi, string $emp_ln) {
-    if (
-        preg_match("/^[^\d\s]+(?:[\s-][^\d\s]+)*$/", $emp_fn) &&
-        preg_match("/^[^\d\s]+(?:[\s-][^\d\s]+)*$/", $emp_mi) &&
-        preg_match("/^[^\d\s]+(?:[\s-][^\d\s]+)*$/", $emp_ln)
-    ) {
-        return true;
-    } else {
+    $namePattern = "/^[^\d\s]+(?:[\s-][^\d\s]+)*$/";
+    $mi = trim($emp_mi);
+
+    if (!preg_match($namePattern, $emp_fn) || !preg_match($namePattern, $emp_ln)) {
         return false;
     }
+
+    if ($mi !== '' && !preg_match($namePattern, $mi)) {
+        return false;
+    }
+
+    return true;
 }
 
 function is_emp_id(string $emp_id)

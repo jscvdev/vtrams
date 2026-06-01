@@ -57,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $emp_mi = trim((string) $emp_mi);
+
     // `designation` comes from a multi-select (`designation[]`), but keep this defensive
     // in case it arrives as a string from other clients.
     if (is_array($designation)) {
@@ -69,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $matchingDesignation = "";
 
-    $fullName = $emp_fn . " " . $emp_mi . " " . $emp_ln;
+    $fullName = trim(preg_replace('/\s+/', ' ', $emp_fn . ' ' . $emp_mi . ' ' . $emp_ln));
 
     if (empty($designation)) {
         $designation = "";

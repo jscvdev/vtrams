@@ -56,10 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $emp_mi = trim((string) $emp_mi);
+
     $so_no = "";
     $datetime_start = "";
     $datetime_end = "";
-    $fullName = $emp_fn . " " . $emp_mi . " " . $emp_ln;
+    $fullName = trim(preg_replace('/\s+/', ' ', $emp_fn . ' ' . $emp_mi . ' ' . $emp_ln));
 
     //CONDITIONAL DATA
     if (isset($_POST['so_no'])) {

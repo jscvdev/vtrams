@@ -8,9 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'register.model.inc.php';
     require_once 'register.ctrl.inc.php';
 
-    $emp_fn = $_POST['emp_fn'];
-    $emp_mi = $_POST['emp_mi'];
-    $emp_ln = $_POST['emp_ln'];
+    $emp_fn = trim((string) ($_POST['emp_fn'] ?? ''));
+    $emp_mi = trim((string) ($_POST['emp_mi'] ?? ''));
+    $emp_ln = trim((string) ($_POST['emp_ln'] ?? ''));
     $emp_id = $_POST['emp_id'];
     $section = $_POST['section'];
     $office = $_POST['office'];
