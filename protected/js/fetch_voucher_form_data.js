@@ -196,12 +196,45 @@ function applyDvSignatories(signatories) {
         const el = document.getElementById(id);
         if (el) el.textContent = String(map[id] || '');
     });
+    storeDvSignatories(signatories);
 }
 
 function getSignatoryByKey(key) {
     const cfg = window.DV_SIGNATORY || {};
-    const byKey = cfg.optionsByKey || {};
-    return byKey[key] || null;
+    const lookupKey = String(key || '').trim();
+    if (!lookupKey) return null;
+
+    const byKey = cfg.optionsByKey;
+    if (byKey && typeof byKey === 'object' && !Array.isArray(byKey) && byKey[lookupKey]) {
+        return byKey[lookupKey];
+    }
+
+    const options = Array.isArray(cfg.options) ? cfg.options : [];
+    for (let i = 0; i < options.length; i++) {
+        const opt = options[i];
+        if (opt && String(opt.key || '') === lookupKey) {
+            return opt;
+        }
+    }
+    return null;
+}
+
+function storeDvSignatories(signatories) {
+    try {
+        sessionStorage.setItem('dv_signatories', JSON.stringify(signatories || {}));
+    } catch (e) {
+        // ignore storage failures
+    }
+}
+
+function applyStoredDvSignatories() {
+    try {
+        const raw = sessionStorage.getItem('dv_signatories');
+        if (!raw) return;
+        applyDvSignatories(JSON.parse(raw));
+    } catch (e) {
+        // ignore invalid stored payload
+    }
 }
 
 function buildSignatorySelection(certKey, accountingKey, approvedKey) {
@@ -248,6 +281,7 @@ function passItem(itemList, processing_no) {
         sessionStorage.setItem('voucher_type', voucher_type);
         sessionStorage.setItem('emp_tag', emp_tag);
 
+        sessionStorage.removeItem('dv_signatories');
         clearDvSignatories();
         renderAccountingEntries();
         console.log('Data updated:', sessionStorage.getItem('particulars'));
@@ -276,19 +310,33 @@ function getValueByKey(items, key) {
 }
 
 function setDocumentData() {
-    document.getElementById('voucher_form_payee').textContent = sessionStorage.getItem('payee');
-    document.getElementById('voucher_form_amount').textContent = sessionStorage.getItem('amount');
-    document.getElementById('voucher_form_payee2').textContent = sessionStorage.getItem('payee');
-    document.getElementById('voucher_form_amount2').textContent = sessionStorage.getItem('amount');
-    document.getElementById('voucher_form_address').textContent = sessionStorage.getItem('address');
-    document.getElementById('voucher_form_voucher_date').textContent = sessionStorage.getItem('voucher_date');
-    document.getElementById('voucher_form_tin_employee_no').textContent = sessionStorage.getItem('tin_employee_no');
-    document.getElementById('voucher_form_particulars').textContent = sessionStorage.getItem('particulars');
+    const payeeEl = document.getElementById('voucher_form_payee');
+    if (!payeeEl) return;
+
+    payeeEl.textContent = sessionStorage.getItem('payee') || '';
+    const amountEl = document.getElementById('voucher_form_amount');
+    if (amountEl) amountEl.textContent = sessionStorage.getItem('amount') || '';
+    const payee2El = document.getElementById('voucher_form_payee2');
+    if (payee2El) payee2El.textContent = sessionStorage.getItem('payee') || '';
+    const amount2El = document.getElementById('voucher_form_amount2');
+    if (amount2El) amount2El.textContent = sessionStorage.getItem('amount') || '';
+    const addressEl = document.getElementById('voucher_form_address');
+    if (addressEl) addressEl.textContent = sessionStorage.getItem('address') || '';
+    const dateEl = document.getElementById('voucher_form_voucher_date');
+    if (dateEl) dateEl.textContent = sessionStorage.getItem('voucher_date') || '';
+    const tinEl = document.getElementById('voucher_form_tin_employee_no');
+    if (tinEl) tinEl.textContent = sessionStorage.getItem('tin_employee_no') || '';
+    const particularsEl = document.getElementById('voucher_form_particulars');
+    if (particularsEl) particularsEl.textContent = sessionStorage.getItem('particulars') || '';
     renderAccountingEntries();
+    applyStoredDvSignatories();
 }
 
+window.applyDvSignatories = applyDvSignatories;
+window.buildSignatorySelection = buildSignatorySelection;
+window.applyStoredDvSignatories = applyStoredDvSignatories;
+window.storeDvSignatories = storeDvSignatories;
+
 window.addEventListener('beforeprint', () => {
-    console.log('beforeprint event triggered.');
     setDocumentData();
-    console.log()
 });

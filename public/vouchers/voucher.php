@@ -1497,16 +1497,19 @@ function session_contains_phrase($phrase)
         function populateSelect(selectEl, roleKeys, labels, defaultKey) {
             if (!selectEl) return;
             selectEl.innerHTML = '';
-            const cfg = getSigCfg();
-            const byKey = cfg.optionsByKey || {};
             const keys = Array.isArray(roleKeys) ? roleKeys : [];
             let hasDefault = false;
 
             keys.forEach(function(key) {
-                const optData = byKey[key];
+                const optData = (typeof getSignatoryByKey === 'function')
+                    ? getSignatoryByKey(key)
+                    : null;
                 if (!optData) return;
                 const option = document.createElement('option');
                 option.value = key;
+                option.dataset.name = optData.name || '';
+                option.dataset.pos1 = optData.pos1 || '';
+                option.dataset.pos2 = optData.pos2 || '';
                 const label = (labels && labels[key]) ? labels[key] : key;
                 option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
                 if (defaultKey && key === defaultKey) {
@@ -1566,20 +1569,59 @@ function session_contains_phrase($phrase)
             return true;
         }
 
+        function readSignatoryFromSelect(selectEl) {
+            if (!selectEl) {
+                return { name: '', pos1: '', pos2: '' };
+            }
+            const opt = selectEl.selectedOptions && selectEl.selectedOptions[0]
+                ? selectEl.selectedOptions[0]
+                : null;
+            if (!opt) {
+                return { name: '', pos1: '', pos2: '' };
+            }
+
+            const fromKey = (typeof getSignatoryByKey === 'function')
+                ? getSignatoryByKey(opt.value)
+                : null;
+            if (fromKey) {
+                return {
+                    name: fromKey.name || '',
+                    pos1: fromKey.pos1 || '',
+                    pos2: fromKey.pos2 || '',
+                };
+            }
+
+            return {
+                name: opt.dataset.name || '',
+                pos1: opt.dataset.pos1 || '',
+                pos2: opt.dataset.pos2 || '',
+            };
+        }
+
         function proceedToPrint() {
             if (!validateSelections()) return;
-            if (typeof buildSignatorySelection !== 'function' || typeof applyDvSignatories !== 'function') {
-                window.print();
-                return;
+
+            const selection = {
+                cert: readSignatoryFromSelect(certSelect),
+                accounting: readSignatoryFromSelect(accountingSelect),
+                approved: readSignatoryFromSelect(approvedSelect),
+            };
+
+            if (typeof storeDvSignatories === 'function') {
+                storeDvSignatories(selection);
             }
-            const selection = buildSignatorySelection(
-                certSelect.value,
-                accountingSelect.value,
-                approvedSelect.value
-            );
-            applyDvSignatories(selection);
+            if (typeof applyDvSignatories === 'function') {
+                applyDvSignatories(selection);
+            }
+
             closeSignatoryModal();
-            window.print();
+
+            window.requestAnimationFrame(function() {
+                if (typeof applyDvSignatories === 'function') {
+                    applyDvSignatories(selection);
+                }
+                window.print();
+            });
         }
 
         window.openSignatoryModal = openSignatoryModal;

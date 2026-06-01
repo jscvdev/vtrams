@@ -490,6 +490,3 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
             </tbody>
         </table>
     </div>
-    </body>
-
-    </html><?php
