@@ -20,33 +20,48 @@ try {
     // ignore
 }
 
-function dv_sig(PDO $pdo, string $key): array
+function dv_fetch_all_signatories(PDO $pdo): array
 {
-    $stmt = $pdo->prepare("
-        SELECT display_name, position_line1, position_line2
+    $stmt = $pdo->query("
+        SELECT signatory_key, display_name, position_line1, position_line2
         FROM voucher_signatories
-        WHERE signatory_key = :k AND is_active = 1
-        LIMIT 1
+        WHERE is_active = 1
+        ORDER BY signatory_key ASC
     ");
-    $stmt->execute([':k' => $key]);
-    $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-    return [
-        'name' => (string)($r['display_name'] ?? ''),
-        'pos1' => (string)($r['position_line1'] ?? ''),
-        'pos2' => (string)($r['position_line2'] ?? ''),
-    ];
+    $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+    $out = [];
+    foreach ($rows as $row) {
+        $key = (string) ($row['signatory_key'] ?? '');
+        if ($key === '') {
+            continue;
+        }
+        $out[$key] = [
+            'key' => $key,
+            'name' => (string) ($row['display_name'] ?? ''),
+            'pos1' => (string) ($row['position_line1'] ?? ''),
+            'pos2' => (string) ($row['position_line2'] ?? ''),
+        ];
+    }
+    return $out;
 }
 
-if (!isset($dv_cert) || !is_array($dv_cert)) {
-    $dv_cert_key = ($_SESSION['logged_user_division'] ?? '') === 'TSD' ? 'dv_certified_tsd' : 'dv_certified_msd';
-    $dv_cert = (isset($pdo) && $pdo instanceof PDO) ? dv_sig($pdo, $dv_cert_key) : ['name' => '', 'pos1' => '', 'pos2' => ''];
-}
-if (!isset($dv_accounting) || !is_array($dv_accounting)) {
-    $dv_accounting = (isset($pdo) && $pdo instanceof PDO) ? dv_sig($pdo, 'dv_accounting_certified') : ['name' => '', 'pos1' => '', 'pos2' => ''];
-}
-if (!isset($dv_approved) || !is_array($dv_approved)) {
-    $dv_approved = (isset($pdo) && $pdo instanceof PDO) ? dv_sig($pdo, 'dv_approved_for_payment') : ['name' => '', 'pos1' => '', 'pos2' => ''];
-}
+$dv_signatory_labels = [
+    'dv_certified_msd' => 'A. Certified (MSD)',
+    'dv_certified_tsd' => 'A. Certified (TSD)',
+    'dv_accounting_certified' => 'C. Certified (Accounting)',
+    'dv_approved_for_payment' => 'D. Approved for Payment',
+];
+$dv_signatory_roles = [
+    'cert' => ['dv_certified_msd', 'dv_certified_tsd'],
+    'accounting' => ['dv_accounting_certified'],
+    'approved' => ['dv_approved_for_payment'],
+];
+$dv_default_cert_key = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
+    ? 'dv_certified_tsd'
+    : 'dv_certified_msd';
+$dv_signatory_options = (isset($pdo) && $pdo instanceof PDO)
+    ? dv_fetch_all_signatories($pdo)
+    : [];
 
 require_once __DIR__ . '/dv_accounting_helper.inc.php';
 
@@ -84,6 +99,13 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
             'payeeEmpTagsLower' => $dv_emp_tag_lookup['payeeEmpTagsLower'],
             'payeeEmpTagsByEmpId' => $dv_emp_tag_lookup['payeeEmpTagsByEmpId'],
             'salaryCommonTitles' => dv_salary_common_account_titles(),
+        ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+        window.DV_SIGNATORY = <?= json_encode([
+            'options' => array_values($dv_signatory_options),
+            'optionsByKey' => $dv_signatory_options,
+            'labels' => $dv_signatory_labels,
+            'roles' => $dv_signatory_roles,
+            'defaultCertKey' => $dv_default_cert_key,
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
     </script>
     <style>
@@ -331,10 +353,8 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
                                     lawful and incurred under my direct supervision.</p>
                             </div>
                             <div style="display:flex; flex-direction: column; gap: 7%; justify-content: center; align-items: center; margin-bottom: 5px;">
-                                <p style="text-decoration: underline; font-size: 14px; font-weight: 800">
-                                    <?= htmlspecialchars($dv_cert['name'] ?: '—', ENT_QUOTES, 'UTF-8') ?>
-                                </p>
-                                <p><?= htmlspecialchars($dv_cert['pos1'] ?: '—', ENT_QUOTES, 'UTF-8') ?></p>
+                                <p style="text-decoration: underline; font-size: 14px; font-weight: 800" id="dv_sig_cert_name"></p>
+                                <p id="dv_sig_cert_pos1"></p>
                             </div>
                         </div>
                     </td>
@@ -391,23 +411,23 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
                 </tr>
                 <tr>
                     <th class="fixed-title text-centered pad-5">Printed Name</th>
-                    <td class="fixed-ratio text-centered pad-5" style="font-size: 13px; font-weight: 800"><?= htmlspecialchars($dv_accounting['name'] ?: '—', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td class="fixed-ratio text-centered pad-5" style="font-size: 13px; font-weight: 800" id="dv_sig_accounting_name"></td>
                     <th class="fixed-title text-centered pad-5">Printed Name</th>
-                    <td class="text-centered pad-5" colspan="2" style="font-size: 13px; font-weight: 800"><?= htmlspecialchars($dv_approved['name'] ?: '—', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td class="text-centered pad-5" colspan="2" style="font-size: 13px; font-weight: 800" id="dv_sig_approved_name"></td>
                 </tr>
                 <tr>
                     <th class="text-centered pad-5">Position</th>
                     <td class="t1 fixed-ratio text-centered pad-5">
                         <div>
-                            <p><?= htmlspecialchars($dv_accounting['pos1'] ?: '—', ENT_QUOTES, 'UTF-8') ?></p>
-                            <p><?= htmlspecialchars($dv_accounting['pos2'] ?: '—', ENT_QUOTES, 'UTF-8') ?></p>
+                            <p id="dv_sig_accounting_pos1"></p>
+                            <p id="dv_sig_accounting_pos2"></p>
                         </div>
                     </td>
                     <th class="text-centered pad-5">Position</th>
                     <td class="t1 text-centered" colspan="2">
                         <div>
-                            <p><?= htmlspecialchars($dv_approved['pos1'] ?: '—', ENT_QUOTES, 'UTF-8') ?></p>
-                            <p><?= htmlspecialchars($dv_approved['pos2'] ?: '—', ENT_QUOTES, 'UTF-8') ?></p>
+                            <p id="dv_sig_approved_pos1"></p>
+                            <p id="dv_sig_approved_pos2"></p>
                         </div>
                     </td>
                 </tr>

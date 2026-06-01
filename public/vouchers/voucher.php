@@ -9,31 +9,6 @@ require_once __DIR__ . '/../../protected/core/components/notifications/custom_al
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 
-// Preload DV signatories from database for the printable disbursement voucher.
-if (!function_exists('voucher_get_signatory')) {
-    function voucher_get_signatory(PDO $pdo, string $key): array
-    {
-        $stmt = $pdo->prepare("
-            SELECT display_name, position_line1, position_line2
-            FROM voucher_signatories
-            WHERE signatory_key = :k AND is_active = 1
-            LIMIT 1
-        ");
-        $stmt->execute([':k' => $key]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        return [
-            'name' => (string)($row['display_name'] ?? ''),
-            'pos1' => (string)($row['position_line1'] ?? ''),
-            'pos2' => (string)($row['position_line2'] ?? ''),
-        ];
-    }
-}
-if (isset($pdo) && $pdo instanceof PDO) {
-    $dv_cert_key = (($_SESSION['logged_user_division'] ?? '') === 'TSD') ? 'dv_certified_tsd' : 'dv_certified_msd';
-    $dv_cert = voucher_get_signatory($pdo, $dv_cert_key);
-    $dv_accounting = voucher_get_signatory($pdo, 'dv_accounting_certified');
-    $dv_approved = voucher_get_signatory($pdo, 'dv_approved_for_payment');
-}
 include 'db_voucher.php';
 check_voucher_errors();
 check_voucher_forward_errors();
@@ -525,7 +500,19 @@ function session_contains_phrase($phrase)
         #coaOptionsModalForward {
             z-index: 10001;
         }
+        #signatoryModal {
+            z-index: 10001;
+        }
         #coa_modal_overlay_forward {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+        }
+        #signatory_modal_overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -597,12 +584,50 @@ function session_contains_phrase($phrase)
         </div>
     </div>
     <div class="overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
+    <!-- DV Signatory Selection Modal (before print) -->
+    <div class="popup-form" id="signatoryModal" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p id="signatory_modal_title">Select Signatories</p>
+                <i class="ri-close-fill close-icon" id="close_signatory_modal"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container" style="width: 100%;">
+                        <div class="form-container">
+                            <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Choose signatories for the printed Disbursement Voucher before proceeding.</p>
+                            <div class="label-input__container">
+                                <label for="dv_sig_cert_select">A. Certified <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_cert_select" required></select>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="dv_sig_accounting_select">C. Certified (Accounting) <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_accounting_select" required></select>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="dv_sig_approved_select">D. Approved for Payment <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_approved_select" required></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn primary" id="signatory_modal_print" type="button">Print Voucher</button>
+                        <button class="btn secondary transparent" id="signatory_modal_cancel" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="signatory_modal_overlay" style="display: none;"></div>
     <div class="overlay" id="overlay"></div>
     <style>
         /* Ensure voucher and COA modals don't exceed 85% of viewport height and space is distributed */
         #popupForm2 .popupForm-box__container,
         #popupForm .popupForm-box__container,
-        #coaOptionsModalForward .popupForm-box__container {
+        #coaOptionsModalForward .popupForm-box__container,
+        #signatoryModal .popupForm-box__container {
             max-height: 85vh;
             display: flex;
             flex-direction: column;
@@ -610,7 +635,8 @@ function session_contains_phrase($phrase)
 
         #popupForm2 .f-container,
         #popupForm .f-container,
-        #coaOptionsModalForward .f-container {
+        #coaOptionsModalForward .f-container,
+        #signatoryModal .f-container {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -619,7 +645,8 @@ function session_contains_phrase($phrase)
 
         #popupForm2 .box-body__container,
         #popupForm .box-body__container,
-        #coaOptionsModalForward .box-body__container {
+        #coaOptionsModalForward .box-body__container,
+        #signatoryModal .box-body__container {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
@@ -627,7 +654,8 @@ function session_contains_phrase($phrase)
 
         #popupForm2 .popupForm-footer__container,
         #popupForm .popupForm-footer__container,
-        #coaOptionsModalForward .popupForm-footer__container {
+        #coaOptionsModalForward .popupForm-footer__container,
+        #signatoryModal .popupForm-footer__container {
             flex-shrink: 0;
         }
     </style>
@@ -790,7 +818,11 @@ function session_contains_phrase($phrase)
                         passItem(payload, pn);
                     }
                 } catch (e) {}
-                window.print();
+                if (typeof openSignatoryModal === 'function') {
+                    openSignatoryModal();
+                } else {
+                    window.print();
+                }
             });
         }
 
@@ -1446,6 +1478,118 @@ function session_contains_phrase($phrase)
     })();
 </script>
 
+<script>
+    // DV print: signatory selection modal before window.print()
+    (function() {
+        const modal = document.getElementById('signatoryModal');
+        const overlay = document.getElementById('signatory_modal_overlay');
+        const closeBtn = document.getElementById('close_signatory_modal');
+        const cancelBtn = document.getElementById('signatory_modal_cancel');
+        const printBtn = document.getElementById('signatory_modal_print');
+        const certSelect = document.getElementById('dv_sig_cert_select');
+        const accountingSelect = document.getElementById('dv_sig_accounting_select');
+        const approvedSelect = document.getElementById('dv_sig_approved_select');
+
+        function getSigCfg() {
+            return window.DV_SIGNATORY || {};
+        }
+
+        function populateSelect(selectEl, roleKeys, labels, defaultKey) {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            const cfg = getSigCfg();
+            const byKey = cfg.optionsByKey || {};
+            const keys = Array.isArray(roleKeys) ? roleKeys : [];
+            let hasDefault = false;
+
+            keys.forEach(function(key) {
+                const optData = byKey[key];
+                if (!optData) return;
+                const option = document.createElement('option');
+                option.value = key;
+                const label = (labels && labels[key]) ? labels[key] : key;
+                option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
+                if (defaultKey && key === defaultKey) {
+                    option.selected = true;
+                    hasDefault = true;
+                }
+                selectEl.appendChild(option);
+            });
+
+            if (!hasDefault && selectEl.options.length > 0) {
+                selectEl.selectedIndex = 0;
+            }
+        }
+
+        function closeSignatoryModal() {
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function openSignatoryModal() {
+            const cfg = getSigCfg();
+            const roles = cfg.roles || {};
+            const labels = cfg.labels || {};
+
+            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
+            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
+            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+
+            const anyOptions = (certSelect && certSelect.options.length) ||
+                (accountingSelect && accountingSelect.options.length) ||
+                (approvedSelect && approvedSelect.options.length);
+
+            if (!anyOptions) {
+                if (typeof showNotify === 'function') {
+                    showNotify('No signatories configured. Set them up in Utilities first.', 'warning', 3500);
+                }
+                return;
+            }
+
+            if (modal) modal.style.display = 'block';
+            if (overlay) overlay.style.display = 'block';
+        }
+
+        function validateSelections() {
+            if (!certSelect || !certSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the A. Certified signatory.', 'warning', 2800);
+                return false;
+            }
+            if (!accountingSelect || !accountingSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the C. Certified (Accounting) signatory.', 'warning', 2800);
+                return false;
+            }
+            if (!approvedSelect || !approvedSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the D. Approved for Payment signatory.', 'warning', 2800);
+                return false;
+            }
+            return true;
+        }
+
+        function proceedToPrint() {
+            if (!validateSelections()) return;
+            if (typeof buildSignatorySelection !== 'function' || typeof applyDvSignatories !== 'function') {
+                window.print();
+                return;
+            }
+            const selection = buildSignatorySelection(
+                certSelect.value,
+                accountingSelect.value,
+                approvedSelect.value
+            );
+            applyDvSignatories(selection);
+            closeSignatoryModal();
+            window.print();
+        }
+
+        window.openSignatoryModal = openSignatoryModal;
+
+        if (closeBtn) closeBtn.addEventListener('click', closeSignatoryModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeSignatoryModal);
+        if (overlay) overlay.addEventListener('click', closeSignatoryModal);
+        if (printBtn) printBtn.addEventListener('click', proceedToPrint);
+    })();
+</script>
 <script>
     // Expose logged user name to external scripts (safe JSON encoding)
     window.__loggedUserEmpName = <?php echo json_encode($_SESSION['logged_user_emp_name'] ?? $logged_user_name ?? ''); ?>;

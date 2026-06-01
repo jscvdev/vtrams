@@ -167,7 +167,7 @@ try {
                                 <input type="text" class="emp_fn form-custom-input" name="emp_fn" placeholder="emp_fn">
                             </div>
                             <div class="label-input__container">
-                                <label for="">Middle Initial</label>
+                                <label for="">Middle Initial (optional)</label>
                                 <input type="text" class="emp_mi form-custom-input" name="emp_mi" placeholder="emp_mi">
                             </div>
                             <div class="label-input__container">

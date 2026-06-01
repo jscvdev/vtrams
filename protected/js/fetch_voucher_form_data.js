@@ -155,6 +155,57 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function clearDvSignatories() {
+    [
+        'dv_sig_cert_name', 'dv_sig_cert_pos1',
+        'dv_sig_accounting_name', 'dv_sig_accounting_pos1', 'dv_sig_accounting_pos2',
+        'dv_sig_approved_name', 'dv_sig_approved_pos1', 'dv_sig_approved_pos2',
+    ].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    });
+}
+
+function applyDvSignatories(signatories) {
+    const sig = signatories || {};
+    const cert = sig.cert || {};
+    const accounting = sig.accounting || {};
+    const approved = sig.approved || {};
+
+    const map = {
+        dv_sig_cert_name: cert.name,
+        dv_sig_cert_pos1: cert.pos1,
+        dv_sig_accounting_name: accounting.name,
+        dv_sig_accounting_pos1: accounting.pos1,
+        dv_sig_accounting_pos2: accounting.pos2,
+        dv_sig_approved_name: approved.name,
+        dv_sig_approved_pos1: approved.pos1,
+        dv_sig_approved_pos2: approved.pos2,
+    };
+
+    Object.keys(map).forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(map[id] || '');
+    });
+}
+
+function getSignatoryByKey(key) {
+    const cfg = window.DV_SIGNATORY || {};
+    const byKey = cfg.optionsByKey || {};
+    return byKey[key] || null;
+}
+
+function buildSignatorySelection(certKey, accountingKey, approvedKey) {
+    const cert = getSignatoryByKey(certKey);
+    const accounting = getSignatoryByKey(accountingKey);
+    const approved = getSignatoryByKey(approvedKey);
+    return {
+        cert: cert ? { name: cert.name, pos1: cert.pos1, pos2: cert.pos2 } : { name: '', pos1: '', pos2: '' },
+        accounting: accounting ? { name: accounting.name, pos1: accounting.pos1, pos2: accounting.pos2 } : { name: '', pos1: '', pos2: '' },
+        approved: approved ? { name: approved.name, pos1: approved.pos1, pos2: approved.pos2 } : { name: '', pos1: '', pos2: '' },
+    };
+}
+
 function passItem(itemList, processing_no) {
     const items = itemList[processing_no];
 
@@ -188,6 +239,7 @@ function passItem(itemList, processing_no) {
         sessionStorage.setItem('voucher_type', voucher_type);
         sessionStorage.setItem('emp_tag', emp_tag);
 
+        clearDvSignatories();
         renderAccountingEntries();
         console.log('Data updated:', sessionStorage.getItem('particulars'));
         console.log('Data updated:', sessionStorage.getItem('amount'));
@@ -224,14 +276,6 @@ function setDocumentData() {
     document.getElementById('voucher_form_tin_employee_no').textContent = sessionStorage.getItem('tin_employee_no');
     document.getElementById('voucher_form_particulars').textContent = sessionStorage.getItem('particulars');
     renderAccountingEntries();
-    // document.getElementById('print_time').textContent = getCurrentTime();
-
-    // if (sessionStorage.getItem('for_action') === "true") {
-    //     document.getElementById("complex-container").style.display = "flex";
-    // }
-
-    // Log the sessionStorage data to ensure it's correct
-    console.log('sessionStorage data:', sessionStorage.getItem('payee'));
 }
 
 window.addEventListener('beforeprint', () => {

@@ -121,7 +121,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $variables_to_check = [
                     '$emp_id' => $emp_id,
                     '$emp_fn' => $emp_fn,
-                    '$emp_mi' => $emp_mi,
                     '$emp_ln' => $emp_ln,
                     '$section' => $section,
                     '$designation' => $designation,
