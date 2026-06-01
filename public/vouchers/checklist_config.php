@@ -414,6 +414,17 @@ function checklist_type_specific_items()
                 'Certification that the expenses incur is in connection with the official function of the claimant',
             ],
         ],
+        'Remittances' => [
+            'title' => 'REMITTANCES',
+            'items' => [
+                'Obligation Request and Status',
+                'Disbursement Voucher',
+                'Remittance form / schedule',
+                'Proof of remittance / acknowledgment',
+                'Supporting documents per remittance type',
+                'Others',
+            ],
+        ],
         'Traveling Expenses' => [
             'title' => 'MANDATORY SUPPORTING DOCUMENTS FOR TRAVELING EXPENSES',
             'items' => [
@@ -611,6 +622,8 @@ function checklist_get_builtin_templates()
             'items' => [
                 'Obligation Request and Status',
                 'Disbursement Voucher',
+                'Remittance form / schedule',
+                'Proof of remittance / acknowledgment',
                 'Supporting documents per remittance type',
                 'Others',
             ],
@@ -648,17 +661,34 @@ function checklist_get_builtin_templates()
 }
 
 /**
+ * Built-in types that remain available even when checklist folder templates are active.
+ *
+ * @return string[]
+ */
+function checklist_always_available_types()
+{
+    return ['Remittances'];
+}
+
+/**
  * Returns the active template set: folder templates if folder has content, else built-in.
+ * Types listed in checklist_always_available_types() are merged in when missing from the folder.
  *
  * @return array<string, array{title: string, items: string[]}>
  */
 function checklist_get_active_templates()
 {
     $folder = checklist_get_folder_templates();
+    $builtin = checklist_get_builtin_templates();
     if (!empty($folder)) {
+        foreach (checklist_always_available_types() as $type) {
+            if (!isset($folder[$type]) && isset($builtin[$type])) {
+                $folder[$type] = $builtin[$type];
+            }
+        }
         return $folder;
     }
-    return checklist_get_builtin_templates();
+    return $builtin;
 }
 
 /**
