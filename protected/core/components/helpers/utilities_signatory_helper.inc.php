@@ -25,6 +25,106 @@ function utilities_signatory_normalize_office(string $office): string
     return trim(preg_replace('/\s+/', ' ', $office));
 }
 
+function utilities_signatory_offices_match(string $a, string $b): bool
+{
+    return strcasecmp(
+        utilities_signatory_normalize_office($a),
+        utilities_signatory_normalize_office($b)
+    ) === 0;
+}
+
+/**
+ * Find the canonical office string as stored in user_group (case/spacing tolerant).
+ */
+function utilities_signatory_find_in_office_list(string $needle, array $offices): ?string
+{
+    $needle = utilities_signatory_normalize_office($needle);
+    if ($needle === '') {
+        return null;
+    }
+
+    foreach ($offices as $office) {
+        if (utilities_signatory_offices_match($needle, (string) $office)) {
+            return utilities_signatory_normalize_office((string) $office);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Match an office label to how it is stored on voucher_signatories rows.
+ */
+function utilities_signatory_match_office_in_signatories(PDO $pdo, string $office): ?string
+{
+    $office = utilities_signatory_normalize_office($office);
+
+    if ($office === '') {
+        $stmt = $pdo->query("
+            SELECT 1
+            FROM voucher_signatories
+            WHERE TRIM(COALESCE(office, '')) = ''
+            LIMIT 1
+        ");
+        return $stmt && $stmt->fetchColumn() ? '' : null;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT TRIM(office) AS office
+        FROM voucher_signatories
+        WHERE LOWER(TRIM(office)) = LOWER(:office)
+        LIMIT 1
+    ");
+    $stmt->execute([':office' => $office]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row
+        ? utilities_signatory_normalize_office((string) ($row['office'] ?? ''))
+        : null;
+}
+
+/**
+ * Offices to query for DV signatories: user office, then PENRO defaults, then legacy blank office.
+ *
+ * @return list<string>
+ */
+function utilities_signatory_fallback_office_candidates(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $candidates = [];
+
+    if ($office !== '') {
+        $candidates[] = utilities_signatory_match_office_in_signatories($pdo, $office) ?? $office;
+    }
+
+    $penro = utilities_signatory_penro_office();
+    $storedPenro = utilities_signatory_match_office_in_signatories($pdo, $penro) ?? $penro;
+    if ($storedPenro !== '' && !utilities_signatory_offices_match($storedPenro, $office)) {
+        $candidates[] = $storedPenro;
+    }
+
+    if (!in_array('', $candidates, true)) {
+        $candidates[] = '';
+    }
+
+    $unique = [];
+    foreach ($candidates as $candidate) {
+        $normalized = utilities_signatory_normalize_office((string) $candidate);
+        $exists = false;
+        foreach ($unique as $existing) {
+            if (utilities_signatory_offices_match($normalized, $existing)) {
+                $exists = true;
+                break;
+            }
+        }
+        if (!$exists) {
+            $unique[] = $normalized;
+        }
+    }
+
+    return $unique;
+}
+
 function utilities_table_has_column(PDO $pdo, string $table, string $column): bool
 {
     $stmt = $pdo->prepare("
@@ -87,16 +187,22 @@ function utilities_signatory_resolve_office(PDO $pdo, ?string $requestedOffice =
     $offices = utilities_signatory_fetch_offices($pdo);
     $requested = utilities_signatory_normalize_office((string) ($requestedOffice ?? ''));
 
-    if ($requested !== '' && in_array($requested, $offices, true)) {
-        return $requested;
+    $canonical = utilities_signatory_find_in_office_list($requested, $offices);
+    if ($canonical !== null) {
+        return $canonical;
     }
 
     $defaultOffice = utilities_signatory_default_office();
-    if ($defaultOffice !== '' && in_array($defaultOffice, $offices, true)) {
+    $canonical = utilities_signatory_find_in_office_list($defaultOffice, $offices);
+    if ($canonical !== null) {
+        return $canonical;
+    }
+
+    if ($defaultOffice !== '') {
         return $defaultOffice;
     }
 
-    return $offices[0] ?? $defaultOffice;
+    return $offices[0] ?? '';
 }
 
 function utilities_signatory_backfill_office(PDO $pdo, string $office): void
@@ -227,25 +333,37 @@ function utilities_fetch_dv_signatories(PDO $pdo, string $office): array
 function utilities_fetch_dv_signatory_map_for_office(PDO $pdo, string $office): array
 {
     $office = utilities_signatory_normalize_office($office);
-    $stmt = $pdo->prepare("
-        SELECT signatory_key, display_name, position_line1, position_line2
-        FROM voucher_signatories
-        WHERE is_active = 1
-          AND office = :office
-        ORDER BY signatory_key ASC
-    ");
-    $stmt->execute([':office' => $office]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if ($office === '') {
+        $stmt = $pdo->query("
+            SELECT signatory_key, display_name, position_line1, position_line2
+            FROM voucher_signatories
+            WHERE is_active = 1
+              AND TRIM(COALESCE(office, '')) = ''
+            ORDER BY signatory_key ASC
+        ");
+        $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT signatory_key, display_name, position_line1, position_line2
+            FROM voucher_signatories
+            WHERE is_active = 1
+              AND LOWER(TRIM(office)) = LOWER(:office)
+            ORDER BY signatory_key ASC
+        ");
+        $stmt->execute([':office' => $office]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
 
     $out = [];
     foreach ($rows as $row) {
         $key = (string) ($row['signatory_key'] ?? '');
-        if ($key === '') {
+        $name = trim((string) ($row['display_name'] ?? ''));
+        if ($key === '' || $name === '') {
             continue;
         }
         $out[$key] = [
             'key' => $key,
-            'name' => (string) ($row['display_name'] ?? ''),
+            'name' => $name,
             'pos1' => (string) ($row['position_line1'] ?? ''),
             'pos2' => (string) ($row['position_line2'] ?? ''),
         ];
@@ -255,27 +373,45 @@ function utilities_fetch_dv_signatory_map_for_office(PDO $pdo, string $office): 
 }
 
 /**
- * Active DV signatories for an office, with fallbacks for legacy/global rows.
+ * Active DV signatories for an office, merging PENRO/legacy defaults per signatory key.
  */
 function utilities_fetch_dv_signatory_map(PDO $pdo, string $office): array
 {
     $office = utilities_signatory_normalize_office($office);
-    $candidates = [$office];
+    $candidates = utilities_signatory_fallback_office_candidates($pdo, $office);
 
-    $penro = utilities_signatory_penro_office();
-    if ($penro !== '' && !in_array($penro, $candidates, true)) {
-        $candidates[] = $penro;
-    }
-    if (!in_array('', $candidates, true)) {
-        $candidates[] = '';
-    }
-
+    $merged = [];
     foreach ($candidates as $candidateOffice) {
         $map = utilities_fetch_dv_signatory_map_for_office($pdo, $candidateOffice);
-        if ($map !== []) {
-            return $map;
+        foreach ($map as $key => $data) {
+            if (!isset($merged[$key])) {
+                $merged[$key] = $data;
+            }
         }
     }
 
-    return [];
+    return $merged;
+}
+
+/** Required DV keys for the print modal. */
+function utilities_dv_signatory_required_keys(): array
+{
+    return [
+        'dv_certified_msd',
+        'dv_certified_tsd',
+        'dv_accounting_certified',
+        'dv_approved_for_payment',
+    ];
+}
+
+/**
+ * True when at least one cert option and accounting + approved signatories exist.
+ */
+function utilities_dv_signatory_map_is_printable(array $map): bool
+{
+    $hasCert = !empty($map['dv_certified_msd']) || !empty($map['dv_certified_tsd']);
+    $hasAccounting = !empty($map['dv_accounting_certified']);
+    $hasApproved = !empty($map['dv_approved_for_payment']);
+
+    return $hasCert && $hasAccounting && $hasApproved;
 }

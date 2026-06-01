@@ -1587,10 +1587,19 @@ function session_contains_phrase($phrase)
             return signatoryFetchInFlight;
         }
 
-        function hasAnySignatoryOptions() {
-            return (certSelect && certSelect.options.length) ||
-                (accountingSelect && accountingSelect.options.length) ||
-                (approvedSelect && approvedSelect.options.length);
+        function hasPrintableSignatoryOptions() {
+            const cfg = getSigCfg();
+            const roles = cfg.roles || {};
+            const hasRoleOption = function(roleKeys) {
+                const keys = Array.isArray(roleKeys) ? roleKeys : [];
+                return keys.some(function(key) {
+                    return typeof getSignatoryByKey === 'function' && !!getSignatoryByKey(key);
+                });
+            };
+
+            return hasRoleOption(roles.cert) &&
+                hasRoleOption(roles.accounting) &&
+                hasRoleOption(roles.approved);
         }
 
         function populateSelect(selectEl, roleKeys, labels, defaultKey) {
@@ -1649,12 +1658,16 @@ function session_contains_phrase($phrase)
             fetchSignatoriesForOffice(targetOffice).then(function() {
                 populateAllSignatorySelects();
 
-                if (!hasAnySignatoryOptions()) {
+                if (!hasPrintableSignatoryOptions()) {
                     if (typeof showNotify === 'function') {
+                        const officeLabel = String((cfg && cfg.office) || '').trim();
+                        const officeHint = officeLabel
+                            ? (' (office: ' + officeLabel + ')')
+                            : '';
                         showNotify(
-                            'DV signatories are not available for your office yet. Please ask a system administrator to configure them in Utilities.',
+                            'DV signatories are not configured for your office yet' + officeHint + '. A system administrator must set all four DV signatories in Utilities (A. Certified MSD/TSD, C. Accounting, and D. Approved). PENRO defaults are used when an office has no local entries.',
                             'warning',
-                            4000
+                            5000
                         );
                     }
                     return;

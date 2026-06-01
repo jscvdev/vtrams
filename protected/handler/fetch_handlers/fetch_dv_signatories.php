@@ -34,12 +34,19 @@ try {
     $defaultCertKey = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
         ? 'dv_certified_tsd'
         : 'dv_certified_msd';
+    if ($defaultCertKey === 'dv_certified_tsd' && empty($optionsByKey['dv_certified_tsd']) && !empty($optionsByKey['dv_certified_msd'])) {
+        $defaultCertKey = 'dv_certified_msd';
+    } elseif ($defaultCertKey === 'dv_certified_msd' && empty($optionsByKey['dv_certified_msd']) && !empty($optionsByKey['dv_certified_tsd'])) {
+        $defaultCertKey = 'dv_certified_tsd';
+    }
 
     echo json_encode([
         'office' => $office,
+        'sessionOffice' => utilities_signatory_default_office(),
         'options' => array_values($optionsByKey),
         'optionsByKey' => $optionsByKey,
         'defaultCertKey' => $defaultCertKey,
+        'printable' => utilities_dv_signatory_map_is_printable($optionsByKey),
     ], $jsonFlags);
 } catch (Throwable $e) {
     http_response_code(500);
