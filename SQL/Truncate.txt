@@ -1,0 +1,24 @@
+TRUNCATE TABLE action_logs;
+TRUNCATE TABLE archives;
+TRUNCATE TABLE action_logs;
+TRUNCATE TABLE document_tracking;
+TRUNCATE TABLE encoded_document_id;
+TRUNCATE TABLE encoded_voucher_no;
+TRUNCATE TABLE incoming;
+TRUNCATE TABLE pending;
+TRUNCATE TABLE receiving;
+TRUNCATE TABLE routing;
+TRUNCATE TABLE sent;
+
+TRUNCATE TABLE vouchers;
+TRUNCATE TABLE dv_entries;
+TRUNCATE TABLE audit_logs;
+TRUNCATE TABLE voucher_action_logs;
+TRUNCATE TABLE voucher_archives;
+TRUNCATE TABLE voucher_incoming;
+TRUNCATE TABLE voucher_receiving;
+TRUNCATE TABLE voucher_sent;
+TRUNCATE TABLE voucher_temp;
+TRUNCATE TABLE voucher_tracking;
+TRUNCATE encoded_voucher_no;
+TRUNCATE files;

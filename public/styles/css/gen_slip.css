@@ -1,0 +1,74 @@
+
+/* BASE */
+
+td {
+    color: #000000;
+    font-weight: 700;
+}
+
+/* BASE */
+/* CSS FOR GENERATING ROUTING SLIP */
+#generated_routing_slip {
+    display: none;
+}
+
+.routing_slip_info .full-bordered-table tr,
+.routing_slip_info .full-bordered-table th {
+    border: solid thin #000000;
+}
+
+.routing_slip_info .full-bordered-table th {
+    text-align: center;
+}
+
+.routing_slip_info .full-bordered-td td{
+    border: solid thin #000000;
+}
+
+.routing_slip_info .no-bordered_data_info td,
+.routing_slip_info .no-bordered_data_info tr{
+    border: none;
+}
+
+.generated_routing__table thead tr {
+    border: none;
+}
+
+.routing__table th,
+.routing__table td {
+}
+.routing__table .routing__header tr th{
+    text-align: center;
+    line-height: 1.1rem;
+}
+
+.full-bordered-td td{
+    color: #000000;
+    height: 150px;
+}
+
+.full-bordered-td .mid-text {
+    text-align: center;
+    font-size: 25px;
+    height: 140px;
+}
+
+.full-bordered-td .mid-text2 {
+    text-align: center;
+    font-size: 25px;
+    height: 100px !important;
+}
+
+.full-bordered-table th {
+    width: 90px;
+}
+
+.full-bordered-td td.multiline_td {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 100px;
+}
+
+.fixed-margin {
+    margin-top: 17px;
+}

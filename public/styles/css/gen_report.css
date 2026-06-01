@@ -1,0 +1,62 @@
+/* BASE */
+
+td {
+    color: #000000;
+    font-weight: 700;
+}
+
+/* BASE */
+/* CSS FOR GENERATING ROUTING SLIP */
+#generated_tracking_info {
+    display: none;
+}
+
+.generate_report_info .full-bordered-table tr,
+.generate_report_info .full-bordered-table th {
+    border: solid thin #000000;
+}
+
+.generate_report_info .full-bordered-table th {
+    text-align: center;
+}
+
+.generate_report_info .full-bordered-td td{
+    border: solid thin #000000;
+}
+
+.generate_report_info .no-bordered_data_info td,
+.generate_report_info .no-bordered_data_info tr{
+    border: none;
+}
+
+.generated_tracking__table thead tr {
+    border: none;
+}
+
+.report__table th,
+.report__table td {
+}
+.report__table .report__header tr th{
+    text-align: center;
+    line-height: 1.1rem;
+}
+.full-bordered-data td {
+    text-align: center;
+    font-size: 25px;
+    border: solid thin #000000;
+}
+
+.generate_report_info .full-bordered-td td.multiline_td {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 100px;
+}
+
+.fixed-margin {
+    margin-top: 17px;
+}
+
+.table_container2 {
+    display: flex;
+    flex-direction: column;
+}

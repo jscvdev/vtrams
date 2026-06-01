@@ -1,0 +1,96 @@
+/*          CUSTOM BUTTONS              */
+
+.btn{
+    width: 75px;
+    background: transparent;
+    font-size: 1em;
+    padding: .6rem .4rem;
+    border-radius: 4px;
+    outline: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+
+    &.transparent {
+        font-weight: 900;
+    }
+    &.btn-pad {
+        padding: .6rem .9rem;
+    }
+    &.btn-flex {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 5%;
+        width: fit-content;
+    }
+    &.btn-nowrap {
+        white-space: nowrap;
+    }
+
+    &.primary {
+        background: #0B5ED7;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #0B5ED7;
+            color: #0B5ED7;
+        }
+    }
+    &.danger {
+        background: #BB2D3B;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #BB2D3B;
+            color: #BB2D3B;
+        }
+    }
+    &.warning {
+        background: #FF7043;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #FF7043;
+            color: #FF7043;
+        }
+    }
+    &.secondary {
+        background: #5C636A;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #5C636A;
+            color: #5C636A;
+        }
+    }    
+    &.success {
+        background: #157347;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #157347;
+            color: #157347;
+        }
+    }
+    &.tertiary {
+        background: #5D3FD3;
+        color: #fff;
+
+        &.transparent {
+            background: rgba(255, 255, 255, 0);
+            border: thin solid #5D3FD3;
+            color: #5D3FD3;
+        }
+    }
+
+    img {
+        max-height: 15px;
+    }
+}

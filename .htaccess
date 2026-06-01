@@ -1,0 +1,17 @@
+#disable listing
+Options -indexes
+
+#set default page
+DirectoryIndex public/documents/index.php
+
+#white listing
+
+#file protection
+<FilesMatch "\.(conf|ini|log)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+#avoid malicious scripts
+#Header set Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted.com; style-src 'self' https://trusted.com; img-src 'self' https://trusted.com; connect-src 'self' https://api.trusted.com"
+

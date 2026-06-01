@@ -1,0 +1,526 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
+@import url('https://fonts.cdnfonts.com/css/helvetica-neue-5');
+
+/*=============== VARIABLES CSS ===============*/
+:root {
+    --header-height: 2.5rem;
+
+    /*========== Colors ==========*/
+    /*Color mode HSL(hue, saturation, lightness)*/
+    --text-dark-color: hsl(210, 100%, 0%);
+    --white-color: hsl(210, 32%, 99%);
+    --text-color: hsl(210, 4%, 55%);
+    --dark-color-light: hsla(210, 4%, 4%, .1);
+    --white-color-light: hsla(210, 4%, 99%, .1);
+    --gradient-x: linear-gradient(90deg,
+            hsla(64, 38%, 92%, 0.9),
+            hsla(38, 39%, 65%, 90%),
+            hsl(189, 69%, 60%),
+            hsla(0, 0%, 0%, 0),
+            hsl(189, 69%, 60%),
+            hsla(38, 39%, 65%, 90%),
+            hsla(64, 38%, 92%, 0.9  ));
+    --gradient-xz: linear-gradient(90deg,
+            hsla(162, 48%, 20%, 90%),
+            hsla(38, 39%, 65%, 90%),
+            hsl(189, 69%, 60%),
+            hsl(189, 69%, 60%),
+            hsla(38, 39%, 65%, 90%),
+            hsla(162, 48%, 20%, 90%));
+    --gradient-xyz: linear-gradient(180deg,
+            hsla(240, 5%, 8%, 0.9),
+            hsla(220, 14%, 12%, 0.9),
+            hsla(188, 18%, 18%, 0.9),
+            hsla(188, 18%, 18%, 0.9),
+            hsla(220.91, 16.67%, 25.88%, 90%));
+    --gradient-y: linear-gradient(0deg,
+            hsla(0, 0%, 0%, 0),
+            hsl(210, 4%, 64%),
+            hsla(0, 0%, 0%, 0));
+    --gradient-new: linear-gradient(90deg,
+            hsla(244, 91%, 43%, 0.9),
+            hsla(286, 94%, 39%, 0.9),
+            hsla(0, 75%, 40%, 0.9));
+    --gradient-updated: linear-gradient(90deg,
+            hsla(241, 71%, 41%, 0.9),
+            hsla(219, 74%, 34%, 0.9),
+            hsla(224, 47%, 39%, 0.9));
+    --gradient-test: linear-gradient(90deg,
+            hsla(0, 75%, 40%, 0.9),
+            rgb(131, 117, 70));
+    --gradient-beta: linear-gradient(90deg,
+            hsla(163, 40%, 42%, 0.9),
+            hsla(147, 56%, 42%, 0.9),
+            hsl(150, 91%, 30%));
+
+    /*========== Font and typography ==========*/
+    /*.5rem = 8px | 1rem = 16px ...*/
+    /* --body-font: 'Helvetica Neue', sans-serif; */
+    --body-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    /* --table-font: 'Helvetica Neue', sans-serif; */
+    --table-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    --normal-font-size: .938rem;
+    --small-font-size: .813rem;
+
+    /*========== Font weight ==========*/
+    --font-medium: 500;
+    --font-semi-bold: 600;
+
+    /*========== z index ==========*/
+    --z-tooltip: 10;
+    --z-fixed: 100;
+}
+
+* {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+}
+
+body {
+    background-color: #F7F8FA;
+}
+
+/* No sidebar: use full content width (hstyle defaults to sidebar offset). */
+.kiosk-body #main.main {
+    width: 100% !important;
+}
+
+.kiosk-body .header__toggle {
+    display: none;
+}
+
+/* Same DOM as main app includes an empty sidebar; keep it out of the way on kiosk. */
+.kiosk-body .sidebar {
+    display: none !important;
+}
+
+/* Kiosk header: same gradient-test fill as main app, but no top/bottom gradient-x strips
+   (hstyle .header::before/::after) — they stack visually and clash with gradient-test. */
+.kiosk-body .header {
+    background: var(--gradient-test) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+.kiosk-body .header::before,
+.kiosk-body .header::after {
+    content: '';
+    display: block;
+    position: absolute;
+    left: 0;
+    width: 100%;
+    background: var(--gradient-x) !important;
+}
+
+.kiosk-body .header::before {
+    top: 0;
+    height: 2.5px;
+}
+
+.kiosk-body .header::after {
+    bottom: 0;
+    height: 4px;
+}
+
+.kiosk-body .header-logo__container {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.kiosk-body .header-logo__container p {
+    text-align: center;
+    align-content: center;
+    color: #ffffff;
+    font-size: 12px;
+}
+
+.kiosk-body .header__logo img {
+    width: 40px;
+    height: 40px;
+    float: left;
+    object-fit: contain;
+}
+
+@media (max-width: 1023px) {
+    .kiosk-body .header-logo__container {
+        display: flex !important;
+    }
+}
+
+/* Same overlay behavior as public/styles/css/pstyle.css (used with header popups). */
+#header_overlay.overlay {
+    display: none;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+}
+
+.search-section {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 15px;
+    font-size: 24px;
+    color: #333;
+}
+
+.search-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.search-container form {
+    flex: 1;
+}
+
+.search-input {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 17%; /* Adjust width as needed */
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+.search-button {
+    padding: 10px 15px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.search-button:hover {
+    background-color: #45a049;
+}
+
+
+.stepper_container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: var(--body-font, 'Helvetica Neue', sans-serif);
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background-color: transparent;
+    padding: 0.25rem 0 0.5rem;
+}
+
+.head {
+    text-align: center;
+}
+
+.head_1 {
+    font-size: 30px;
+    font-weight: 600;
+    color: #333;
+}
+
+.head_1 span {
+    color: #1B4D3E;
+}
+
+.head_2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin-top: 3px;
+    margin-bottom:8px;
+}
+
+.kiosk-stepper-list {
+    display: flex;
+    margin-top: 2.5rem;
+    padding: 0;
+}
+
+.kiosk-stepper-list li {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.kiosk-stepper-list li .icon {
+    font-size: 1.5rem;
+    color: #6e6e6e;
+    margin: 0 60px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #f4f5f6, #eaecf0);
+    border: 1px solid #d8dce1;
+    box-shadow: 0 3px 10px rgba(27, 77, 62, 0.08);
+    animation: kioskIconFloat 3s ease-in-out infinite;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, color 0.25s ease, background 0.25s ease;
+}
+
+.kiosk-stepper-list li.completed .icon {
+    color: #ffffff;
+    background: linear-gradient(145deg, #1f6a54, #1B4D3E);
+    border-color: #1B4D3E;
+    box-shadow: 0 0 0 4px rgba(27, 77, 62, 0.12), 0 8px 18px rgba(27, 77, 62, 0.35);
+    animation: kioskIconPulse 1.4s ease-in-out infinite;
+}
+
+.kiosk-stepper-list li .text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    /* background: linear-gradient(90deg,
+            hsla(30, 1%, 34%, 0.9),
+            hsla(162, 48%, 20%, 90%),
+            hsla(162, 48%, 20%, 90%),
+            hsla(30, 1%, 34%, 0.9));
+        -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent; */
+}
+
+/* Progress Div Css  */
+
+.kiosk-stepper-list li .progress {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: rgba(68, 68, 68, 0.781);
+    margin: 14px 0;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    position: relative;
+    cursor: pointer;
+}
+
+.progress::after {
+    content: " ";
+    position: absolute;
+    width: 135px;
+    height: 5px;
+    background-color: rgba(68, 68, 68, 0.781);
+    right: 30px;
+}
+
+.one::after {
+    width: 0;
+    height: 0;
+}
+
+.kiosk-stepper-list li .progress i {
+    display: none;
+}
+
+.kiosk-stepper-list li .progress p {
+    font-size: 13px;
+}
+
+/* Active Css  */
+
+.kiosk-stepper-list li .active {
+    background-color: #1B4D3E;
+    display: grid;
+    place-items: center;
+}
+
+.kiosk-stepper-list li .active::after {
+    background-color: #1B4D3E;
+}
+
+.kiosk-stepper-list li .active p {
+    display: none;
+}
+
+.kiosk-stepper-list li .active i {
+    font-size: 20px;
+    display: flex;
+}
+
+@keyframes kioskIconFloat {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+@keyframes kioskIconPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+.table-section {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+    margin-bottom: 15px;
+    font-size: 24px;
+    color: #333;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.data-table th, .data-table td {
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.data-table th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.data-table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+.data-table tr:hover {
+    background-color: #ddd;
+}
+
+
+
+/* Responsive Css  */
+
+@media (max-width: 980px) {
+    .kiosk-stepper-list {
+        flex-direction: column;
+    }
+
+    .kiosk-stepper-list li {
+        flex-direction: row;
+    }
+
+    .kiosk-stepper-list li .progress {
+        margin: 0 30px;
+    }
+
+    .kiosk-stepper-list .progress::after {
+        width: 5px;
+        height: 55px;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: -1;
+    }
+
+    .kiosk-stepper-list .one::after {
+        height: 0;
+    }
+
+    .kiosk-stepper-list li .icon {
+        margin: 15px 0;
+    }
+}
+
+@media (max-width:600px) {
+    .head .head_1 {
+        font-size: 24px;
+    }
+
+    .head .head_2 {
+        font-size: 16px;
+    }
+}
+
+/* —— Kiosk layout (matches voucher dashboard patterns from base.css) —— */
+.kiosk-search-card .kiosk-search-hint {
+    font-size: 0.9rem;
+    color: #555;
+    margin: 0 0 1rem;
+    line-height: 1.45;
+}
+
+.kiosk-code {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    background: #eef1f4;
+    padding: 0.12rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.88em;
+}
+
+.kiosk-search-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.kiosk-search-field {
+    flex: 1 1 240px;
+    min-width: 200px;
+}
+
+.kiosk-search-btn {
+    min-width: 88px;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.02em;
+    gap: 0.35rem;
+}
+
+.kiosk-search-btn span {
+    font-size: 0.72rem;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.kiosk-table-msg {
+    text-align: center;
+    color: #666;
+    padding: 1.25rem !important;
+}
+
+.kiosk-stepper-sub {
+    margin-top: 0.35rem !important;
+    margin-bottom: 0 !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: #555 !important;
+}
+
+.kiosk-results-card .content-wrapper {
+    overflow-x: auto;
+}

@@ -1,0 +1,28 @@
+******UPDATES NEEDED ******
+-UPDATE UI
+-USER PROFILE
+-REALTIME DATA
+
+??????? VOUCHER
+FIX RETURN DOCUMENT IN VOUCHER - TO CLAIMANT/LIASSON OFFICER - TO LIASSON NEXT (IF IMPLEMENTED OUTSIDE) 
+-> [LOGIC] CHECK OFFICE_FROM->SET LIASSON ACCORDINGLY
+
+STATUS -> NEEDS PER SECTION & DISTINCTION BETWEEN NORMAL AND REPLY (ACTION) DOCUMENTS
+SEARCH IN STATUS/TRACKING - BE ABLE TO SEARCH VIA DOCUMENT ID
+GUI FOR KIOSK SEARCHING DTS
+
+DASHBOARD - MDY FILTER
+FILTER BY USER ?? POSSIBLE?
+
+******UPDATES NEEDED ******
+->Able to reprint routing of incoming documents in Records->Add office from to flag
+->Able to copy forward a document before forwarding the actual document
+
+
+->> make sure to run script on designation_limit for dmsdb and add visibility
+
+
+UPDATE action_logs to include office as a separate column - done 
+remember to change to sys in path for style.css
+
+CHANGED DATABASE TO ALL COLUMN TO BE NULLABLE & > 255 if varchar should be less than 65k total for all rows

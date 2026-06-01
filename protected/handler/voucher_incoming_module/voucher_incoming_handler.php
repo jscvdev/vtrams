@@ -1,0 +1,298 @@
+<?php
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
+    require_once 'voucher_incoming.model.inc.php';
+    require_once 'voucher_incoming.ctrl.inc.php';
+    /** @var PDO $pdo */
+
+    // Check if token is valid
+    if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
+        // Valid token, process the data
+
+        $keyList = array(
+            "processing_no",
+            "ors_no",
+            "ada_check_no",
+            "dv_no",
+            "payee",
+            "address",
+            "particulars",
+            "tin_employee_no",
+            "amount",
+            "voucher_type",
+            "voucher_date",
+            "office_from",
+            "office_to",
+            "sender_udc",
+            "receiver_udc",
+            "encoded_by",
+            "encoded_from",
+            "datetime_encoded",
+            "forwarded_by",
+            "process_status",
+            "combined_remarks",
+            "sender_remarks",
+            "selected_coa_options",
+            "coa_category",
+            "coa_subsection"
+        );
+
+        $variable_map = array(
+            'processing_no' => 'processing_no',
+            'dv_no' => 'dv_no',
+            'ors_no' => 'ors_no',
+            'ada_check_no' => 'ada_check_no',
+            'payee' => 'payee',
+            'address' => 'address',
+            'particulars' => 'particulars',
+            'tin_employee_no' => 'tin_employee_no',
+            'amount' => 'amount',
+            'voucher_type' => 'voucher_type',
+            'voucher_date' => 'voucher_date',
+            'office_from' => 'office_from',
+            'office_to' => 'office_to',
+            'sender_udc' => 'sender_udc',
+            'receiver_udc' => 'receiver_udc',
+            'encoded_by' => 'encoded_by',
+            'encoded_from' => 'encoded_from',
+            'datetime_encoded' => 'datetime_encoded',
+            'forwarded_by' => 'forwarded_by',
+            'process_status' => 'process_status',
+            'combined_remarks' => 'combined_remarks',
+            'sender_remarks' => 'sender_remarks',
+            'selected_coa_options' => 'coa_options',
+            'coa_category' => 'coa_category',
+            'coa_subsection' => 'coa_subsection'
+            // Add more mappings as needed
+        );
+
+        //LOOP METHOD
+        foreach ($keyList as $key) {
+            $variable_name = $variable_map[$key];
+            if (isset($_POST[$key])) {
+                // IMPORTANT: do NOT HTML-escape JSON payloads (it corrupts stored JSON)
+                if ($key === 'selected_coa_options') {
+                    $$variable_name = trim((string)$_POST[$key]);
+                } else {
+                    $$variable_name = htmlspecialchars($_POST[$key]);
+                }
+            } else {
+                $$variable_name = "";
+            }
+        }
+
+        $target = explode(",", $_SESSION['logged_user_designation']);
+
+        if (isset($_SESSION["logged_user_udc"])) {
+            $receiver_udc = $_SESSION["logged_user_udc"];
+        }
+
+        $remarks = "";
+
+        try {
+            $temp_dump = [];
+
+            // MULTIPLE FILE UPLOAD SUPPORTED 27/04/2024
+            try {
+                if (isset($_REQUEST['receive_voucher'])) {
+
+                    date_default_timezone_set('Asia/Singapore'); // SET TIMEZONE TO GMT+8
+                    $currTime = $date = date('Y-m-d H:i:s', time()); // FORMAT THE CURRENT TIME
+
+                    $datetime_action = $currTime;
+                    $action_by  = $_SESSION['logged_user_emp_name'];
+                    $action = "Received by: " . $_SESSION['logged_user_emp_name'];
+                    $action_from = $_SESSION['logged_user_section'];
+                    $received_from = $_SESSION['logged_user_section'];
+                    $status = "";
+
+                    if (!empty($remarks)) {
+                        $combined_remarks = $combined_remarks . ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                        $remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                    }
+
+                    if (in_array("Planning Section", $target)) {
+                        $status = "For Charging";
+                    } elseif (in_array("Budget Unit", $target)) {
+                        $status = "Verifying Availability of Fund and Allotment";
+                    } elseif (in_array("Accounting Unit", $target)) {
+                        $status = "Processing the Disbursement Voucher";
+                    } elseif (in_array("Office of the PENRO", $target)) {
+                        $status = "For Approval of the PENRO";
+                    } elseif (in_array("Cashiers Unit", $target)) {
+                        $status = "For Preparation of Check, ACIC or LDDAP-ADA";
+                    }
+
+                    $variables_to_check = [
+                        'processing_no' => $processing_no,
+                        'payee' => $payee,
+                        'particulars' => $particulars,
+                        'amount' => $amount,
+                        'voucher_type' => $voucher_type,
+                        'voucher_date' => $voucher_date,
+                        'office_from' => $office_from,
+                        'office_to' => $office_to,
+                        'sender_udc' => $sender_udc,
+                        'receiver_udc' => $receiver_udc,
+                        'encoded_by' => $encoded_by,
+                        'encoded_from' => $encoded_from,
+                        'datetime_encoded' => $datetime_encoded
+                    ];
+
+                    //TAKES IN AN ASSOCIATIVE ARRAY (KEY=>VALUE PAIRS)
+                    $result = is_voucher_incoming_required_data_empty($variables_to_check);
+
+                    //CHECK IF REQUIRED DATA EMPTY
+                    if ($result['is_empty']) {
+                        $temp_dump['empty_data'] = "Some data required is missing! Empty values: ";
+                        $empty_value_strings = [];
+
+                        foreach ($result['empty_variables'] as $var_name => $var_value) {
+                            $empty_value_strings[] = "$var_name: $var_value";
+                        }
+
+                        $temp_dump['empty_data'] .= implode(', ', $empty_value_strings);
+                    }
+
+                    //CHECK IF DOCUMENT IS ALREADY RECEIVED
+                    if (check_if_voucher_received($pdo, $processing_no)) {
+                        $temp_dump['voucher_exists'] = "Voucher is already received!";
+                    }
+
+                    //CHECK ANY VALIDATION FAILS ELSE PROCEED TO EXECUTE DATABASE QUERY
+                    if ($temp_dump) {
+                        $_SESSION['error_voucher_incoming'] = $temp_dump;
+                        echo "<script>process_functionAlert('Receive failed!', 'voucher_incoming_redirect')</script>";
+                        $_SESSION['token'] = generateToken();
+                        die();
+                    } else {
+                        // DATABASE STATEMENTS VIA MODE/CTRL
+                        // Get COA options, category, and subsection from POST, or fetch from database if not provided
+                        $coa_options = null;
+                        $coa_category = null;
+                        $coa_subsection = null;
+                        
+                        if (isset($_POST['selected_coa_options']) && !empty($_POST['selected_coa_options'])) {
+                            $coa_options = $_POST['selected_coa_options'];
+                            $coa_category = isset($_POST['coa_category']) ? $_POST['coa_category'] : null;
+                            $coa_subsection = isset($_POST['coa_subsection']) ? $_POST['coa_subsection'] : null;
+                        } else {
+                            // Fetch existing COA data from voucher_incoming table
+                            $fetch_coa_query = "SELECT coa_options, coa_category, coa_subsection FROM voucher_incoming WHERE processing_no = :processing_no";
+                            $fetch_coa_stmt = $pdo->prepare($fetch_coa_query);
+                            $fetch_coa_stmt->bindParam(":processing_no", $processing_no);
+                            $fetch_coa_stmt->execute();
+                            $coa_row = $fetch_coa_stmt->fetch(PDO::FETCH_ASSOC);
+                            if ($coa_row) {
+                                if (!empty($coa_row['coa_options'])) {
+                                    $coa_options = $coa_row['coa_options'];
+                                }
+                                if (!empty($coa_row['coa_category'])) {
+                                    $coa_category = $coa_row['coa_category'];
+                                }
+                                if (!empty($coa_row['coa_subsection'])) {
+                                    $coa_subsection = $coa_row['coa_subsection'];
+                                }
+                            }
+                        }
+                        
+                        voucher_move_to_receiving(
+                            $pdo,
+                            $processing_no,
+                            $dv_no,
+                            $ors_no,
+                            $ada_check_no,
+                            $payee,
+                            $address,
+                            $particulars,
+                            $tin_employee_no,
+                            $amount,
+                            $voucher_type,
+                            $voucher_date,
+                            $datetime_action,
+                            $sender_udc,
+                            $receiver_udc,
+                            $office_from,
+                            $office_to,
+                            $encoded_by,
+                            $encoded_from,
+                            $datetime_encoded,
+                            $forwarded_by,
+                            $process_status,
+                            $combined_remarks,
+                            $sender_remarks,
+                            "",
+                            $coa_options,
+                            $coa_category,
+                            $coa_subsection
+                        );
+                        update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
+                        voucher_log_user_action(
+                            $pdo,
+                            $processing_no,
+                            $ors_no,
+                            $ada_check_no,
+                            $dv_no,
+                            $payee,
+                            $address,
+                            $tin_employee_no,
+                            $particulars,
+                            $amount,
+                            $voucher_type,
+                            $voucher_date,
+                            $action,
+                            $action_by,
+                            $action_from,
+                            $datetime_action,
+                            $office_from,
+                            $office_to,
+                            $encoded_by,
+                            $remarks
+                        );
+                        // Log to audit_logs
+                        $forwardedBy = !empty($forwarded_by) ? $forwarded_by : 'Unknown';
+                        AuditHelper::logActivity('receiving', "Received voucher: {$processing_no} forwarded by {$forwardedBy}", [
+                            'processing_no' => $processing_no,
+                            'dv_no' => $dv_no,
+                            'payee' => $payee,
+                            'office_from' => $office_from,
+                            'office_to' => $office_to,
+                            'forwarded_by' => $forwarded_by
+                        ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+                        remove_from_voucher_incoming($pdo, $processing_no);
+                        remove_from_voucher_sent($pdo, $processing_no);
+                        echo "<script>process_functionAlert('Receive success!', 'voucher_incoming_redirect')</script>";
+                        $_SESSION['token'] = generateToken();
+                        die();
+                    }
+                } else {
+                    echo "<script>process_functionAlert('Forward Error: Wrong module used!', 'voucher_incoming_redirect')</script>";
+                    $_SESSION['token'] = generateToken();
+                    die();
+                }
+            } catch (PDOException $e) {
+                echo $e->getMessage();
+                // die();
+            }
+
+            $pdo = null;
+            $statement = null;
+
+            $_SESSION['token'] = generateToken();
+            die();
+        } catch (PDOException $e) {
+            echo $e->getMessage();
+            // die();
+        }
+    } else {
+        // Invalid token
+        echo "<script>process_functionAlert('Invalid token!', 'voucher_incoming_redirect')</script>";
+        $_SESSION['token'] = generateToken();
+        die();
+    }
+} else {
+    require_once __DIR__ . '/../../../core/components/redirects/redirect_config.inc.php';
+    redirect_to('encode');
+    die();
+}
