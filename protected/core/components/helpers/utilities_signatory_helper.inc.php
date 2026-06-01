@@ -151,7 +151,10 @@ function utilities_signatory_ensure_schema(PDO $pdo): void
         $pdo->exec("ALTER TABLE voucher_signatories ADD COLUMN office VARCHAR(255) NOT NULL DEFAULT '' AFTER signatory_key");
     }
 
-    $backfillOffice = utilities_signatory_resolve_office($pdo, null);
+    $backfillOffice = utilities_signatory_penro_office();
+    if ($backfillOffice === '') {
+        $backfillOffice = utilities_signatory_resolve_office($pdo, null);
+    }
     utilities_signatory_backfill_office($pdo, $backfillOffice);
 
     if (utilities_table_has_index($pdo, 'ada_signatory_options', 'uniq_type_value')
@@ -221,7 +224,7 @@ function utilities_fetch_dv_signatories(PDO $pdo, string $office): array
     return $out;
 }
 
-function utilities_fetch_dv_signatory_map(PDO $pdo, string $office): array
+function utilities_fetch_dv_signatory_map_for_office(PDO $pdo, string $office): array
 {
     $office = utilities_signatory_normalize_office($office);
     $stmt = $pdo->prepare("
@@ -249,4 +252,30 @@ function utilities_fetch_dv_signatory_map(PDO $pdo, string $office): array
     }
 
     return $out;
+}
+
+/**
+ * Active DV signatories for an office, with fallbacks for legacy/global rows.
+ */
+function utilities_fetch_dv_signatory_map(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $candidates = [$office];
+
+    $penro = utilities_signatory_penro_office();
+    if ($penro !== '' && !in_array($penro, $candidates, true)) {
+        $candidates[] = $penro;
+    }
+    if (!in_array('', $candidates, true)) {
+        $candidates[] = '';
+    }
+
+    foreach ($candidates as $candidateOffice) {
+        $map = utilities_fetch_dv_signatory_map_for_office($pdo, $candidateOffice);
+        if ($map !== []) {
+            return $map;
+        }
+    }
+
+    return [];
 }

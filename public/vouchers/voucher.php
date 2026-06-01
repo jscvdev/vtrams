@@ -1638,17 +1638,43 @@ function session_contains_phrase($phrase)
                 populateOfficeSelect(cfg.office || '');
             }
 
-            populateAllSignatorySelects();
+            const targetOffice = (canSelectSignatoryOffice() && officeSelect && officeSelect.value)
+                ? officeSelect.value
+                : String(cfg.office || '').trim();
 
-            if (!hasAnySignatoryOptions()) {
-                if (typeof showNotify === 'function') {
-                    showNotify('No signatories configured. Set them up in Utilities first.', 'warning', 3500);
-                }
-                return;
+            if (printBtn) {
+                printBtn.disabled = true;
             }
 
-            if (modal) modal.style.display = 'block';
-            if (overlay) overlay.style.display = 'block';
+            fetchSignatoriesForOffice(targetOffice).then(function() {
+                populateAllSignatorySelects();
+
+                if (!hasAnySignatoryOptions()) {
+                    if (typeof showNotify === 'function') {
+                        showNotify(
+                            'DV signatories are not available for your office yet. Please ask a system administrator to configure them in Utilities.',
+                            'warning',
+                            4000
+                        );
+                    }
+                    return;
+                }
+
+                if (modal) modal.style.display = 'block';
+                if (overlay) overlay.style.display = 'block';
+            }).catch(function(err) {
+                if (typeof showNotify === 'function') {
+                    showNotify(
+                        String(err && err.message ? err.message : 'Failed to load signatories. Please try again.'),
+                        'warning',
+                        3200
+                    );
+                }
+            }).finally(function() {
+                if (printBtn) {
+                    printBtn.disabled = false;
+                }
+            });
         }
 
         function validateSelections() {
