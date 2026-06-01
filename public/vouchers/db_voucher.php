@@ -152,6 +152,16 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
                 font-size: 9px;
             }
 
+            #printableTable .dv-accounting-row td {
+                min-height: 20px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+            }
+
+            #printableTable #dv_accounting_body {
+                padding-bottom: 10px;
+            }
+
             @page {
                 size: portrait;
                 /* auto is the default value, it will fit the content to the available space */
@@ -247,6 +257,18 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
         #printableTable .dv-accounting-row td {
             font-size: 11px;
             line-height: 1.35;
+            min-height: 22px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            vertical-align: top;
+        }
+
+        #printableTable #dv_accounting_body {
+            padding-bottom: 10px;
+        }
+
+        #printableTable #dv_accounting_body.dv-accounting-body--empty .dv-accounting-row td {
+            min-height: 22px;
         }
     </style>
     <div class="printableTable" id="printableTable" style="margin-top: 20px;">
@@ -371,13 +393,15 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
                     <th class="text-centered">Credit</th>
                 </tr>
             </tbody>
-            <tbody id="dv_accounting_body">
-                <tr class="dv-accounting-row">
-                    <td class="fixed-height_B pad-2 dv-account-title" colspan="2"></td>
-                    <td class="fixed-height_B pad-2 dv-uacs-code text-centered" style="width: 100px !important;"></td>
-                    <td class="fixed-height_B pad-2 dv-debit"></td>
-                    <td class="fixed-height_B pad-2 dv-credit"></td>
+            <tbody id="dv_accounting_body" class="dv-accounting-body--empty">
+                <?php for ($i = 0; $i < 7; $i++): ?>
+                <tr class="dv-accounting-row dv-accounting-row--empty">
+                    <td class="pad-2 dv-account-title" colspan="2">&nbsp;</td>
+                    <td class="pad-2 dv-uacs-code text-centered" style="width: 100px !important;">&nbsp;</td>
+                    <td class="pad-2 dv-debit">&nbsp;</td>
+                    <td class="pad-2 dv-credit">&nbsp;</td>
                 </tr>
+                <?php endfor; ?>
             </tbody>
             <tbody>
                 <tr class="fixed_text_alignment">

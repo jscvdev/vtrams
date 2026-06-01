@@ -111,22 +111,29 @@ function isContractualSalaryVoucher(voucherType) {
     return cfgTypes.indexOf(t) !== -1;
 }
 
+function buildEmptyAccountingRowHtml() {
+    return (
+        '<tr class="dv-accounting-row dv-accounting-row--empty">' +
+        '<td class="pad-2 dv-account-title" colspan="2">&nbsp;</td>' +
+        '<td class="pad-2 dv-uacs-code text-centered" style="width: 100px !important;">&nbsp;</td>' +
+        '<td class="pad-2 dv-debit">&nbsp;</td>' +
+        '<td class="pad-2 dv-credit">&nbsp;</td>' +
+        '</tr>'
+    );
+}
+
 function renderAccountingEntries() {
     const tbody = document.getElementById('dv_accounting_body');
     if (!tbody) return;
 
     const voucherType = sessionStorage.getItem('voucher_type') || '';
     if (!isContractualSalaryVoucher(voucherType)) {
-        tbody.innerHTML =
-            '<tr class="dv-accounting-row">' +
-            '<td class="fixed-height_B pad-2 dv-account-title" colspan="2"></td>' +
-            '<td class="fixed-height_B pad-2 dv-uacs-code text-centered" style="width: 100px !important; min-height: 210px;"></td>' +
-            '<td class="fixed-height_B pad-2 dv-debit"></td>' +
-            '<td class="fixed-height_B pad-2 dv-credit"></td>' +
-            '</tr>';
+        tbody.className = 'dv-accounting-body--empty';
+        tbody.innerHTML = Array.from({ length: 7 }, buildEmptyAccountingRowHtml).join('');
         return;
     }
 
+    tbody.className = '';
     const payee = sessionStorage.getItem('payee') || '';
     const empId = sessionStorage.getItem('tin_employee_no') || '';
     const storedTag = sessionStorage.getItem('emp_tag') || '';
@@ -135,12 +142,14 @@ function renderAccountingEntries() {
     const rows = getSalaryAccountingRows(empTag);
     tbody.innerHTML = rows.map(function (row) {
         const titleClass = 'pad-2 dv-account-title' + (row.indent ? ' dv-account-title--indent' : '');
+        const titleText = row.title ? escapeHtml(row.title) : '&nbsp;';
+        const uacsText = row.uacs ? escapeHtml(row.uacs) : '&nbsp;';
         return (
             '<tr class="dv-accounting-row">' +
-            '<td class="' + titleClass + '" colspan="2">' + escapeHtml(row.title) + '</td>' +
-            '<td class="pad-2 dv-uacs-code" style="width: 100px !important;">' + escapeHtml(row.uacs) + '</td>' +
-            '<td class="pad-2 dv-debit"></td>' +
-            '<td class="pad-2 dv-credit"></td>' +
+            '<td class="' + titleClass + '" colspan="2">' + titleText + '</td>' +
+            '<td class="pad-2 dv-uacs-code" style="width: 100px !important;">' + uacsText + '</td>' +
+            '<td class="pad-2 dv-debit">&nbsp;</td>' +
+            '<td class="pad-2 dv-credit">&nbsp;</td>' +
             '</tr>'
         );
     }).join('');
