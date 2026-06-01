@@ -1,6 +1,7 @@
 <?php
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 AuditHelper::logPageView('Utilities');
 
 // Utilities: System Admin only
@@ -11,34 +12,8 @@ if (!$can_view_utilities) {
     die();
 }
 
-// Create table if missing (one-time, safe).
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS ada_signatory_options (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        option_type VARCHAR(64) NOT NULL,
-        option_value VARCHAR(255) NOT NULL,
-        is_active TINYINT(1) NOT NULL DEFAULT 1,
-        sort_order INT NOT NULL DEFAULT 0,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_type_value (option_type, option_value),
-        KEY idx_type_active_sort (option_type, is_active, sort_order, option_value)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-");
-
-// DV (db_voucher.php) signatories table
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS voucher_signatories (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        signatory_key VARCHAR(64) NOT NULL,
-        display_name VARCHAR(255) NOT NULL,
-        position_line1 VARCHAR(255) NOT NULL DEFAULT '',
-        position_line2 VARCHAR(255) NOT NULL DEFAULT '',
-        is_active TINYINT(1) NOT NULL DEFAULT 1,
-        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_key (signatory_key)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-");
+// Ensure signatory tables support per-office configuration.
+utilities_signatory_ensure_schema($pdo);
 
 const ADA_OPT_CERTIFIED = 'certified_correct';
 const ADA_OPT_APPROVED = 'approved_by';
@@ -62,6 +37,11 @@ function normalize_opt_value(string $v): string
 
 // Handle CRUD
 $flash = null;
+$available_offices = utilities_signatory_fetch_offices($pdo);
+$selected_office = utilities_signatory_resolve_office(
+    $pdo,
+    $_POST['office'] ?? $_GET['office'] ?? null
+);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tokenOk = isset($_POST['token'], $_SESSION['token']) && hash_equals((string)$_SESSION['token'], (string)$_POST['token']);
     if (!$tokenOk) {
@@ -70,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = $_POST['action'] ?? '';
         $type = $_POST['option_type'] ?? '';
         $scope = $_POST['scope'] ?? 'ada'; // 'ada' or 'dv'
+        $formOffice = utilities_signatory_resolve_office($pdo, $_POST['office'] ?? $selected_office);
+        $selected_office = $formOffice;
         $allowedTypes = [ADA_OPT_CERTIFIED, ADA_OPT_APPROVED, ADA_OPT_SIGNATORY];
         $allowedDvKeys = [
             'dv_certified_msd',
@@ -89,8 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Value is required.'];
                     } else {
-                        $stmt = $pdo->prepare("INSERT INTO ada_signatory_options (option_type, option_value, sort_order, is_active) VALUES (:t, :v, :s, 1)");
-                        $stmt->execute([':t' => $type, ':v' => $value, ':s' => $sort]);
+                        $stmt = $pdo->prepare("INSERT INTO ada_signatory_options (option_type, office, option_value, sort_order, is_active) VALUES (:t, :office, :v, :s, 1)");
+                        $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value, ':s' => $sort]);
                         $flash = ['type' => 'success', 'msg' => 'Added successfully.'];
                     }
                 } elseif ($scope === 'ada' && $action === 'update') {
@@ -104,9 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $pdo->prepare("
                             UPDATE ada_signatory_options
                             SET option_value = :v, sort_order = :s, is_active = :a
-                            WHERE id = :id AND option_type = :t
+                            WHERE id = :id AND option_type = :t AND office = :office
                         ");
-                        $stmt->execute([':v' => $value, ':s' => $sort, ':a' => $active, ':id' => $id, ':t' => $type]);
+                        $stmt->execute([':v' => $value, ':s' => $sort, ':a' => $active, ':id' => $id, ':t' => $type, ':office' => $formOffice]);
                         $flash = ['type' => 'success', 'msg' => 'Updated successfully.'];
                     }
                 } elseif ($scope === 'ada' && $action === 'delete') {
@@ -114,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($id <= 0) {
                         $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
                     } else {
-                        $stmt = $pdo->prepare("DELETE FROM ada_signatory_options WHERE id = :id AND option_type = :t");
-                        $stmt->execute([':id' => $id, ':t' => $type]);
+                        $stmt = $pdo->prepare("DELETE FROM ada_signatory_options WHERE id = :id AND option_type = :t AND office = :office");
+                        $stmt->execute([':id' => $id, ':t' => $type, ':office' => $formOffice]);
                         $flash = ['type' => 'success', 'msg' => 'Deleted successfully.'];
                     }
                 } elseif ($scope === 'dv' && $action === 'dv_upsert') {
@@ -127,15 +109,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $flash = ['type' => 'error', 'msg' => 'Name is required.'];
                     } else {
                         $stmt = $pdo->prepare("
-                            INSERT INTO voucher_signatories (signatory_key, display_name, position_line1, position_line2, is_active)
-                            VALUES (:k, :n, :p1, :p2, :a)
+                            INSERT INTO voucher_signatories (signatory_key, office, display_name, position_line1, position_line2, is_active)
+                            VALUES (:k, :office, :n, :p1, :p2, :a)
                             ON DUPLICATE KEY UPDATE
                                 display_name = VALUES(display_name),
                                 position_line1 = VALUES(position_line1),
                                 position_line2 = VALUES(position_line2),
                                 is_active = VALUES(is_active)
                         ");
-                        $stmt->execute([':k' => $type, ':n' => $name, ':p1' => $pos1, ':p2' => $pos2, ':a' => $active]);
+                        $stmt->execute([':k' => $type, ':office' => $formOffice, ':n' => $name, ':p1' => $pos1, ':p2' => $pos2, ':a' => $active]);
                         $flash = ['type' => 'success', 'msg' => 'DV signatory saved.'];
                     }
                 } else {
@@ -153,21 +135,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-function fetch_opts(PDO $pdo, string $type): array
+function fetch_opts(PDO $pdo, string $type, string $office): array
 {
     $stmt = $pdo->prepare("
         SELECT id, option_type, option_value, is_active, sort_order
         FROM ada_signatory_options
         WHERE option_type = :t
+          AND office = :office
         ORDER BY sort_order ASC, option_value ASC
     ");
-    $stmt->execute([':t' => $type]);
+    $stmt->execute([':t' => $type, ':office' => $office]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
-$opts_certified = fetch_opts($pdo, ADA_OPT_CERTIFIED);
-$opts_approved = fetch_opts($pdo, ADA_OPT_APPROVED);
-$opts_signatory = fetch_opts($pdo, ADA_OPT_SIGNATORY);
+$opts_certified = fetch_opts($pdo, ADA_OPT_CERTIFIED, $selected_office);
+$opts_approved = fetch_opts($pdo, ADA_OPT_APPROVED, $selected_office);
+$opts_signatory = fetch_opts($pdo, ADA_OPT_SIGNATORY, $selected_office);
 
 // DV signatories (single row per key)
 $dv_keys = [
@@ -176,17 +159,7 @@ $dv_keys = [
     'dv_accounting_certified' => 'DV C. Certified (Accounting)',
     'dv_approved_for_payment' => 'DV D. Approved for Payment',
 ];
-$dv_signatories = [];
-try {
-    $stmt = $pdo->query("SELECT signatory_key, display_name, position_line1, position_line2, is_active FROM voucher_signatories");
-    $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
-    foreach ($rows as $r) {
-        $k = (string)($r['signatory_key'] ?? '');
-        if ($k) $dv_signatories[$k] = $r;
-    }
-} catch (Throwable $e) {
-    $dv_signatories = [];
-}
+$dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
 ?>
 
 <style>
@@ -233,7 +206,16 @@ try {
         background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .util-page .voucher-card-title__label {
+        display: inline-flex;
+        align-items: center;
         gap: 0.5rem;
+        min-width: 0;
     }
 
     .util-page .voucher-card-title .ri-icon {
@@ -532,6 +514,35 @@ try {
         color: #94a3b8;
     }
 
+    .util-office-switch {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        flex-wrap: wrap;
+        margin: 0;
+        margin-left: auto;
+    }
+
+    .util-office-switch label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--util-muted);
+        white-space: nowrap;
+    }
+
+    .util-office-switch .field {
+        min-width: 220px;
+        max-width: 320px;
+    }
+
+    .util-office-switch .form-custom-input {
+        min-height: 36px;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+
     @media (max-width: 1050px) {
         .util-grid {
             grid-template-columns: 1fr;
@@ -544,6 +555,17 @@ try {
         .util-dv-grid {
             grid-template-columns: 1fr;
         }
+
+        .util-office-switch {
+            width: 100%;
+            margin-left: 0;
+        }
+
+        .util-office-switch .field {
+            flex: 1;
+            min-width: 0;
+            max-width: none;
+        }
     }
 </style>
 
@@ -553,7 +575,30 @@ try {
     </header>
 
     <div class="voucher-card voucher-card--table">
-        <h2 class="voucher-card-title"><i class="ri-file-list-3-line ri-icon"></i> LDDAP-ADA Signatory | Voucher Options</h2>
+        <h2 class="voucher-card-title">
+            <span class="voucher-card-title__label">
+                <i class="ri-file-list-3-line ri-icon"></i>
+                LDDAP-ADA Signatory | Voucher Options
+            </span>
+            <form method="get" class="util-office-switch" id="utilitiesOfficeForm">
+                <label for="utilities_office_select">Office</label>
+                <div class="field">
+                    <select class="form-custom-input" name="office" id="utilities_office_select" onchange="this.form.submit()">
+                        <?php if (!$available_offices): ?>
+                            <option value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>" selected>
+                                <?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php else: ?>
+                            <?php foreach ($available_offices as $officeName): ?>
+                                <option value="<?= htmlspecialchars($officeName, ENT_QUOTES, 'UTF-8') ?>" <?= $officeName === $selected_office ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($officeName, ENT_QUOTES, 'UTF-8') ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </form>
+        </h2>
         <div class="content-wrapper">
             <?php if ($flash): ?>
                 <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
@@ -579,6 +624,7 @@ try {
                         <div class="util-card__body">
                             <form method="post" class="util-add">
                                 <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="action" value="add">
                                 <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
                                 <div class="field">
@@ -613,6 +659,7 @@ try {
                                                 <div class="util-inline">
                                                     <form method="post" class="util-inline" style="flex:1; min-width:0;">
                                                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                        <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                                         <input type="hidden" name="action" value="update">
                                                         <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
                                                         <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
@@ -626,6 +673,7 @@ try {
                                                     </form>
                                                     <form method="post" onsubmit="return confirm('Delete this entry?');" class="util-row-actions">
                                                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                        <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                                         <input type="hidden" name="action" value="delete">
                                                         <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
                                                         <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
@@ -644,7 +692,7 @@ try {
 
             <div class="util-dv-section">
                 <p class="util-section-title">Disbursement Voucher (DV) printed template</p>
-                <p class="util-dv-desc">These values populate the printed DV template. One active record per role.</p>
+                <p class="util-dv-desc">These values populate the printed DV template for the selected office. One active record per role.</p>
                 <div class="util-dv-grid">
                     <?php foreach ($dv_keys as $k => $label):
                         $row = $dv_signatories[$k] ?? ['display_name' => '', 'position_line1' => '', 'position_line2' => '', 'is_active' => 1];
@@ -656,6 +704,7 @@ try {
                             <div class="util-card__body">
                                 <form method="post">
                                     <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                    <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="scope" value="dv">
                                     <input type="hidden" name="action" value="dv_upsert">
                                     <input type="hidden" name="option_type" value="<?= htmlspecialchars($k) ?>">

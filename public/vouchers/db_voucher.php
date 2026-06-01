@@ -1,48 +1,21 @@
 <?php
 // DV printable template signatories (managed in Utilities -> DV Signatories)
 // Expect $pdo to be available from including page.
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
+
 try {
     if (isset($pdo) && $pdo instanceof PDO) {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS voucher_signatories (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                signatory_key VARCHAR(64) NOT NULL,
-                display_name VARCHAR(255) NOT NULL,
-                position_line1 VARCHAR(255) NOT NULL DEFAULT '',
-                position_line2 VARCHAR(255) NOT NULL DEFAULT '',
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uniq_key (signatory_key)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
+        utilities_signatory_ensure_schema($pdo);
     }
 } catch (Throwable $e) {
     // ignore
 }
 
-function dv_fetch_all_signatories(PDO $pdo): array
+function dv_fetch_all_signatories(PDO $pdo, ?string $office = null): array
 {
-    $stmt = $pdo->query("
-        SELECT signatory_key, display_name, position_line1, position_line2
-        FROM voucher_signatories
-        WHERE is_active = 1
-        ORDER BY signatory_key ASC
-    ");
-    $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
-    $out = [];
-    foreach ($rows as $row) {
-        $key = (string) ($row['signatory_key'] ?? '');
-        if ($key === '') {
-            continue;
-        }
-        $out[$key] = [
-            'key' => $key,
-            'name' => (string) ($row['display_name'] ?? ''),
-            'pos1' => (string) ($row['position_line1'] ?? ''),
-            'pos2' => (string) ($row['position_line2'] ?? ''),
-        ];
-    }
-    return $out;
+    $resolvedOffice = utilities_signatory_resolve_office($pdo, $office);
+
+    return utilities_fetch_dv_signatory_map($pdo, $resolvedOffice);
 }
 
 $dv_signatory_labels = [
@@ -60,7 +33,11 @@ $dv_default_cert_key = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
     ? 'dv_certified_tsd'
     : 'dv_certified_msd';
 $dv_signatory_options = (isset($pdo) && $pdo instanceof PDO)
-    ? dv_fetch_all_signatories($pdo)
+    ? dv_fetch_all_signatories($pdo, utilities_signatory_default_office())
+    : [];
+$dv_can_select_signatory_office = utilities_signatory_can_select_office();
+$dv_signatory_offices = ($dv_can_select_signatory_office && isset($pdo) && $pdo instanceof PDO)
+    ? utilities_signatory_fetch_offices($pdo)
     : [];
 
 require_once __DIR__ . '/dv_accounting_helper.inc.php';
@@ -106,6 +83,11 @@ $dv_contractual_voucher_types = ['Contractual Services or Job Order'];
             'labels' => $dv_signatory_labels,
             'roles' => $dv_signatory_roles,
             'defaultCertKey' => $dv_default_cert_key,
+            'office' => utilities_signatory_default_office(),
+            'canSelectOffice' => $dv_can_select_signatory_office,
+            'offices' => $dv_signatory_offices,
+            'penroOffice' => utilities_signatory_penro_office(),
+            'fetchUrl' => '../../protected/handler/fetch_handlers/fetch_dv_signatories.php',
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
     </script>
     <style>

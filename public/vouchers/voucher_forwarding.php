@@ -126,35 +126,9 @@ $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $ada_options = [];
 if ($showCashierArchiveCol) {
     try {
-        $pdo->exec("
-        CREATE TABLE IF NOT EXISTS ada_signatory_options (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            option_type VARCHAR(64) NOT NULL,
-            option_value VARCHAR(255) NOT NULL,
-            is_active TINYINT(1) NOT NULL DEFAULT 1,
-            sort_order INT NOT NULL DEFAULT 0,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_type_value (option_type, option_value),
-            KEY idx_type_active_sort (option_type, is_active, sort_order, option_value)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    ");
-        $stmt = $pdo->prepare("
-        SELECT option_type, option_value
-        FROM ada_signatory_options
-        WHERE is_active = 1
-          AND option_type IN ('certified_correct','approved_by','agency_authorized_signatory')
-        ORDER BY option_type ASC, sort_order ASC, option_value ASC
-    ");
-        $stmt->execute();
-        $ada_rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        foreach ($ada_rows as $r) {
-            $t = (string)($r['option_type'] ?? '');
-            $v = (string)($r['option_value'] ?? '');
-            if ($t && $v) {
-                $ada_options[$t][] = $v;
-            }
-        }
+        require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
+        utilities_signatory_ensure_schema($pdo);
+        $ada_options = utilities_fetch_ada_options($pdo, utilities_signatory_default_office());
     } catch (Throwable $e) {
         $ada_options = [];
     }

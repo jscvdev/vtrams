@@ -596,6 +596,10 @@ function session_contains_phrase($phrase)
                     <div class="popupForm-body__container" style="width: 100%;">
                         <div class="form-container">
                             <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Choose signatories for the printed Disbursement Voucher before proceeding.</p>
+                            <div class="label-input__container" id="dv_sig_office_container" style="display: none;">
+                                <label for="dv_sig_office_select">Office <span style="color: #64748b; font-weight: normal;">(optional)</span></label>
+                                <select class="form-custom-input" id="dv_sig_office_select"></select>
+                            </div>
                             <div class="label-input__container">
                                 <label for="dv_sig_cert_select">A. Certified <span style="color: red;">*</span></label>
                                 <select class="form-custom-input" id="dv_sig_cert_select" required></select>
@@ -1489,9 +1493,104 @@ function session_contains_phrase($phrase)
         const certSelect = document.getElementById('dv_sig_cert_select');
         const accountingSelect = document.getElementById('dv_sig_accounting_select');
         const approvedSelect = document.getElementById('dv_sig_approved_select');
+        const officeContainer = document.getElementById('dv_sig_office_container');
+        const officeSelect = document.getElementById('dv_sig_office_select');
+        let signatoryFetchInFlight = null;
 
         function getSigCfg() {
             return window.DV_SIGNATORY || {};
+        }
+
+        function canSelectSignatoryOffice() {
+            const cfg = getSigCfg();
+            return !!cfg.canSelectOffice;
+        }
+
+        function applySignatoryPayload(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            const cfg = getSigCfg();
+            cfg.options = Array.isArray(payload.options) ? payload.options : [];
+            cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
+                ? payload.optionsByKey
+                : {};
+            if (payload.defaultCertKey) {
+                cfg.defaultCertKey = payload.defaultCertKey;
+            }
+            if (payload.office) {
+                cfg.office = payload.office;
+            }
+            window.DV_SIGNATORY = cfg;
+        }
+
+        function populateOfficeSelect(selectedOffice) {
+            if (!officeSelect || !officeContainer) return;
+            const cfg = getSigCfg();
+            const offices = Array.isArray(cfg.offices) ? cfg.offices : [];
+            const defaultOffice = String(cfg.office || cfg.penroOffice || '').trim();
+            const resolved = String(selectedOffice || defaultOffice || offices[0] || '').trim();
+
+            officeSelect.innerHTML = '';
+            offices.forEach(function(officeName) {
+                const option = document.createElement('option');
+                option.value = officeName;
+                option.textContent = officeName;
+                if (officeName === resolved) {
+                    option.selected = true;
+                }
+                officeSelect.appendChild(option);
+            });
+
+            if (!officeSelect.value && offices.length) {
+                officeSelect.selectedIndex = 0;
+            }
+        }
+
+        function populateAllSignatorySelects() {
+            const cfg = getSigCfg();
+            const roles = cfg.roles || {};
+            const labels = cfg.labels || {};
+            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
+            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
+            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+        }
+
+        function fetchSignatoriesForOffice(office) {
+            const cfg = getSigCfg();
+            const url = String(cfg.fetchUrl || '../../protected/handler/fetch_handlers/fetch_dv_signatories.php');
+            const targetOffice = String(office || cfg.office || '').trim();
+            const requestUrl = targetOffice
+                ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 'office=' + encodeURIComponent(targetOffice))
+                : url;
+
+            if (signatoryFetchInFlight) {
+                return signatoryFetchInFlight;
+            }
+
+            signatoryFetchInFlight = fetch(requestUrl, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(payload) {
+                    return { ok: res.ok, payload: payload };
+                });
+            }).then(function(result) {
+                if (!result.ok || !result.payload || result.payload.error) {
+                    throw new Error((result.payload && result.payload.error) ? result.payload.error : 'Failed to load signatories');
+                }
+                applySignatoryPayload(result.payload);
+                populateAllSignatorySelects();
+                return result.payload;
+            }).finally(function() {
+                signatoryFetchInFlight = null;
+            });
+
+            return signatoryFetchInFlight;
+        }
+
+        function hasAnySignatoryOptions() {
+            return (certSelect && certSelect.options.length) ||
+                (accountingSelect && accountingSelect.options.length) ||
+                (approvedSelect && approvedSelect.options.length);
         }
 
         function populateSelect(selectEl, roleKeys, labels, defaultKey) {
@@ -1531,18 +1630,17 @@ function session_contains_phrase($phrase)
 
         function openSignatoryModal() {
             const cfg = getSigCfg();
-            const roles = cfg.roles || {};
-            const labels = cfg.labels || {};
 
-            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
-            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
-            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+            if (officeContainer) {
+                officeContainer.style.display = canSelectSignatoryOffice() ? '' : 'none';
+            }
+            if (canSelectSignatoryOffice()) {
+                populateOfficeSelect(cfg.office || '');
+            }
 
-            const anyOptions = (certSelect && certSelect.options.length) ||
-                (accountingSelect && accountingSelect.options.length) ||
-                (approvedSelect && approvedSelect.options.length);
+            populateAllSignatorySelects();
 
-            if (!anyOptions) {
+            if (!hasAnySignatoryOptions()) {
                 if (typeof showNotify === 'function') {
                     showNotify('No signatories configured. Set them up in Utilities first.', 'warning', 3500);
                 }
@@ -1630,6 +1728,15 @@ function session_contains_phrase($phrase)
         if (cancelBtn) cancelBtn.addEventListener('click', closeSignatoryModal);
         if (overlay) overlay.addEventListener('click', closeSignatoryModal);
         if (printBtn) printBtn.addEventListener('click', proceedToPrint);
+        if (officeSelect) {
+            officeSelect.addEventListener('change', function() {
+                fetchSignatoriesForOffice(officeSelect.value).catch(function(err) {
+                    if (typeof showNotify === 'function') {
+                        showNotify(String(err && err.message ? err.message : 'Failed to load signatories for the selected office.'), 'warning', 3200);
+                    }
+                });
+            });
+        }
     })();
 </script>
 <script>
