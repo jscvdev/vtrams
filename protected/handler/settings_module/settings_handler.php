@@ -7,6 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../core/components/security/config_session.inc.php';
     require_once __DIR__ . '/../../core/components/security/router.inc.php';
     require_once __DIR__ . '/../../core/components/notifications/custom_process_alert.php';
+    require_once __DIR__ . '/../../core/components/helpers/request_cache.inc.php';
 
     // Allow access if user has System Admin role (any ACL level)
     require_once __DIR__ . '/../../core/components/security/access_control.inc.php';
@@ -71,6 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $insert_stmt->bindParam(':header_text', $header_text, PDO::PARAM_STR);
                     $insert_stmt->execute();
                 }
+
+                RequestCache::forget('app', 'system_settings');
 
                 // Generate new token
                 if (!function_exists('generateToken')) {

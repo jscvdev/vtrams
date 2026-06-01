@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/components/helpers/http_cache_helper.inc.php';
+
 ob_start();
 
 ini_set('display_errors', 0);
@@ -59,9 +61,7 @@ if (!in_array($mimeType, $allowedTypes)) {
 
 // Common headers
 header('Content-Length: ' . filesize($filePath));
-header('Pragma: no-cache');
-header('Expires: 0');
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+send_no_cache_headers(true);
 
 // Decide whether to preview or download
 if ($mimeType === 'application/pdf') {

@@ -1,6 +1,7 @@
 <?php
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Content-type: text/html; charset=utf-8");
+require_once __DIR__ . '/../../protected/core/components/helpers/http_cache_helper.inc.php';
+send_no_cache_headers();
+header('Content-type: text/html; charset=utf-8');
 require '../../protected/core/components/security/err_blocker.inc.php';
 require '../../protected/dbconnection.inc.php';
 require '../../protected/core/components/security/config_session.inc.php';

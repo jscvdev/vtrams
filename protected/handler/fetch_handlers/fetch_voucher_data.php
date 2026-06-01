@@ -5,6 +5,7 @@ require __DIR__ . '/../../core/components/security/err_blocker.inc.php';
 require __DIR__ . '/../../dbconnection.inc.php';
 require __DIR__ . '/../../core/components/security/config_session.inc.php';
 require __DIR__ . '/../../core/components/security/router.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/schema_cache_helper.inc.php';
 
 // Get filter parameters
 $voucher_type = isset($_GET['voucher_type']) && $_GET['voucher_type'] !== 'all' ? $_GET['voucher_type'] : null;
@@ -14,66 +15,22 @@ $month = isset($_GET['month']) && $_GET['month'] !== 'all' ? $_GET['month'] : nu
 $day = isset($_GET['day']) && $_GET['day'] !== 'all' ? $_GET['day'] : null;
 $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? $_GET['yearDate'] : null;
 
-/** @var array<string, bool> */
 function db_table_exists(PDO $pdo, string $table): bool
 {
-    static $cache = [];
-    if (array_key_exists($table, $cache)) {
-        return $cache[$table];
-    }
-    try {
-        $safe = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-        if ($safe === '' || $safe !== $table) {
-            $cache[$table] = false;
-
-            return false;
-        }
-        $stmt = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($safe));
-        $cache[$table] = $stmt && $stmt->rowCount() > 0;
-    } catch (Throwable) {
-        $cache[$table] = false;
-    }
-
-    return $cache[$table];
+    return schema_table_exists($pdo, $table);
 }
 
 /**
- * Column map for a table (DESCRIBE).
- *
  * @return array<string, bool>
  */
 function table_column_map(PDO $pdo, string $table): array
 {
-    static $cache = [];
-    if (isset($cache[$table])) {
-        return $cache[$table];
-    }
-    $map = [];
-    try {
-        $safe = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-        if ($safe === '' || $safe !== $table) {
-            $cache[$table] = [];
-
-            return [];
-        }
-        $stmt = $pdo->query('DESCRIBE `' . $safe . '`');
-        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-        foreach ($rows as $r) {
-            if (isset($r['Field'])) {
-                $map[$r['Field']] = true;
-            }
-        }
-    } catch (Throwable) {
-        $map = [];
-    }
-    $cache[$table] = $map;
-
-    return $map;
+    return schema_table_column_map($pdo, $table);
 }
 
 function table_has_column(PDO $pdo, string $table, string $column): bool
 {
-    return isset(table_column_map($pdo, $table)[$column]);
+    return schema_table_has_column($pdo, $table, $column);
 }
 
 function order_clause_for_table(PDO $pdo, string $table, string $alias): string

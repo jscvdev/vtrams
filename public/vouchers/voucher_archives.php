@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/schema_cache_helper.inc.php';
 AuditHelper::logPageView('Voucher Archives');
 include('../../protected/handler/archiving_module/archiving_errhandler.inc.php');
 require_once __DIR__ . '/checklist_config.php';
@@ -36,17 +37,7 @@ $searchSql = '';
 if (!$invalidSearch && $q !== '') {
     $pat = '%' . $q . '%';
     // voucher_archives may have either `ada_check_no` (new) or `check_no`/`ada_no` (legacy). Only reference columns that exist.
-    $existingCols = [];
-    try {
-        $colStmt = $pdo->query('SHOW COLUMNS FROM `voucher_archives`');
-        if ($colStmt) {
-            while ($colRow = $colStmt->fetch(PDO::FETCH_ASSOC)) {
-                $existingCols[(string) $colRow['Field']] = true;
-            }
-        }
-    } catch (Throwable $e) {
-        $existingCols = [];
-    }
+    $existingCols = schema_table_column_map($pdo, 'voucher_archives');
 
     $desiredTextCols = [
         'processing_no', 'ors_no', 'ada_check_no', 'check_no', 'ada_no', 'dv_no',

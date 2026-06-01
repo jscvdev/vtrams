@@ -3,8 +3,8 @@
 require_once '../../protected/core/utf8_helper.inc.php';
 initUTF8Support();
 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
+require_once __DIR__ . '/../../protected/core/components/helpers/http_cache_helper.inc.php';
+send_no_cache_headers();
 
 // Use same session as rest of app (vtrams_session) so login state is consistent
 require_once '../../protected/core/components/security/config_session.inc.php';

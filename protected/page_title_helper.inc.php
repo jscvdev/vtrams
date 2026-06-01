@@ -4,6 +4,10 @@
  * Provides consistent page title generation across the system
  */
 
+require_once __DIR__ . '/core/components/helpers/request_cache.inc.php';
+
+const PAGE_TITLE_CACHE_NS = 'app';
+
 class PageTitleHelper {
     private $pdo;
     private $systemSettings;
@@ -17,31 +21,27 @@ class PageTitleHelper {
      * Load system settings from database
      */
     private function loadSystemSettings() {
-        try {
-            $stmt = $this->pdo->prepare("SELECT * FROM system_settings WHERE id = 1");
-            $stmt->execute();
-            $this->systemSettings = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$this->systemSettings) {
-                // Fallback to default settings
-                $this->systemSettings = [
-                    'system_name' => 'PENRO Disbursement Voucher System',
-                    'page_title' => 'Disbursement Voucher System',
-                    'company_name' => 'Provincial Environment and Natural Resources Office',
-                    'browser_title' => 'PENRO-DVS',
-                    'header_text' => 'PENRO Disbursement Voucher System v1.0',
-                ];
-            }
-        } catch (PDOException $e) {
-            error_log("Error loading system settings: " . $e->getMessage());
-            $this->systemSettings = [
+        $this->systemSettings = RequestCache::remember(PAGE_TITLE_CACHE_NS, 'system_settings', function () {
+            $defaults = [
                 'system_name' => 'PENRO Disbursement Voucher System',
                 'page_title' => 'Disbursement Voucher System',
                 'company_name' => 'Provincial Environment and Natural Resources Office',
                 'browser_title' => 'PENRO-DVS',
                 'header_text' => 'PENRO Disbursement Voucher System v1.0',
             ];
-        }
+
+            try {
+                $stmt = $this->pdo->prepare('SELECT * FROM system_settings WHERE id = 1');
+                $stmt->execute();
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                return $row ?: $defaults;
+            } catch (PDOException $e) {
+                error_log('Error loading system settings: ' . $e->getMessage());
+
+                return $defaults;
+            }
+        });
     }
     
     /**
@@ -116,7 +116,7 @@ class PageTitleHelper {
             $result = $stmt->execute([$newTitle]);
             
             if ($result) {
-                // Refresh the cached settings
+                RequestCache::forget(PAGE_TITLE_CACHE_NS, 'system_settings');
                 $this->loadSystemSettings();
             }
             

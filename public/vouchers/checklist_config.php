@@ -12,6 +12,10 @@ if (!defined('CHECKLIST_CONFIG_LOADED')) {
     define('CHECKLIST_CONFIG_LOADED', 1);
 }
 
+require_once dirname(__DIR__, 2) . '/protected/core/components/helpers/request_cache.inc.php';
+
+const CHECKLIST_CACHE_NS = 'checklist';
+
 /** Path to scan for checklist templates (images + optional JSON). */
 if (!defined('CHECKLIST_TEMPLATES_PATH')) {
     // Primary source: project-root /checklist (portable across PCs)
@@ -557,12 +561,17 @@ function checklist_scan_folder_json($dir)
 function checklist_get_folder_templates()
 {
     $dir = defined('CHECKLIST_TEMPLATES_PATH') ? CHECKLIST_TEMPLATES_PATH : null;
-    if ($dir === null || $dir === '') {
-        return [];
-    }
-    $fromImages = checklist_scan_folder_images($dir);
-    $fromJson   = checklist_scan_folder_json($dir);
-    return $fromJson + $fromImages;
+    $cacheKey = 'folder:' . ($dir === null || $dir === '' ? '' : (string) $dir);
+
+    return RequestCache::remember(CHECKLIST_CACHE_NS, $cacheKey, static function () use ($dir): array {
+        if ($dir === null || $dir === '') {
+            return [];
+        }
+        $fromImages = checklist_scan_folder_images($dir);
+        $fromJson = checklist_scan_folder_json($dir);
+
+        return $fromJson + $fromImages;
+    });
 }
 
 /**
@@ -678,17 +687,21 @@ function checklist_always_available_types()
  */
 function checklist_get_active_templates()
 {
-    $folder = checklist_get_folder_templates();
-    $builtin = checklist_get_builtin_templates();
-    if (!empty($folder)) {
-        foreach (checklist_always_available_types() as $type) {
-            if (!isset($folder[$type]) && isset($builtin[$type])) {
-                $folder[$type] = $builtin[$type];
+    return RequestCache::remember(CHECKLIST_CACHE_NS, 'active_templates', static function (): array {
+        $folder = checklist_get_folder_templates();
+        $builtin = checklist_get_builtin_templates();
+        if (!empty($folder)) {
+            foreach (checklist_always_available_types() as $type) {
+                if (!isset($folder[$type]) && isset($builtin[$type])) {
+                    $folder[$type] = $builtin[$type];
+                }
             }
+
+            return $folder;
         }
-        return $folder;
-    }
-    return $builtin;
+
+        return $builtin;
+    });
 }
 
 /**
@@ -721,19 +734,22 @@ function checklist_for_type($voucherType)
  */
 function checklist_types_with_labels()
 {
-    $templates = checklist_get_active_templates();
-    // Display-label fixes for legacy/misspelled stored type values.
-    // IMPORTANT: keys remain unchanged to preserve existing saved voucher_type values.
-    $labelFixes = [
-        'Diesel or Fuel Expnese' => 'Diesel Fuel Expense',
-        'Contractual Services or Job Order' => 'Contractual Services or Job Order Salary',
-    ];
-    $out = [];
-    foreach (array_keys($templates) as $type) {
-        $out[$type] = $labelFixes[$type] ?? $type;
-    }
-    ksort($out, SORT_NATURAL | SORT_FLAG_CASE);
-    return $out;
+    return RequestCache::remember(CHECKLIST_CACHE_NS, 'types_with_labels', static function (): array {
+        $templates = checklist_get_active_templates();
+        // Display-label fixes for legacy/misspelled stored type values.
+        // IMPORTANT: keys remain unchanged to preserve existing saved voucher_type values.
+        $labelFixes = [
+            'Diesel or Fuel Expnese' => 'Diesel Fuel Expense',
+            'Contractual Services or Job Order' => 'Contractual Services or Job Order Salary',
+        ];
+        $out = [];
+        foreach (array_keys($templates) as $type) {
+            $out[$type] = $labelFixes[$type] ?? $type;
+        }
+        ksort($out, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $out;
+    });
 }
 
 /**

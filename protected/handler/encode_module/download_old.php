@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../core/components/helpers/http_cache_helper.inc.php';
+
 // Start output buffering to prevent any accidental output before headers
 ob_start();
 
@@ -18,9 +20,7 @@ if (file_exists($filePath)) {
     // Set headers for the response (don't trigger a download)
     header('Content-Type: application/octet-stream');  // We still use binary MIME type
     header('Content-Length: ' . $fileSize);           // Set the content length for streaming
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    send_no_cache_headers(true);
 
     // Output the file as binary data (no download trigger)
     readfile($filePath);

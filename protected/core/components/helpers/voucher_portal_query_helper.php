@@ -2,32 +2,16 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/schema_cache_helper.inc.php';
+
 /**
- * Cached SHOW COLUMNS for voucher portal tables (incoming / receiving / sent).
+ * Cached column map for voucher portal tables (incoming / receiving / sent).
  *
  * @return array<string, bool>
  */
 function voucher_portal_existing_columns(PDO $pdo, string $table): array
 {
-    static $cache = [];
-    if (isset($cache[$table])) {
-        return $cache[$table];
-    }
-    $out = [];
-    try {
-        $safe = str_replace('`', '', $table);
-        $st = $pdo->query('SHOW COLUMNS FROM `' . $safe . '`');
-        if ($st) {
-            while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-                $out[(string) $r['Field']] = true;
-            }
-        }
-    } catch (Throwable $e) {
-        $out = [];
-    }
-    $cache[$table] = $out;
-
-    return $out;
+    return schema_table_column_map($pdo, $table);
 }
 
 /**
