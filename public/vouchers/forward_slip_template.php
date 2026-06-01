@@ -21,7 +21,7 @@ function formatAmount($val)
 
 $claimant = h($_POST['claimant'] ?? '');
 $amount = formatAmount($_POST['amount'] ?? '');
-$nature = ''; // Nature of claim left blank on printed slip
+$nature = h($_POST['nature'] ?? '');
 $remarks = h($_POST['remarks'] ?? '');
 $processedBy = h($_POST['processedBy'] ?? '');
 $processedDate = h($_POST['processedDate'] ?? '');

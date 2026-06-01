@@ -2,6 +2,14 @@
   const printBtn = document.getElementById('print_forward_slip');
   if (!printBtn) return;
 
+  const natureModal = document.getElementById('natureOfClaimModal');
+  const natureOverlay = document.getElementById('nature_of_claim_modal_overlay');
+  const natureModalInput = document.getElementById('nature_of_claim_modal_input');
+  const natureFormInput = document.getElementById('nature_of_claim');
+  const natureModalConfirm = document.getElementById('nature_of_claim_modal_confirm');
+  const natureModalCancel = document.getElementById('nature_of_claim_modal_cancel');
+  const natureModalClose = document.getElementById('close_nature_of_claim_modal');
+
   function escapeHtml(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -64,7 +72,7 @@
     const processedBy = '';
     const signatureName = (window.__loggedUserEmpName || '').toString();
 
-    const nature = String(voucherType || '').trim();
+    const nature = String(natureFormInput?.value || '').trim();
 
     return {
       claimant,
@@ -321,7 +329,31 @@
     coaDisplayInput.addEventListener('change', syncPrintButtonState);
   }
 
-  printBtn.addEventListener('click', async function () {
+  function closeNatureOfClaimModal() {
+    if (natureModal) natureModal.style.display = 'none';
+    if (natureOverlay) natureOverlay.style.display = 'none';
+  }
+
+  function openNatureOfClaimModal() {
+    if (!natureModal || !natureOverlay) {
+      printForwardSlip();
+      return;
+    }
+    const existing = String(natureFormInput?.value || '').trim();
+    if (natureModalInput) {
+      natureModalInput.value = existing;
+    }
+    natureModal.style.display = 'block';
+    natureOverlay.style.display = 'block';
+    if (natureModalInput) {
+      setTimeout(function () {
+        natureModalInput.focus();
+        natureModalInput.select();
+      }, 50);
+    }
+  }
+
+  async function printForwardSlip() {
     if (!hasSelectedCoaRequirements()) {
       if (typeof showNotify === 'function') {
         showNotify('Please select COA requirements before printing the slip.', 'warning', 3500);
@@ -388,7 +420,59 @@
         }
       }, 50);
     });
+  }
+
+  printBtn.addEventListener('click', function () {
+    if (!hasSelectedCoaRequirements()) {
+      if (typeof showNotify === 'function') {
+        showNotify('Please select COA requirements before printing the slip.', 'warning', 3500);
+      } else {
+        alert('Please select COA requirements before printing the slip.');
+      }
+      syncPrintButtonState();
+      return;
+    }
+    openNatureOfClaimModal();
   });
+
+  function confirmNatureOfClaimAndPrint() {
+    const value = String(natureModalInput?.value || '').trim();
+    if (!value) {
+      if (typeof showNotify === 'function') {
+        showNotify('Please enter the nature of claim.', 'warning', 3000);
+      } else {
+        alert('Please enter the nature of claim.');
+      }
+      if (natureModalInput) natureModalInput.focus();
+      return;
+    }
+    if (natureFormInput) {
+      natureFormInput.value = value;
+    }
+    closeNatureOfClaimModal();
+    printForwardSlip();
+  }
+
+  if (natureModalConfirm) {
+    natureModalConfirm.addEventListener('click', confirmNatureOfClaimAndPrint);
+  }
+  if (natureModalCancel) {
+    natureModalCancel.addEventListener('click', closeNatureOfClaimModal);
+  }
+  if (natureModalClose) {
+    natureModalClose.addEventListener('click', closeNatureOfClaimModal);
+  }
+  if (natureOverlay) {
+    natureOverlay.addEventListener('click', closeNatureOfClaimModal);
+  }
+  if (natureModalInput) {
+    natureModalInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmNatureOfClaimAndPrint();
+      }
+    });
+  }
 
   // Enforce: slip must be printed before allowing "Forward" submit
   const forwardForm = document.getElementById('encoded_voucher_form');

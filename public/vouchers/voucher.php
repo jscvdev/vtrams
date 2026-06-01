@@ -445,6 +445,10 @@ function session_contains_phrase($phrase)
                                 <label for=''>Remarks</label>
                                 <input type='text' class='remarks form-custom-input' name='remarks' id='remarks' value='' placeholder='Remarks'>
                             </div>
+                            <div class='label-input__container'>
+                                <label for='nature_of_claim'>Nature of Claim</label>
+                                <input type='text' class='form-custom-input' name='nature_of_claim' id='nature_of_claim' value='' placeholder='Set via Print Slip' readonly>
+                            </div>
                             <div class="label-input__container hidden_input">
                                 <label for="">Encoded_by</label>
                                 <input name="encoded_by" id="encoded_by" class="encoded_by">
@@ -503,6 +507,9 @@ function session_contains_phrase($phrase)
         #signatoryModal {
             z-index: 10001;
         }
+        #natureOfClaimModal {
+            z-index: 10001;
+        }
         #coa_modal_overlay_forward {
             position: fixed;
             top: 0;
@@ -513,6 +520,15 @@ function session_contains_phrase($phrase)
             z-index: 10000;
         }
         #signatory_modal_overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+        }
+        #nature_of_claim_modal_overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -584,6 +600,35 @@ function session_contains_phrase($phrase)
         </div>
     </div>
     <div class="overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
+    <!-- Nature of Claim (before forward slip print) -->
+    <div class="popup-form" id="natureOfClaimModal" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p>Nature of Claim</p>
+                <i class="ri-close-fill close-icon" id="close_nature_of_claim_modal"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container" style="width: 100%;">
+                        <div class="form-container">
+                            <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Enter the nature of claim to appear on the printed forward slip.</p>
+                            <div class="label-input__container">
+                                <label for="nature_of_claim_modal_input">Nature of Claim <span style="color: red;">*</span></label>
+                                <input type="text" class="form-custom-input" id="nature_of_claim_modal_input" autocomplete="off" placeholder="e.g. Traveling Expenses, Procurement of Supplies">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn primary" id="nature_of_claim_modal_confirm" type="button">Confirm &amp; Print Slip</button>
+                        <button class="btn secondary transparent" id="nature_of_claim_modal_cancel" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;"></div>
     <!-- DV Signatory Selection Modal (before print) -->
     <div class="popup-form" id="signatoryModal" style="display: none;">
         <div class="popupForm-box__container">
@@ -631,7 +676,8 @@ function session_contains_phrase($phrase)
         #popupForm2 .popupForm-box__container,
         #popupForm .popupForm-box__container,
         #coaOptionsModalForward .popupForm-box__container,
-        #signatoryModal .popupForm-box__container {
+        #signatoryModal .popupForm-box__container,
+        #natureOfClaimModal .popupForm-box__container {
             max-height: 85vh;
             display: flex;
             flex-direction: column;
@@ -640,7 +686,8 @@ function session_contains_phrase($phrase)
         #popupForm2 .f-container,
         #popupForm .f-container,
         #coaOptionsModalForward .f-container,
-        #signatoryModal .f-container {
+        #signatoryModal .f-container,
+        #natureOfClaimModal .f-container {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -650,7 +697,8 @@ function session_contains_phrase($phrase)
         #popupForm2 .box-body__container,
         #popupForm .box-body__container,
         #coaOptionsModalForward .box-body__container,
-        #signatoryModal .box-body__container {
+        #signatoryModal .box-body__container,
+        #natureOfClaimModal .box-body__container {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
@@ -659,7 +707,8 @@ function session_contains_phrase($phrase)
         #popupForm2 .popupForm-footer__container,
         #popupForm .popupForm-footer__container,
         #coaOptionsModalForward .popupForm-footer__container,
-        #signatoryModal .popupForm-footer__container {
+        #signatoryModal .popupForm-footer__container,
+        #natureOfClaimModal .popupForm-footer__container {
             flex-shrink: 0;
         }
     </style>
@@ -873,6 +922,8 @@ function session_contains_phrase($phrase)
             }
 
             if (slipPrintedInput) slipPrintedInput.value = '0';
+            var natureOfClaimInput = document.getElementById('nature_of_claim');
+            if (natureOfClaimInput) natureOfClaimInput.value = '';
 
             if (name === 'btn-forward') {
                 var formF = document.getElementById('encoded_voucher_form');
