@@ -1,7 +1,8 @@
 <?php
 require __DIR__ . '/config_session.inc.php';
-include(__DIR__ . '/../notifications/system_custom_alert.php');
-include(__DIR__ . '/err_blocker.inc.php');
+require __DIR__ . '/err_blocker.inc.php';
+require_once __DIR__ . '/session_login_helper.inc.php';
+require_once __DIR__ . '/../redirects/redirect_config.inc.php';
 
 // Log logout before destroying session (don't let audit failure block logout)
 if (isset($_SESSION['logged_user_emp_name'])) {
@@ -13,9 +14,14 @@ if (isset($_SESSION['logged_user_emp_name'])) {
     }
 }
 
-session_unset();
-session_destroy();
+destroy_login_session();
 
-echo "<script>login_functionAlert('Logout success!', 'logout_user')</script>";
+$loginUrl = get_redirect_url('documents_index');
+if ($loginUrl === null) {
+    http_response_code(500);
+    echo 'Login redirect is not configured.';
+    exit;
+}
 
-die();
+header('Location: ' . $loginUrl);
+exit;

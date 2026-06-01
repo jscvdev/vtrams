@@ -23,7 +23,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         'domain' => $cookieDomain, // Use current host (blank for localhost/IP)
         'path' => '/', // Cookie path
         'secure' => $isHttps, // Only transmit cookies over HTTPS when available
-        'httponly' => true // Make cookies accessible only through HTTP(S), not JavaScript
+        'httponly' => true, // Make cookies accessible only through HTTP(S), not JavaScript
+        'samesite' => 'Lax',
     ]);
 
     // COOKIE INI

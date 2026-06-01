@@ -3,17 +3,29 @@
 require_once '../../protected/core/utf8_helper.inc.php';
 initUTF8Support();
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
 // Use same session as rest of app (vtrams_session) so login state is consistent
 require_once '../../protected/core/components/security/config_session.inc.php';
+require_once '../../protected/dbconnection.inc.php';
+require_once '../../protected/core/components/security/session_login_helper.inc.php';
+require_once '../../protected/core/components/redirects/redirect_config.inc.php';
 
-// Check if user is already logged in (same flag as router/auth)
-if (!empty($_SESSION['logged_in']) && $_SESSION['logged_in'] === 'true' && !empty($_SESSION['logged_user_emp_id'])) {
-    header("Location: /vtrams/public/vouchers/voucher.php");
-    exit;
+// Only skip login when session is complete and matches the database (avoids blank redirect loops)
+if (login_session_has_required_fields() && login_session_matches_database($pdo)) {
+    $voucherUrl = get_redirect_url('voucher');
+    if ($voucherUrl !== null) {
+        header('Location: ' . $voucherUrl);
+        exit;
+    }
 }
 
-// Include database connection and page title helper
-require_once '../../protected/dbconnection.inc.php';
+// Stale or partial login cookie: clear it and show the login form
+if (!empty($_SESSION['logged_in'])) {
+    invalidate_login_session();
+}
+
 require_once '../../protected/page_title_helper.inc.php';
 
 // Initialize page title helper
