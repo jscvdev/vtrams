@@ -1,7 +1,20 @@
 <?php
 
+require_once __DIR__ . '/../../core/components/helpers/schema_cache_helper.inc.php';
+
+const COA_FORWARD_PREFS_TABLE = 'user_coa_forward_prefs';
+
+function coa_forward_prefs_is_available(PDO $pdo): bool
+{
+    return schema_table_exists($pdo, COA_FORWARD_PREFS_TABLE);
+}
+
 function coa_forward_prefs_get(PDO $pdo, string $empId, string $voucherType): ?array
 {
+    if (!coa_forward_prefs_is_available($pdo)) {
+        return null;
+    }
+
     $stmt = $pdo->prepare(
         'SELECT selected_options FROM user_coa_forward_prefs
          WHERE emp_id = :emp_id AND voucher_type = :voucher_type
@@ -27,6 +40,10 @@ function coa_forward_prefs_get(PDO $pdo, string $empId, string $voucherType): ?a
 
 function coa_forward_prefs_save(PDO $pdo, string $empId, string $voucherType, string $selectedOptionsJson): bool
 {
+    if (!coa_forward_prefs_is_available($pdo)) {
+        return false;
+    }
+
     $stmt = $pdo->prepare(
         'INSERT INTO user_coa_forward_prefs (emp_id, voucher_type, selected_options)
          VALUES (:emp_id, :voucher_type, :selected_options)

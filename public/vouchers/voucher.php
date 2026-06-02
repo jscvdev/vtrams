@@ -1369,9 +1369,14 @@ function session_contains_phrase($phrase)
             }
             const url = COA_PREFS_API + '?voucher_type=' + encodeURIComponent(vt);
             return fetch(url, { credentials: 'same-origin' })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    if (!data || !data.ok || !Array.isArray(data.items)) {
+                .then(function(res) {
+                    return res.json().then(function(data) {
+                        return { ok: res.ok, data: data };
+                    });
+                })
+                .then(function(payload) {
+                    const data = payload && payload.data;
+                    if (!payload || !payload.ok || !data || !data.ok || !Array.isArray(data.items)) {
                         coaPrefsCache[vt] = null;
                         return null;
                     }
@@ -1379,6 +1384,7 @@ function session_contains_phrase($phrase)
                     return coaPrefsCache[vt];
                 })
                 .catch(function() {
+                    coaPrefsCache[vt] = null;
                     return null;
                 });
         }

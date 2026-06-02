@@ -28,6 +28,14 @@ if ($method === 'GET') {
         coa_forward_prefs_json_response(['ok' => false, 'error' => 'voucher_type is required'], 400);
     }
 
+    if (!coa_forward_prefs_is_available($pdo)) {
+        coa_forward_prefs_json_response([
+            'ok' => true,
+            'voucher_type' => $voucherType,
+            'items' => [],
+        ]);
+    }
+
     try {
         $items = coa_forward_prefs_get($pdo, $empId, $voucherType);
         coa_forward_prefs_json_response([
@@ -36,6 +44,7 @@ if ($method === 'GET') {
             'items' => $items ?? [],
         ]);
     } catch (PDOException $e) {
+        error_log('coa_forward_prefs GET: ' . $e->getMessage());
         coa_forward_prefs_json_response(['ok' => false, 'error' => 'Database error'], 500);
     }
 }
@@ -66,14 +75,24 @@ if ($method === 'POST') {
         coa_forward_prefs_json_response(['ok' => false, 'error' => 'Could not encode selections'], 400);
     }
 
+    if (!coa_forward_prefs_is_available($pdo)) {
+        coa_forward_prefs_json_response([
+            'ok' => false,
+            'error' => 'Saved checklist preferences are not available. Run the user_coa_forward_prefs database migration.',
+        ], 503);
+    }
+
     try {
-        coa_forward_prefs_save($pdo, $empId, $voucherType, $encoded);
+        if (!coa_forward_prefs_save($pdo, $empId, $voucherType, $encoded)) {
+            coa_forward_prefs_json_response(['ok' => false, 'error' => 'Could not save preferences'], 500);
+        }
         coa_forward_prefs_json_response([
             'ok' => true,
             'voucher_type' => $voucherType,
             'items' => $selectedOptions,
         ]);
     } catch (PDOException $e) {
+        error_log('coa_forward_prefs POST: ' . $e->getMessage());
         coa_forward_prefs_json_response(['ok' => false, 'error' => 'Database error'], 500);
     }
 }
