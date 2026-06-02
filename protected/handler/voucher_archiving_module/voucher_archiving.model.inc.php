@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+
 function archiving_delete_from_voucher_receiving(object $pdo, string $processing_no) {
     $query = "DELETE FROM voucher_receiving WHERE processing_no = :processing_no";
     $statement = $pdo->prepare($query);
@@ -14,6 +16,7 @@ function archiving_delete_from_voucher_receiving(object $pdo, string $processing
 }
 function insert_to_voucher_archive(object $pdo, string $processing_no, string $ors_no, string $ada_check_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_date,
                                       string $priority, string $action, string $action_by, string $datetime_action, string $office_from, string $office_to, string $encoded_by, string $receiver_udc) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $query = "INSERT INTO voucher_archives (processing_no, ors_no, ada_check_no, dv_no, payee, address, tin_employee_no, particulars, amount, voucher_date,
         priority, action, action_by, datetime_action, office_from, office_to, encoded_by, receiver_udc) 
                         VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :tin_employee_no, :particulars, :amount, :voucher_date,
@@ -29,7 +32,7 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
     $statement->bindParam(":address",$address);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
     $statement->bindParam(":particulars",$particulars);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":priority",$priority);
     $statement->bindParam(":action",$action);

@@ -5,6 +5,7 @@ require '../../protected/core/components/security/config_session.inc.php';
 require '../../protected/core/components/security/router.inc.php';
 require '../../protected/core/components/security/user_check.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 AuditHelper::logPageView('Search Voucher');
 ?>
 <link rel="stylesheet" href="../styles/css/gen_report.css">
@@ -215,7 +216,7 @@ if (isset($_GET['query'])) {
                         </tr>
                         <tr>
                             <th style="font-size: 13px">Amount:</th>
-                            <td style="font-size: 13px" colspan="5" id="amount" class="amount2"><?php echo $formattedAmount = number_format($row['amount'], 2, '.', ','); ?></td>
+                            <td style="font-size: 13px" colspan="5" id="amount" class="amount2"><?php echo htmlspecialchars(format_amount_display((string) ($row['amount'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
 
                         <tr>

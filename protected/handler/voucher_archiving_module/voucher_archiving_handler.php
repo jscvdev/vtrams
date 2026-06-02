@@ -62,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        voucher_apply_exact_amount($amount);
+
         $forwarded_by  = $_SESSION['logged_user_emp_name']; // FORWARDED BY -> CURRENT LOGGED USER
 
         if (isset($_SESSION['logged_user_office'])) {

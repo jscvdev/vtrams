@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+
 function incoming_voucher_sent_delete_from_incoming(object $pdo, string $processing_no) {
     $query = "DELETE FROM voucher_incoming WHERE processing_no = :processing_no";
 
@@ -28,6 +30,7 @@ function incoming_voucher_delete_from_sent(object $pdo, string $processing_no) {
 
 function voucher_incoming_sent_to_receiving(object $pdo, string $ors_no, string $ada_check_no, string $processing_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $datetime_action, string $office_from, string $office_to, string $sender_udc, string $receiver_udc, 
 string $encoded_by, string $encoded_from, string $datetime_encoded, string $process_status, string $combined_remarks) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $transmit = 'No';
 
     // Carry supporting_documents (and charged_amount) forward from voucher_incoming
@@ -55,7 +58,7 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":charged_amount",$charged_amount);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
@@ -80,6 +83,7 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
 }
 
 function voucher_incoming_sent_to_pending(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $encoded_by, string $encoded_from, string $datetime_encoded) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, particulars, tin_employee_no,  amount, voucher_type, voucher_date, encoded_by, encoded_from, datetime_encoded) 
                         VALUES (:processing_no, :dv_no, :ada_check_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :voucher_date, :encoded_by, :encoded_from, :datetime_encoded)";
 
@@ -92,7 +96,7 @@ function voucher_incoming_sent_to_pending(object $pdo, string $processing_no, st
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":encoded_by",$encoded_by);

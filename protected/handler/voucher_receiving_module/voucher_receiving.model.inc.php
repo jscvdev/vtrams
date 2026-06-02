@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+
 function voucher_delete_from_receiving(object $pdo, string $processing_no)
 {
     $query = "DELETE FROM voucher_receiving WHERE processing_no = :processing_no";
@@ -42,6 +44,7 @@ function voucher_pending_to_incoming(
     ?string $coa_category_override = null,
     ?string $coa_subsection_override = null
 ) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     // Fetch original amount and COA data (if any) from voucher_receiving
     $charged_amount = null;
     $supporting_documents = null;
@@ -159,7 +162,7 @@ function voucher_pending_to_incoming(
     $statement->bindParam(":payee",$payee);
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":charged_amount",$charged_amount);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
@@ -216,6 +219,7 @@ function voucher_pending_to_sent(
     ?string $coa_category_override = null,
     ?string $coa_subsection_override = null
 ) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     // Fetch original amount and COA data (if any) from voucher_receiving
     $charged_amount = null;
     $supporting_documents = null;
@@ -314,7 +318,7 @@ function voucher_pending_to_sent(
     $statement->bindParam(":payee",$payee);
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":charged_amount",$charged_amount);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
@@ -430,22 +434,26 @@ function update_dv(object $pdo, string $dv_no, string $processing_no)
 
 function update_amount(object $pdo, string $processing_no, string $amount)
 {
-    // Keep original amount in `amount`.
-    // Store into `charged_amount` only when the edited value truly differs.
-    // If unchanged (or empty), clear charged_amount so downstream inserts stay clean.
-    $query = "UPDATE voucher_receiving 
-              SET charged_amount = CASE
-                    WHEN TRIM(:new_amount_trim) = '' THEN NULL
-                    WHEN CAST(REPLACE(:new_amount_num, ',', '') AS DECIMAL(18,2)) = CAST(REPLACE(amount, ',', '') AS DECIMAL(18,2)) THEN NULL
-                    ELSE :new_amount_out
-                  END
-              WHERE processing_no = :processing_no";
+    require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+    vouchers_amount_ensure_string_column($pdo);
+
+    $normalized = normalize_amount_string($amount);
+
+    $select = $pdo->prepare('SELECT amount FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1');
+    $select->bindParam(':processing_no', $processing_no);
+    $select->execute();
+    $row = $select->fetch(PDO::FETCH_ASSOC);
+    $current = normalize_amount_string($row['amount'] ?? '');
+
+    $charged = null;
+    if ($normalized !== '' && !amounts_equal_string($normalized, $current)) {
+        $charged = $normalized;
+    }
+
+    $query = 'UPDATE voucher_receiving SET charged_amount = :charged_amount WHERE processing_no = :processing_no';
 
     $statement = $pdo->prepare($query);
-    // Named placeholders must be unique (or MySQL PDO can throw HY093).
-    $statement->bindParam(':new_amount_trim', $amount);
-    $statement->bindParam(':new_amount_num', $amount);
-    $statement->bindParam(':new_amount_out', $amount);
+    $statement->bindValue(':charged_amount', $charged, $charged === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
     $statement->bindParam(':processing_no', $processing_no);
     $statement->execute();
 

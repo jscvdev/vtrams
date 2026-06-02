@@ -5,6 +5,7 @@ require_once '../../core/components/security/config_session.inc.php';
 require_once '../../core/components/security/router.inc.php';
 require_once '../action_module/voucher_action.model.inc.php';
 require_once '../action_module/voucher_action.ctrl.inc.php';
+require_once '../../core/components/helpers/amount_helper.inc.php';
 require_once '../voucher_archiving_module/voucher_archiving.model.inc.php';
 try {
     // Retrieve JSON data from the request body
@@ -152,6 +153,12 @@ try {
     } else {
         // Process each row
         foreach ($tableData as $row) {
+            if (isset($row['amount'])) {
+                $row['amount'] = normalize_amount_string((string) $row['amount']);
+            }
+            if (isset($row['final_amount'])) {
+                $row['final_amount'] = normalize_amount_string((string) $row['final_amount']);
+            }
             $process_history = normalize_process_history($row['process_history'] ?? null);
             $ada_check_no = $row['ada_check_no'] ?? ($row['check_no'] ?? ($row['ada_no'] ?? null));
             // Bind parameters and execute the statement
@@ -189,7 +196,7 @@ try {
                 ':payee' => $row['payee'] ?? null,
                 ':address' => $row['address'] ?? null,
                 ':particulars' => $row['particulars'] ?? null,
-                ':amount' => $row['amount'] ?? null,
+                ':amount' => normalize_amount_string((string) ($row['amount'] ?? '')),
                 ':voucher_type' => $row['voucher_type'] ?? null,
                 ':voucher_date' => $row['voucher_date'] ?? null,
                 ':action' => $action ?? null,

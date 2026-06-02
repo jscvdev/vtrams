@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+
 function delete_from_voucher_incoming(object $pdo, string $processing_no) {
     $query = "DELETE FROM voucher_incoming WHERE processing_no = :processing_no";
 
@@ -56,6 +58,7 @@ function voucher_insert_into_receving(
     string $coa_category = null,
     string $coa_subsection = null
 ) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $transmit = 'No';
 
     // Preserve existing process_history so receiving doesn't "reset" history to the latest action only.
@@ -157,7 +160,7 @@ function voucher_insert_into_receving(
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);

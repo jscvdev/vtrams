@@ -403,6 +403,7 @@ if ($scriptName !== '') {
 
     <!--=============== JS ===============-->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="../../protected/js/amount_helper.js"></script>
     <script src="../../protected/js/main.js"></script>
     <script src="../../protected/js/popscript.js"></script>
 
@@ -437,7 +438,7 @@ if ($scriptName !== '') {
                     stats.voucherType[voucherType] = (stats.voucherType[voucherType] || 0) + 1;
 
                     // Amount by voucher type
-                    const amount = parseFloat(row.amount) || 0;
+                    const amount = parseFloat(normalizeAmountInput(row.amount || '')) || 0;
                     stats.amountByType[voucherType] = (stats.amountByType[voucherType] || 0) + amount;
 
                     // Monthly distribution

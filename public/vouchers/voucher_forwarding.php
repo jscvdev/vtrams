@@ -1080,6 +1080,7 @@ if ($showCashierArchiveCol) {
 
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
@@ -1173,10 +1174,7 @@ if ($showCashierArchiveCol) {
             const currentValue = inputElement.value;
             if (currentValue !== lastValue) {
                 lastValue = currentValue;
-                const convertedBack = parseFloat(currentValue.replace(/[,]/g, ''));
-                if (!isNaN(convertedBack)) {
-                    outputElement.value = `${convertedBack}`;
-                }
+                syncAmountFields(currentValue, outputElement);
             }
         }
 
@@ -1232,11 +1230,9 @@ if ($showCashierArchiveCol) {
             var coa_subsection = coa_subsection_cell ? coa_subsection_cell.textContent : '';
 
             // Use charged amount for processing if present; otherwise original.
-            var amount = (charged_amount && charged_amount.trim() !== '' && charged_amount.trim() !== '0' && charged_amount.trim() !== '0.00') ?
-                charged_amount :
-                amountOriginal;
+            var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
 
-            const convertedBack = parseFloat(String(amount).replace(/[,]/g, ''));
+            const convertedBack = normalizeAmountInput(String(amount));
 
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;
@@ -1307,8 +1303,7 @@ if ($showCashierArchiveCol) {
             if (originalStringInput) originalStringInput.disabled = true;
             if (chargedStringInput) chargedStringInput.disabled = true;
 
-            const chargedNum = parseFloat(String(charged_amount || '').replace(/[,]/g, ''));
-            const hasCharged = Number.isFinite(chargedNum) && chargedNum !== 0;
+            const hasCharged = isNonZeroAmount(charged_amount);
 
             if (hasCharged) {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
@@ -1493,8 +1488,7 @@ if ($showCashierArchiveCol) {
                 if (originalStringInput) originalStringInput.disabled = false;
                 if (chargedStringInput) chargedStringInput.disabled = false;
 
-                const chargedNumEdit = parseFloat(String(charged_amount || '').replace(/[,]/g, ''));
-                const hasChargedEdit = Number.isFinite(chargedNumEdit) && chargedNumEdit !== 0;
+                const hasChargedEdit = isNonZeroAmount(charged_amount);
 
                 if (originalStringInput && chargedStringInput) {
                     if (hasChargedEdit) {

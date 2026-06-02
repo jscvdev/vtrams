@@ -26,9 +26,9 @@
   }
 
   function formatCurrency(val) {
-    const n = parseFloat(String(val ?? '').replace(/,/g, ''));
-    if (Number.isFinite(n)) {
-      return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (typeof formatAmountDisplay === 'function') {
+      const formatted = formatAmountDisplay(val);
+      if (formatted !== '') return formatted;
     }
     return String(val ?? '');
   }

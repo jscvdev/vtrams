@@ -67,6 +67,7 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
     : [];
 ?>
     <!--=============== MAIN ===============!-->
+    <script src="../../protected/js/amount_helper.js"></script>
     <script src="../../protected/js/fetch_voucher_form_data.js"></script>
     <script>
         window.DV_ACCOUNTING = <?= json_encode([

@@ -61,6 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    voucher_apply_exact_amount($amount);
+
     if (isset($_SESSION['logged_user_office'])) {
         $office_from = $_SESSION['logged_user_office'];
     } else {

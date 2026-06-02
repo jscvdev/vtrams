@@ -119,6 +119,7 @@ try {
     }
 
     foreach ($rows as &$row) {
+        $row['amount'] = trim((string) ($row['amount'] ?? ''));
         array_walk_recursive($row, static function (&$item): void {
             if (is_string($item) && !mb_check_encoding($item, 'UTF-8')) {
                 $item = utf8_encode($item);

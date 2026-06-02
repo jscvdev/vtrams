@@ -312,9 +312,8 @@ function session_contains_phrase($phrase)
             });
             tableBody.appendChild(frag);
             document.querySelectorAll('.amount').forEach(function(el) {
-                const num = parseFloat(String(el.innerText).replace(/,/g, ''));
-                if (isNaN(num)) return;
-                el.innerText = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+                var formatted = formatAmountDisplay(el.innerText);
+                if (formatted !== '') el.innerText = formatted;
             });
         }
         function listUrl(page) {
@@ -413,6 +412,7 @@ function session_contains_phrase($phrase)
 
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>

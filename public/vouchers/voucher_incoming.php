@@ -1214,39 +1214,17 @@ $totalRows = $displayTotal;
         const numericAmountInput = document.querySelector('input[name="amount"]');
 
         if (chargedInput && numericAmountInput) {
-            // Make the visible charged field editable, keep the numeric field as the clean backing value
             chargedInput.readOnly = false;
             numericAmountInput.readOnly = true;
 
-            function sanitizeToNumericString(raw) {
-                let v = String(raw || '');
-                // Strip everything except digits and dot
-                v = v.replace(/[^0-9.]/g, '');
-                // Allow only a single decimal point
-                v = v.replace(/(\..*)\./g, '$1');
-                return v;
-            }
-
             chargedInput.addEventListener('input', function() {
-                const cleaned = sanitizeToNumericString(chargedInput.value);
-                if (cleaned !== chargedInput.value) {
-                    chargedInput.value = cleaned;
-                }
-                const parsed = parseFloat(cleaned);
-                if (!Number.isNaN(parsed)) {
-                    // Store the pure numeric value (no commas) for backend update_voucher_amount()
-                    numericAmountInput.value = String(parsed);
-                }
+                sanitizeAmountInputField(chargedInput);
+                syncAmountFields(chargedInput.value, numericAmountInput);
             });
 
             chargedInput.addEventListener('blur', function() {
-                const cleaned = sanitizeToNumericString(chargedInput.value);
-                const parsed = parseFloat(cleaned);
-                if (!Number.isNaN(parsed)) {
-                    const fixed = parsed.toFixed(2);
-                    chargedInput.value = fixed;
-                    numericAmountInput.value = fixed;
-                }
+                sanitizeAmountInputField(chargedInput);
+                syncAmountFields(chargedInput.value, numericAmountInput);
             });
         }
     }
@@ -1270,6 +1248,7 @@ $totalRows = $displayTotal;
 </script>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
@@ -1391,11 +1370,9 @@ $totalRows = $displayTotal;
             var charged_amount = charged_amount_cell ? charged_amount_cell.textContent : '';
 
             // Use charged amount for processing if present; otherwise original.
-            var amount = (charged_amount && charged_amount.trim() !== '' && charged_amount.trim() !== '0' && charged_amount.trim() !== '0.00') ?
-                charged_amount :
-                amountOriginal;
+            var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
 
-            const convertedBack = parseFloat(String(amount).replace(/[,]/g, ''));
+            const convertedBack = normalizeAmountInput(String(amount));
 
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;
@@ -1491,8 +1468,7 @@ $totalRows = $displayTotal;
             const originalStringInput = document.getElementById('original_string_amount');
             const chargedStringInput = document.getElementById('charged_string_amount');
 
-            const chargedNum = parseFloat(String(charged_amount || '').replace(/[,]/g, ''));
-            const hasCharged = Number.isFinite(chargedNum) && chargedNum !== 0;
+            const hasCharged = isNonZeroAmount(charged_amount);
 
             if (hasCharged) {
                 // Show charged amount only; primary Amount stays in DOM (hidden) for submit

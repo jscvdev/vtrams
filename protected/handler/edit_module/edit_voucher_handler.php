@@ -44,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    voucher_apply_exact_amount($amount);
+
     if (isset($_SESSION['logged_user_office'])) {
         $office_from = $_SESSION['logged_user_office'];
     } else {
@@ -117,21 +119,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     die();
                 } else {
                     vouchers_amount_ensure_string_column($pdo);
-                    //QUERY
-                    $query = "UPDATE vouchers SET dv_no = :dv_no, payee = :payee, address = :address, particulars = :particulars, tin_employee_no = :tin_employee_no, amount = :amount, voucher_date = :voucher_date WHERE processing_no=:processing_no";
+                    $dv_no = voucher_resolve_existing_dv_no($pdo, $processing_no, $dv_no);
+                    //QUERY — dv_no is not editable from the pending-voucher form; preserve existing value.
+                    $query = "UPDATE vouchers SET payee = :payee, address = :address, particulars = :particulars, tin_employee_no = :tin_employee_no, amount = :amount, voucher_type = :voucher_type, voucher_date = :voucher_date WHERE processing_no=:processing_no";
 
                     $statement = $pdo->prepare($query);
 
-                    $statement->bindParam(":dv_no", $dv_no);
                     $statement->bindParam(":payee", $payee);
                     $statement->bindParam(":address", $address);
                     $statement->bindParam(":particulars", $particulars);
                     $statement->bindParam(":tin_employee_no", $tin_employee_no);
-                    $statement->bindParam(":amount", $amount);
+                    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
+                    $statement->bindParam(":voucher_type", $voucher_type);
                     $statement->bindParam(":voucher_date", $voucher_date);
                     $statement->bindParam(":processing_no", $processing_no);
 
                     if ($statement->execute()) {
+                        if (!sync_voucher_tracking_after_edit(
+                            $pdo,
+                            $processing_no,
+                            $payee,
+                            $address,
+                            $particulars,
+                            $amount,
+                            $voucher_type,
+                            $voucher_date,
+                            $action,
+                            $datetime_action
+                        )) {
+                            voucher_log_to_document_tracking(
+                                $pdo,
+                                $processing_no,
+                                $ors_no,
+                                $ada_check_no,
+                                $dv_no,
+                                $payee,
+                                $address,
+                                $particulars,
+                                $amount,
+                                $voucher_type,
+                                $voucher_date,
+                                $datetime_action,
+                                $action,
+                                $datetime_action,
+                                $encoded_by,
+                                $office_to,
+                                $office_from,
+                                (string) ($remarks ?? '')
+                            );
+                        }
                         try {
                             insert_dv_entry(
                                 $pdo,

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 // Retrieve JSON data from the request body
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
@@ -6,13 +7,20 @@ $data = json_decode($input, true);
 $tableData = $data['data'] ?? [];
 
 $row = $tableData[0];
-$total_amount = 0;
+$total_amount = '0';
 
 foreach ($tableData as $row) {
-    $converted = floatval(preg_replace("/[^-0-9\.]/", "", $row['amount']));
-    $total_amount += $converted;
-    $formatted_total = number_format($total_amount, 2, '.', ',');;
+    $part = normalize_amount_string((string) ($row['amount'] ?? ''));
+    if ($part === '') {
+        continue;
+    }
+    if (function_exists('bcadd')) {
+        $total_amount = bcadd($total_amount, $part, 12);
+    } else {
+        $total_amount = normalize_amount_string((string) ((float) $total_amount + (float) $part));
+    }
 }
+$formatted_total = format_amount_display($total_amount);
 
 echo "<script>console.log('.$total_amount.')</script>";
 

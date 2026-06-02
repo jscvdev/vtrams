@@ -365,7 +365,7 @@ function session_contains_phrase($phrase)
                                 <input class="form-custom-input"
                                     type="text"
                                     min="1.00"
-                                    oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/(\..*)\./g, '$1')"
+                                    oninput="sanitizeAmountInputField(this)"
                                     name="amount"
                                     value="1.00"
                                     placeholder="Amount"
@@ -434,7 +434,7 @@ function session_contains_phrase($phrase)
                                 <input class="form-custom-input encoded_amount" id="encoded_amount"
                                     type="text"
                                     min="1"
-                                    oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/(\..*)\./g, '$1')"
+                                    oninput="sanitizeAmountInputField(this)"
                                     name="encoded_amount"
                                     placeholder="Amount"
                                     required>
@@ -801,27 +801,6 @@ function session_contains_phrase($phrase)
 <div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
 
 <script>
-    /** Strip commas; keep digits and one decimal point; preserve all decimal digits exactly. */
-    function normalizeAmountInput(raw) {
-        var v = String(raw || '').replace(/,/g, '').trim();
-        if (v === '') return '';
-        v = v.replace(/[^\d.]/g, '');
-        var dot = v.indexOf('.');
-        if (dot !== -1) {
-            v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
-        }
-        return v;
-    }
-
-    /** Add thousand separators without parseFloat (no rounding). */
-    function formatAmountDisplay(raw) {
-        var normalized = normalizeAmountInput(raw);
-        if (normalized === '') return '';
-        var parts = normalized.split('.');
-        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        return parts.length > 1 ? intPart + '.' + parts[1] : intPart;
-    }
-
     // Load table rows async so the page shell renders fast (1000+ rows won't block initial render).
     (function() {
         const tableBody = document.getElementById('tableBody');
@@ -1088,10 +1067,7 @@ function session_contains_phrase($phrase)
                 frag.appendChild(tr);
             });
             tableBody.appendChild(frag);
-            document.querySelectorAll('.amount').forEach(function(el) {
-                var formatted = formatAmountDisplay(el.innerText);
-                if (formatted !== '') el.innerText = formatted;
-            });
+            formatAmountTableCells('.amount');
         }
 
         function listUrl(page) {
@@ -1210,6 +1186,7 @@ function session_contains_phrase($phrase)
 
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
@@ -1893,6 +1870,7 @@ function session_contains_phrase($phrase)
 $forwardSlipJsPath = __DIR__ . '/../../protected/js/forward_slip.js';
 $forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJsPath) : time();
 ?>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
 </body>
 

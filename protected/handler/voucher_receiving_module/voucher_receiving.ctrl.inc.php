@@ -177,6 +177,7 @@ function update_voucher_dv_no(object $pdo, string $dv_no, string $processing_no)
 
 function update_voucher_amount(object $pdo, string $processing_no, string $amount)
 {
+    voucher_apply_exact_amount($amount);
     update_amount($pdo, $processing_no, $amount);
 }
 

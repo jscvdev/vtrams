@@ -82,6 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        voucher_apply_exact_amount($amount);
+
         $target = explode(",", $_SESSION['logged_user_designation']);
 
         if (isset($_SESSION["logged_user_udc"])) {
@@ -236,8 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $dv_no,
                             $payee,
                             $address,
-                            $tin_employee_no,
                             $particulars,
+                            $tin_employee_no,
                             $amount,
                             $voucher_type,
                             $voucher_date,

@@ -977,6 +977,7 @@ $totalRows = $displayTotal;
 <div class="overlay" id="historyOverlay" style="display:none;"></div>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
@@ -1116,11 +1117,9 @@ $totalRows = $displayTotal;
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
             var charged_amount = charged_amount_cell ? charged_amount_cell.textContent : '';
 
-            var amount = (charged_amount && charged_amount.trim() !== '' && charged_amount.trim() !== '0' && charged_amount.trim() !== '0.00') ?
-                charged_amount :
-                amountOriginal;
+            var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
 
-            const convertedBack = parseFloat(String(amount).replace(/[,]/g, ''));
+            const convertedBack = normalizeAmountInput(String(amount));
 
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;
@@ -1157,8 +1156,7 @@ $totalRows = $displayTotal;
             const originalStringInput = document.getElementById('original_string_amount');
             const chargedStringInput = document.getElementById('charged_string_amount');
 
-            const chargedNum = parseFloat(String(charged_amount || '').replace(/[,]/g, ''));
-            const hasCharged = Number.isFinite(chargedNum) && chargedNum !== 0;
+            const hasCharged = isNonZeroAmount(charged_amount);
 
             if (hasCharged) {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';

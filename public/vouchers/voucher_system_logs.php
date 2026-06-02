@@ -4,8 +4,12 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../protected/handler/voucher_module/voucher.model.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 AuditHelper::logPageView('Voucher System Logs');
+
+vouchers_amount_ensure_string_column($pdo);
 
 $rawSearch = (string) ($_GET['searchTerm'] ?? '');
 $q = filterInput($rawSearch);
@@ -152,7 +156,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address"><?php echo $row['address']; ?></td>
                             <td data-label="particulars" class="status"><?php echo $row['particulars']; ?></td>
-                            <td data-label="amount" class="amount"><?php echo $row['amount']; ?></td>
+                            <td data-label="amount" class="amount"><?php echo htmlspecialchars(format_amount_display((string) ($row['amount'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="action"><?php echo $row['action']; ?></td>
                             <td data-label="datetime_action"><?php echo $row['datetime_action']; ?></td>
@@ -272,6 +276,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 <?php endif; ?>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 </body>
 

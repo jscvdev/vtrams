@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
+
 function voucher_document_user_action(
     object $pdo,
     string $processing_no,
@@ -27,6 +30,9 @@ function voucher_document_user_action(
     string $coa_category = null,
     string $coa_subsection = null
 ) {
+    vouchers_amount_ensure_string_column($pdo);
+    $amount = normalize_amount_string($amount);
+
     $query = "INSERT INTO voucher_action_logs (
                     processing_no,
                     ors_no,
@@ -86,7 +92,7 @@ function voucher_document_user_action(
     $statement->bindParam(":address", $address);
     $statement->bindParam(":tin_employee_no", $tin_employee_no);
     $statement->bindParam(":particulars", $particulars);
-    $statement->bindParam(":amount", $amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_type", $voucher_type);
     $statement->bindParam(":voucher_date", $voucher_date);
     $statement->bindParam(":action", $action);

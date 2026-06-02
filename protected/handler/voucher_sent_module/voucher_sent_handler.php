@@ -77,6 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        voucher_apply_exact_amount($amount);
+
         if (isset($_SESSION['logged_user_office'])) {
             $office_from = $_SESSION['logged_user_office'];
         } else {
@@ -192,8 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $dv_no,
                                 $payee,
                                 $address,
-                                $tin_employee_no,
                                 $particulars,
+                                $tin_employee_no,
                                 $amount,
                                 $voucher_type,
                                 $voucher_date,
@@ -257,8 +259,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $dv_no,
                                 $payee,
                                 $address,
-                                $tin_employee_no,
                                 $particulars,
+                                $tin_employee_no,
                                 $amount,
                                 $voucher_type,
                                 $voucher_date,

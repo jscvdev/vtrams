@@ -257,25 +257,13 @@ function buildSignatorySelection(certKey, accountingKey, approvedKey) {
     };
 }
 
-function formatAmountDisplayFromRaw(raw) {
-    var v = String(raw || '').replace(/,/g, '').trim();
-    if (v === '') return '';
-    v = v.replace(/[^\d.]/g, '');
-    var dot = v.indexOf('.');
-    if (dot !== -1) {
-        v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
-    }
-    if (v === '') return '';
-    var parts = v.split('.');
-    var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts.length > 1 ? intPart + '.' + parts[1] : intPart;
-}
-
 function passItem(itemList, processing_no) {
     const items = itemList[processing_no];
 
     const originalAmount = getValueByKey(items, 'amount');
-    const formattedNumber = formatAmountDisplayFromRaw(originalAmount);
+    const formattedNumber = typeof formatAmountDisplay === 'function'
+        ? formatAmountDisplay(originalAmount)
+        : String(originalAmount || '');
 
     if (items) {
         const payee = getValueByKey(items, 'payee');

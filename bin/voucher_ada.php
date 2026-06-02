@@ -644,6 +644,7 @@ $target = explode(",", $_SESSION['logged_user_designation']);
 
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
@@ -678,7 +679,7 @@ $target = explode(",", $_SESSION['logged_user_designation']);
             var process_history_cell = row.querySelector('[data-label="process_history"]');
             var process_history = process_history_cell ? process_history_cell.textContent.trim() : '';
 
-            const convertedBack = parseFloat(amount.replace(/[,]/g, ''));
+            const convertedBack = normalizeAmountInput(String(amount));
 
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;

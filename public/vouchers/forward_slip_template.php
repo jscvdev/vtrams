@@ -4,6 +4,7 @@
 // Checklist is selected by voucher_type via centralized checklist_config.php.
 
 require_once __DIR__ . '/checklist_config.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 
 function h($value)
 {
@@ -12,11 +13,11 @@ function h($value)
 
 function formatAmount($val)
 {
-    $clean = str_replace(',', '', (string)$val);
-    if (!is_numeric($clean)) {
+    $formatted = format_amount_display((string) $val);
+    if ($formatted === '') {
         return h($val);
     }
-    return number_format((float)$clean, 2, '.', ',');
+    return h($formatted);
 }
 
 $claimant = h($_POST['claimant'] ?? '');

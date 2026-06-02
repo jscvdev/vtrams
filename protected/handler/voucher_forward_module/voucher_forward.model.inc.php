@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+
 function delete_from_vouchers(object $pdo, string $processing_no) {
     $query = "DELETE FROM vouchers WHERE processing_no = :processing_no";
     $statement = $pdo->prepare($query);
@@ -15,6 +17,7 @@ function delete_from_vouchers(object $pdo, string $processing_no) {
 
 function voucher_pending_to_incoming(object $pdo, string $processing_no, string $ors_no, string $ada_check_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $datetime_action, string $sender_udc,
                                      string $receiver_udc, string $office_from, string $office_to, string $encoded_by, string $encoded_from, string $datetime_encoded, string $forwarded_by, string $process_status, string $combined_remarks, string $coa_options = null, string $coa_category = null, string $coa_subsection = null) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $query = "INSERT INTO voucher_incoming (processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, voucher_type, voucher_date, datetime_forwarded, sender_udc, receiver_udc, office_from, office_to, encoded_by, encoded_from, datetime_encoded, forwarded_by, process_status, remarks, sender_remarks, coa_options, coa_category, coa_subsection) 
                         VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :voucher_date, :datetime_forwarded, :sender_udc, :receiver_udc, :office_from, :office_to, :encoded_by, :encoded_from, :datetime_encoded, :forwarded_by, :process_status, :remarks, :sender_remarks, :coa_options, :coa_category, :coa_subsection)";
 
@@ -28,7 +31,7 @@ function voucher_pending_to_incoming(object $pdo, string $processing_no, string 
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);
@@ -54,6 +57,7 @@ function voucher_pending_to_incoming(object $pdo, string $processing_no, string 
 
 function voucher_pending_to_sent(object $pdo, string $processing_no, string $ors_no, string $ada_check_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $datetime_action, string $sender_udc,
                                      string $receiver_udc, string $office_from, string $office_to, string $encoded_by, string $encoded_from, string $datetime_encoded, string $forwarded_by, string $process_status, string $combined_remarks, string $coa_options = null, string $coa_category = null, string $coa_subsection = null) {
+    $amount = voucher_prepare_stored_amount($pdo, $amount);
     $query = "INSERT INTO voucher_sent (processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, voucher_type, voucher_date, datetime_forwarded, sender_udc, receiver_udc, office_from, office_to, encoded_by, encoded_from, datetime_encoded, forwarded_by, process_status, remarks, sender_remarks, coa_options, coa_category, coa_subsection) 
                         VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :voucher_date, :datetime_forwarded, :sender_udc, :receiver_udc, :office_from, :office_to, :encoded_by, :encoded_from, :datetime_encoded, :forwarded_by, :process_status, :remarks, :sender_remarks, :coa_options, :coa_category, :coa_subsection)";
 
@@ -67,7 +71,7 @@ function voucher_pending_to_sent(object $pdo, string $processing_no, string $ors
     $statement->bindParam(":address",$address);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindParam(":amount",$amount);
+    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);
