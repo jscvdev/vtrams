@@ -360,3 +360,24 @@ function sync_voucher_tracking_after_edit(
 
     return $statement->rowCount() > 0;
 }
+
+/**
+ * Mirror charged_amount on voucher_tracking so Voucher Status shows edited amounts.
+ */
+function sync_voucher_tracking_charged_amount(object $pdo, string $processing_no, ?string $charged_amount): bool
+{
+    vouchers_amount_ensure_string_column($pdo);
+
+    $charged = null;
+    if ($charged_amount !== null && trim($charged_amount) !== '') {
+        $charged = normalize_amount_string($charged_amount);
+    }
+
+    $query = 'UPDATE voucher_tracking SET charged_amount = :charged_amount WHERE processing_no = :processing_no';
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':charged_amount', $charged, $charged === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}

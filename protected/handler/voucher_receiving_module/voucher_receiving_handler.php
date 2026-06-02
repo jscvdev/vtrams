@@ -111,8 +111,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // This will also preserve the original amount into charged_amount when first changed
-                        update_voucher_amount($pdo, $processing_no, $amount);
+                        // Preserve original amount; store edit in charged_amount and sync voucher_tracking.
+                        $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount);
+                        $logAmount = $amountUpdate['effective_amount'] ?? $amount;
+
+                        date_default_timezone_set('Asia/Singapore');
+                        $datetime_action = date('Y-m-d H:i:s');
+                        $action = 'Amount edited by: ' . ($_SESSION['logged_user_emp_name'] ?? '');
+                        $action_by = $_SESSION['logged_user_emp_name'] ?? '';
+                        $action_from = $_SESSION['logged_user_section'] ?? '';
+                        $log_office_to = $office_to !== '' ? $office_to : ($_SESSION['logged_user_office'] ?? '');
+
+                        voucher_log_user_action(
+                            $pdo,
+                            $processing_no,
+                            $ors_no,
+                            $ada_check_no,
+                            $dv_no,
+                            $payee,
+                            $address,
+                            $particulars,
+                            $tin_employee_no,
+                            $logAmount,
+                            $voucher_type,
+                            $voucher_date,
+                            $action,
+                            $action_by,
+                            $action_from,
+                            $datetime_action,
+                            $office_from,
+                            $log_office_to,
+                            $encoded_by,
+                            $remarks
+                        );
+
+                        AuditHelper::logActivity('editing', "Edited voucher amount: {$processing_no}", [
+                            'processing_no' => $processing_no,
+                            'dv_no' => $dv_no,
+                            'payee' => $payee,
+                            'amount' => $logAmount,
+                        ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+
                         echo "<script>process_functionAlert('Amount updated successfully!', 'voucher_receiving_redirect')</script>";
                         $_SESSION['token'] = generateToken();
                         die();

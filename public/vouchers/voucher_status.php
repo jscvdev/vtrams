@@ -56,7 +56,7 @@ $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $rowsPerPage;
 $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)) : 0;
 
-$fetch_voucher_status_log_query = 'SELECT vt.*, COALESCE(NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(vt.amount AS CHAR)) AS amount_resolved
+$fetch_voucher_status_log_query = 'SELECT vt.*, COALESCE(NULLIF(TRIM(CAST(vt.charged_amount AS CHAR)), \'\'), NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(vt.amount AS CHAR)) AS amount_resolved
     FROM voucher_tracking vt
     LEFT JOIN vouchers v ON v.processing_no = vt.processing_no
     WHERE vt.office_from = :office_from' . str_replace(

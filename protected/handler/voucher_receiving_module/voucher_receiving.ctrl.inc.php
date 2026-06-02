@@ -175,10 +175,13 @@ function update_voucher_dv_no(object $pdo, string $dv_no, string $processing_no)
     update_dv($pdo, $dv_no, $processing_no);
 }
 
-function update_voucher_amount(object $pdo, string $processing_no, string $amount)
+/**
+ * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
+ */
+function update_voucher_amount(object $pdo, string $processing_no, string $amount): array
 {
     voucher_apply_exact_amount($amount);
-    update_amount($pdo, $processing_no, $amount);
+    return update_amount($pdo, $processing_no, $amount);
 }
 
 function get_voucher_receiver_name_by_role(object $pdo, string $role, string $office = ''): string

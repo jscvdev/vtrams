@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
 
 function voucher_delete_from_receiving(object $pdo, string $processing_no)
 {
@@ -432,15 +433,17 @@ function update_dv(object $pdo, string $dv_no, string $processing_no)
     return $statement->rowCount() > 0;
 }
 
-function update_amount(object $pdo, string $processing_no, string $amount)
+/**
+ * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
+ */
+function update_amount(object $pdo, string $processing_no, string $amount): array
 {
-    require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
     vouchers_amount_ensure_string_column($pdo);
 
     $normalized = normalize_amount_string($amount);
 
     $select = $pdo->prepare('SELECT amount FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1');
-    $select->bindParam(':processing_no', $processing_no);
+    $select->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
     $select->execute();
     $row = $select->fetch(PDO::FETCH_ASSOC);
     $current = normalize_amount_string($row['amount'] ?? '');
@@ -454,10 +457,18 @@ function update_amount(object $pdo, string $processing_no, string $amount)
 
     $statement = $pdo->prepare($query);
     $statement->bindValue(':charged_amount', $charged, $charged === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
-    $statement->bindParam(':processing_no', $processing_no);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
     $statement->execute();
 
-    return $statement->rowCount() > 0;
+    sync_voucher_tracking_charged_amount($pdo, $processing_no, $charged);
+
+    $effective = $charged ?? $current;
+
+    return [
+        'updated' => $statement->rowCount() > 0,
+        'effective_amount' => $effective,
+        'charged_amount' => $charged,
+    ];
 }
 
 function get_employee_name_by_designation(object $pdo, string $designation, string $office = ''): ?string
