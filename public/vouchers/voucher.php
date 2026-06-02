@@ -452,6 +452,11 @@ function session_contains_phrase($phrase)
                                 <label for=''>Remarks</label>
                                 <input type='text' class='remarks form-custom-input' name='remarks' id='remarks' value='' placeholder='Remarks'>
                             </div>
+                            <div class='label-input__container forward-only-field' id='forward_target_container' style="display: none;">
+                                <label for='forward_target_display'>Forward To</label>
+                                <input type='text' class='form-custom-input' id='forward_target_display' value='' readonly>
+                                <input type='hidden' name='forward_return_designation' id='forward_return_designation' value=''>
+                            </div>
                             <div class='label-input__container forward-only-field'>
                                 <label for='nature_of_claim'>Nature of Claim</label>
                                 <input type='text' class='form-custom-input' name='nature_of_claim' id='nature_of_claim' value='' placeholder='Set via Print Slip' readonly>
@@ -892,8 +897,34 @@ function session_contains_phrase($phrase)
         function setForwardOnlyUiVisible(show) {
             var display = show ? '' : 'none';
             document.querySelectorAll('.forward-only-control, .forward-only-field').forEach(function(el) {
+                if (el.id === 'forward_target_container') {
+                    return;
+                }
                 el.style.display = display;
             });
+        }
+
+        function setForwardReturnTarget(row) {
+            var container = document.getElementById('forward_target_container');
+            var display = document.getElementById('forward_target_display');
+            var hidden = document.getElementById('forward_return_designation');
+            var isReturned = row && String(row.active_status || '') === 'returned';
+            var designation = isReturned ? String(row.forward_return_designation || '').trim() : '';
+            var label = isReturned ? String(row.forward_return_label || row.returned_by_name || '').trim() : '';
+
+            if (hidden) {
+                hidden.value = designation;
+            }
+            if (display) {
+                display.value = label;
+            }
+            if (container) {
+                container.style.display = isReturned && label ? '' : 'none';
+            }
+        }
+
+        function clearForwardReturnTarget() {
+            setForwardReturnTarget(null);
         }
 
         function handleRowAction(row, name) {
@@ -944,6 +975,7 @@ function session_contains_phrase($phrase)
 
             if (name === 'btn-forward') {
                 setForwardOnlyUiVisible(true);
+                setForwardReturnTarget(row);
                 var formF = document.getElementById('encoded_voucher_form');
                 if (formF) formF.setAttribute('action', '../../protected/handler/voucher_forward_module/voucher_forward_handler.php');
                 if (document.querySelector('.btn-dynamic')) document.querySelector('.btn-dynamic').textContent = 'Forward';
@@ -968,6 +1000,7 @@ function session_contains_phrase($phrase)
                 }
             } else if (name === 'btn-edit') {
                 setForwardOnlyUiVisible(false);
+                clearForwardReturnTarget();
                 var coaHidden = document.getElementById('selected_coa_options_forward');
                 if (coaHidden) coaHidden.value = '';
                 var formE = document.getElementById('encoded_voucher_form');

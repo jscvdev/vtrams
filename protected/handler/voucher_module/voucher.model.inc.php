@@ -267,8 +267,8 @@ function voucher_log_to_document_tracking(object $pdo, string $processing_no, st
     $amount = normalize_amount_string($amount);
     $ada_check_date = 'TBD';
     $status = 'TBD';
-    $query = "INSERT INTO voucher_tracking (processing_no, ors_no, ada_check_no, ada_check_date, dv_no, payee, address, particulars, amount, voucher_type, voucher_date, datetime_encoded, voucher_status, status, datetime_status, encoded_by, office_to, office_from, remarks, coa_options, coa_category, coa_subsection) 
-                        VALUES (:processing_no, :ors_no, :ada_check_no, :ada_check_date, :dv_no, :payee, :address, :particulars, :amount, :voucher_type, :voucher_date, :datetime_encoded, :voucher_status, :status, :datetime_status, :encoded_by, :office_to, :office_from, :remarks, :coa_options, :coa_category, :coa_subsection)";
+    $query = "INSERT INTO voucher_tracking (processing_no, ors_no, ada_check_no, ada_check_date, dv_no, payee, address, particulars, amount, voucher_type, voucher_date, datetime_encoded, voucher_status, status, datetime_status, encoded_by, office_to, office_from, remarks, coa_options, coa_category, coa_subsection, active_status) 
+                        VALUES (:processing_no, :ors_no, :ada_check_no, :ada_check_date, :dv_no, :payee, :address, :particulars, :amount, :voucher_type, :voucher_date, :datetime_encoded, :voucher_status, :status, :datetime_status, :encoded_by, :office_to, :office_from, :remarks, :coa_options, :coa_category, :coa_subsection, 'no')";
 
     $statement = $pdo->prepare($query);
 

@@ -303,7 +303,7 @@ if ($scriptName !== '') {
     </div>
     <div class="main-content main_dashboard">
         <h1>Voucher Analytics Dashboard</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Analytics for active forwarded vouchers only (excludes encoded, edited, and returned)</p>
+        <p style="color: rgb(75 85 99 / 0.9)">Analytics for active forwarded/received vouchers only (excludes encoded and returned)</p>
 
         <section class="filter_options">
             <div>

@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_forward.model.inc.php';
     require_once 'voucher_forward.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
     /** @var PDO $pdo */
 
     // Check if token is valid
@@ -27,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "selected_coa_options_forward",
             "coa_category_forward",
             "coa_subsection_forward",
+            "forward_return_designation",
         );
 
         $variable_map = array(
@@ -46,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'selected_coa_options_forward' => 'coa_options',
             'coa_category_forward' => 'coa_category',
             'coa_subsection_forward' => 'coa_subsection',
+            'forward_return_designation' => 'forward_return_designation',
 
             // Add more mappings as needed
         );
@@ -78,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ada_check_no = "TBD";
         $process_status = "N/A";
         $receiver_udc = "";
+        $forward_return_designation = isset($forward_return_designation) ? trim((string) $forward_return_designation) : '';
         if (empty($combined_remarks)) {
             $combined_remarks = "";
         }
@@ -104,59 +108,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $combined_remarks = "N/A";
                     }
 
-                    if ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
-                        while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-
-                            if ($office_from === "DENR-PENRO EASTERN SAMAR") {
-                                $target_to = "Planning Section";
-                            } else {
-                                $target_to = "ICU";
-                            }
-                            // Query users in user_group matching the designation
-                            $check_exists_query = "SELECT * FROM user_group WHERE FIND_IN_SET(:designation, designation)";
-                            $check_exists_query_statement = $pdo->prepare($check_exists_query);
-                            $check_exists_query_statement->bindParam(":designation", $target_to);
-                            $check_exists_query_statement->execute();
-
-                            $match_found = false;
-
-                            while ($row3 = $check_exists_query_statement->fetch(PDO::FETCH_ASSOC)) {
-                                if ($row3['office'] === $office_to) {
-                                    $match_found = true;
-                                    if (!empty($row3['udc'])) {
-                                        $receiver_udc_array[] = $row3['udc'];
-                                        $forwarded_to = $target_to;
-                                    } else {
-                                        $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                    }
-                                }
-                            }
+                    $forwarded_to = '';
+                    if ($forward_return_designation !== '') {
+                        // Re-forward returned voucher to the office/designation of whoever returned it.
+                        $resolved = voucher_forward_receiver_udcs_for_designation(
+                            $pdo,
+                            $forward_return_designation,
+                            $office_to
+                        );
+                        $receiver_udc = $resolved['receiver_udc'];
+                        $forwarded_to = $resolved['forwarded_to'];
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                        // Convert collected UDCs into comma-separated string
-                        $receiver_udc = implode(',', array_unique($receiver_udc_array));
-                    } elseif (in_array("Liaison Officer", $target)) {
-                        while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-
+                    } elseif ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
+                        if ($office_from === "DENR-PENRO EASTERN SAMAR") {
+                            $target_to = "Planning Section";
+                        } else {
                             $target_to = "ICU";
-                            // Query users in user_group matching the designation
-                            $check_exists_query = "SELECT * FROM user_group WHERE FIND_IN_SET(:designation, designation)";
-                            $check_exists_query_statement = $pdo->prepare($check_exists_query);
-                            $check_exists_query_statement->bindParam(":designation", $target_to);
-                            $check_exists_query_statement->execute();
-
-                            $match_found = false;
-
-                            while ($row3 = $check_exists_query_statement->fetch(PDO::FETCH_ASSOC)) {
-                                if (!empty($row3['udc'])) {
-                                    $receiver_udc_array[] = $row3['udc'];
-                                    $forwarded_to = $target_to;
-                                } else {
-                                    $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                }
-                            }
                         }
-                        // Convert collected UDCs into comma-separated string
-                        $receiver_udc = implode(',', array_unique($receiver_udc_array));
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to);
+                        $receiver_udc = $resolved['receiver_udc'];
+                        $forwarded_to = $resolved['forwarded_to'];
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        }
+                    } elseif (in_array("Liaison Officer", $target)) {
+                        $target_to = "ICU";
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to);
+                        $receiver_udc = $resolved['receiver_udc'];
+                        $forwarded_to = $resolved['forwarded_to'];
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        }
                     }
 
                     date_default_timezone_set('Asia/Singapore'); // Set timezone to GMT+8

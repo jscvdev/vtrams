@@ -85,7 +85,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 <div class="main main--dashboard" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Voucher Status</h1>
-        <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">Active forwarded vouchers only (excludes encoded, edited, and returned)</p>
+        <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">Active forwarded/received vouchers only (excludes encoded and returned)</p>
     </header>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-download_container">
