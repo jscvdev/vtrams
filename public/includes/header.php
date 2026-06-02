@@ -349,13 +349,15 @@ $header_text = $pageTitleHelper->getHeaderText();
                             </a>
                         </div>
                     <?php endif; ?>
-                    <div class="sidebar-link-container">
-                        <a href='../vouchers/settings.php' class='sidebar__link'>
-                            <i class='ri-settings-3-line'></i>
-                            <span class='sidebar__link-name'>Settings</span>
-                            <span class='sidebar__link-floating'>Settings</span>
-                        </a>
-                    </div>
+                    <?php if (in_array("System Admin", $target)) : ?>
+                        <div class="sidebar-link-container">
+                            <a href='../vouchers/settings.php' class='sidebar__link'>
+                                <i class='ri-settings-3-line'></i>
+                                <span class='sidebar__link-name'>Settings</span>
+                                <span class='sidebar__link-floating'>Settings</span>
+                            </a>
+                        </div>
+                    <?php endif; ?>
                     <div class="sidebar-link-container">
                         <a class="sidebar__link" onclick="functionAlert('Are you sure to logout?', 'logout')">
                             <i class="ri-logout-circle-line"></i>
