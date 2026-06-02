@@ -35,7 +35,11 @@ if (!$invalidSearch && $q !== '') {
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs WHERE office_from = :office_from' . $searchSql;
+    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs val WHERE val.office_from = :office_from' . str_replace(
+        ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
+        ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
+        $searchSql
+    );
     $voucher_action_logs_statementCount = $pdo->prepare($countSql);
     $voucher_action_logs_statementCount->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
     foreach ($searchParams as $key => $pair) {
@@ -53,7 +57,14 @@ $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $rowsPerPage;
 $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)) : 0;
 
-$fetch_voucher_action_logs_query = 'SELECT * FROM voucher_action_logs WHERE office_from = :office_from' . $searchSql . ' ORDER BY processing_no DESC LIMIT :lim OFFSET :off';
+$fetch_voucher_action_logs_query = 'SELECT val.*, COALESCE(NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(val.amount AS CHAR)) AS amount_resolved
+    FROM voucher_action_logs val
+    LEFT JOIN vouchers v ON v.processing_no = val.processing_no
+    WHERE val.office_from = :office_from' . str_replace(
+    ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
+    ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
+    $searchSql
+) . ' ORDER BY val.processing_no DESC LIMIT :lim OFFSET :off';
 $fetch_voucher_action_logs = $pdo->prepare($fetch_voucher_action_logs_query);
 $fetch_voucher_action_logs->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
 foreach ($searchParams as $key => $pair) {
@@ -156,7 +167,12 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address"><?php echo $row['address']; ?></td>
                             <td data-label="particulars" class="status"><?php echo $row['particulars']; ?></td>
-                            <td data-label="amount" class="amount"><?php echo htmlspecialchars(format_amount_display((string) ($row['amount'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php
+                                $amountRaw = amount_pdo_value_to_string($row['amount_resolved'] ?? $row['amount'] ?? '');
+                                $amountNormalized = normalize_amount_string($amountRaw);
+                                $amountShown = format_amount_display($amountRaw);
+                            ?>
+                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="action"><?php echo $row['action']; ?></td>
                             <td data-label="datetime_action"><?php echo $row['datetime_action']; ?></td>

@@ -34,7 +34,11 @@ if (!$invalidSearch && $q !== '') {
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking WHERE office_from = :office_from' . $searchSql;
+    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking vt WHERE vt.office_from = :office_from' . str_replace(
+        ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
+        ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
+        $searchSql
+    );
     $document_status_statementCount = $pdo->prepare($document_status_queryCount);
     $document_status_statementCount->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
     foreach ($searchParams as $key => $pair) {
@@ -52,7 +56,14 @@ $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $rowsPerPage;
 $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)) : 0;
 
-$fetch_voucher_status_log_query = 'SELECT * FROM voucher_tracking WHERE office_from = :office_from' . $searchSql . ' ORDER BY processing_no DESC LIMIT :lim OFFSET :off';
+$fetch_voucher_status_log_query = 'SELECT vt.*, COALESCE(NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(vt.amount AS CHAR)) AS amount_resolved
+    FROM voucher_tracking vt
+    LEFT JOIN vouchers v ON v.processing_no = vt.processing_no
+    WHERE vt.office_from = :office_from' . str_replace(
+    ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
+    ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
+    $searchSql
+) . ' ORDER BY vt.processing_no DESC LIMIT :lim OFFSET :off';
 $fetch_voucher_status_log = $pdo->prepare($fetch_voucher_status_log_query);
 $fetch_voucher_status_log->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
 foreach ($searchParams as $key => $pair) {
@@ -142,7 +153,12 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                                 <td data-label="payee"><?php echo $row['payee']; ?></td>
                                 <td data-label="address" class="status"><?php echo $row['address']; ?></td>
                                 <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                                <td data-label="amount" class="amount"><?php echo htmlspecialchars(format_amount_display((string) ($row['amount'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php
+                                    $amountRaw = amount_pdo_value_to_string($row['amount_resolved'] ?? $row['amount'] ?? '');
+                                    $amountNormalized = normalize_amount_string($amountRaw);
+                                    $amountShown = format_amount_display($amountRaw);
+                                ?>
+                                <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                                 <td data-label="datetime_encoded"><?php echo $row['datetime_encoded']; ?></td>
                                 <td data-label="voucher_status"><?php echo $row['voucher_status']; ?></td>

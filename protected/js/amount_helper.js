@@ -40,9 +40,13 @@ function syncAmountFields(sourceValue, outputElement) {
 
 function formatAmountTableCells(selector) {
     document.querySelectorAll(selector || '.amount').forEach(function(el) {
-        var formatted = formatAmountDisplay(el.innerText);
+        var raw = el.getAttribute('data-amount');
+        if (raw === null || raw === '') {
+            raw = el.textContent;
+        }
+        var formatted = formatAmountDisplay(raw);
         if (formatted !== '') {
-            el.innerText = formatted;
+            el.textContent = formatted;
         }
     });
 }

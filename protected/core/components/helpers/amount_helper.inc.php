@@ -6,9 +6,32 @@ declare(strict_types=1);
  * Exact amount string helpers (no float rounding).
  */
 
-function normalize_amount_string(?string $raw): string
+/** Convert PDO amount values (int/float/string) without comma truncation. */
+function amount_pdo_value_to_string(mixed $raw): string
 {
-    $v = str_replace(',', '', trim((string) $raw));
+    if ($raw === null) {
+        return '';
+    }
+    if (is_string($raw)) {
+        return trim($raw);
+    }
+    if (is_int($raw)) {
+        return (string) $raw;
+    }
+    if (is_float($raw)) {
+        if (floor($raw) === $raw && abs($raw) < 1e15) {
+            return (string) (int) $raw;
+        }
+
+        return rtrim(rtrim(sprintf('%.10F', $raw), '0'), '.');
+    }
+
+    return trim((string) $raw);
+}
+
+function normalize_amount_string(mixed $raw): string
+{
+    $v = str_replace(',', '', amount_pdo_value_to_string($raw));
     if ($v === '') {
         return '';
     }
@@ -27,7 +50,7 @@ function amounts_equal_string(?string $a, ?string $b): bool
     return normalize_amount_string($a) === normalize_amount_string($b);
 }
 
-function format_amount_display(?string $raw): string
+function format_amount_display(mixed $raw): string
 {
     $normalized = normalize_amount_string($raw);
     if ($normalized === '') {
