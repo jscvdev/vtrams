@@ -597,8 +597,9 @@ function session_contains_phrase($phrase)
                 </div>
                 <div class="popupForm-footer__container">
                     <div class="footer-button__container" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        <p style="margin: 0; font-size: 12px; color: #555; flex: 1; min-width: 200px;">By clicking "Confirm," I certify that all required attachments have been submitted and acknowledge that incomplete submissions may result in processing delays.</p>
+                        <p style="margin: 0; font-size: 12px; color: #555; flex: 1; min-width: 200px;">Use <strong>Save</strong> to store your default checklist for this voucher type. <strong>Confirm</strong> applies your selection to this voucher only.</p>
                         <button class="btn tertiary" id="coa_modal_select_all_forward" type="button">Select all</button>
+                        <button class="btn secondary" id="coa_modal_persist_forward" type="button">Save</button>
                         <button class="btn primary" id="coa_modal_save_forward" type="button">Confirm</button>
                         <button class="btn secondary transparent" id="coa_modal_cancel_forward" type="button">CANCEL</button>
                     </div>
@@ -960,6 +961,11 @@ function session_contains_phrase($phrase)
                     dynamicBtn.disabled = true;
                     dynamicBtn.classList.add('btn-disabled-forward');
                 }
+                var coaHiddenForward = document.getElementById('selected_coa_options_forward');
+                if (coaHiddenForward) coaHiddenForward.value = '';
+                if (typeof window.vtramsApplySavedCoaForwardPrefs === 'function') {
+                    window.vtramsApplySavedCoaForwardPrefs(voucher_type);
+                }
             } else if (name === 'btn-edit') {
                 setForwardOnlyUiVisible(false);
                 var coaHidden = document.getElementById('selected_coa_options_forward');
@@ -1309,6 +1315,9 @@ function session_contains_phrase($phrase)
     // Forward Voucher: "Confirm" opens the requirements checklist modal (by voucher type).
     (function() {
         const templates = <?php echo json_encode(checklist_get_active_templates(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const COA_PREFS_API = '../../protected/handler/coa_prefs_module/coa_forward_prefs_handler.php';
+        const COA_PREFS_TOKEN = <?php echo json_encode((string)($_SESSION['token'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+        const coaPrefsCache = Object.create(null);
 
         const openBtn = document.getElementById('confirm_forward_requirements');
         const modal = document.getElementById('coaOptionsModalForward');
@@ -1318,6 +1327,7 @@ function session_contains_phrase($phrase)
         const closeBtn = document.getElementById('close_coa_modal_forward');
         const cancelBtn = document.getElementById('coa_modal_cancel_forward');
         const saveBtn = document.getElementById('coa_modal_save_forward');
+        const persistBtn = document.getElementById('coa_modal_persist_forward');
         const selectAllBtn = document.getElementById('coa_modal_select_all_forward');
 
         const hiddenSelected = document.getElementById('selected_coa_options_forward');
@@ -1328,6 +1338,182 @@ function session_contains_phrase($phrase)
             const t = String(label || '').trim().toLowerCase();
             return t === 'etc' || t === 'etc.' || t === 'others' || t === 'other';
         }
+
+        function parseChecklistItem(raw) {
+            if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.label) {
+                const subs = Array.isArray(raw.subitems)
+                    ? raw.subitems.map(function(s) { return String(s || '').trim(); }).filter(Boolean)
+                    : [];
+                return { label: String(raw.label || '').trim(), subitems: subs };
+            }
+            return { label: String(raw || '').trim(), subitems: [] };
+        }
+
+        function getTemplateLabels(voucherType) {
+            const t = templates[voucherType];
+            const labels = new Set();
+            if (!t || !Array.isArray(t.items)) return labels;
+            t.items.forEach(function(raw) {
+                const meta = parseChecklistItem(raw);
+                if (meta.label) labels.add(meta.label);
+                meta.subitems.forEach(function(s) { labels.add(String(s || '').trim()); });
+            });
+            return labels;
+        }
+
+        function loadSavedPrefs(voucherType) {
+            const vt = String(voucherType || '').trim();
+            if (!vt) return Promise.resolve(null);
+            if (Object.prototype.hasOwnProperty.call(coaPrefsCache, vt)) {
+                return Promise.resolve(coaPrefsCache[vt]);
+            }
+            const url = COA_PREFS_API + '?voucher_type=' + encodeURIComponent(vt);
+            return fetch(url, { credentials: 'same-origin' })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || !data.ok || !Array.isArray(data.items)) {
+                        coaPrefsCache[vt] = null;
+                        return null;
+                    }
+                    coaPrefsCache[vt] = data.items.length ? data.items : null;
+                    return coaPrefsCache[vt];
+                })
+                .catch(function() {
+                    return null;
+                });
+        }
+
+        function saveSavedPrefsToDb(voucherType, selectedOptions) {
+            const vt = String(voucherType || '').trim();
+            if (!vt || !Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+                return Promise.reject(new Error('No selections to save'));
+            }
+            return fetch(COA_PREFS_API, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: COA_PREFS_TOKEN,
+                    voucher_type: vt,
+                    selected_options: selectedOptions
+                })
+            })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || !data.ok) {
+                        throw new Error((data && data.error) ? data.error : 'Save failed');
+                    }
+                    coaPrefsCache[vt] = selectedOptions;
+                    return data;
+                });
+        }
+
+        function splitSavedCoaLabel(full, knownBase) {
+            const s = String(full || '').trim();
+            const base = String(knownBase || '').trim();
+            if (!base) return { base: s, extra: '' };
+            if (s === base) return { base: base, extra: '' };
+            const prefix = base + ' - ';
+            if (s.indexOf(prefix) === 0) {
+                return { base: base, extra: s.slice(prefix.length).trim() };
+            }
+            return { base: s, extra: '' };
+        }
+
+        function savedItemMatchesCheckbox(savedOpt, checkboxBase) {
+            const full = String((savedOpt && (savedOpt.label || savedOpt.value)) || '').trim();
+            const base = String(checkboxBase || '').trim();
+            if (!full || !base) return false;
+            if (full === base) return true;
+            return splitSavedCoaLabel(full, base).base === base;
+        }
+
+        function filterSavedToTemplate(voucherType, savedItems) {
+            const allowed = getTemplateLabels(voucherType);
+            if (!allowed.size) return [];
+            return (savedItems || []).filter(function(opt) {
+                const full = String((opt && (opt.label || opt.value)) || '').trim();
+                if (!full) return false;
+                if (allowed.has(full)) return true;
+                for (const lab of allowed) {
+                    if (full === lab || full.indexOf(lab + ' - ') === 0) return true;
+                }
+                return false;
+            });
+        }
+
+        function getCheckboxBaseLabel(cb) {
+            return (cb.parentElement && cb.parentElement.querySelector('span')
+                ? cb.parentElement.querySelector('span').textContent
+                : cb.value) || '';
+        }
+
+        function applySelectionsToList(savedItems) {
+            if (!optionsList || !Array.isArray(savedItems) || savedItems.length === 0) return;
+            const checkboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
+            checkboxes.forEach(function(cb) {
+                const base = String(getCheckboxBaseLabel(cb) || '').trim();
+                const match = savedItems.find(function(opt) {
+                    return savedItemMatchesCheckbox(opt, base);
+                });
+                cb.checked = !!match;
+                const extraInput = cb.parentElement && cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
+                if (extraInput && match) {
+                    const full = String((match.label || match.value) || '').trim();
+                    extraInput.value = splitSavedCoaLabel(full, base).extra;
+                } else if (extraInput) {
+                    extraInput.value = '';
+                }
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            if (selectAllBtn && checkboxes.length) {
+                const allChecked = checkboxes.every(function(cb) { return cb.checked; });
+                selectAllBtn.textContent = allChecked ? 'Unselect all' : 'Select all';
+            }
+        }
+
+        function getConfirmedSelectionsForVoucher() {
+            const raw = String(hiddenSelected && hiddenSelected.value || '').trim();
+            if (!raw) return null;
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) && parsed.length ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function collectSelectedOptionsFromCheckboxes() {
+            if (!optionsList) return [];
+            const allCheckboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
+            const checked = allCheckboxes.filter(function(cb) { return cb.checked; });
+            return checked.map(function(cb) {
+                const base = cb.parentElement.querySelector('span') ? cb.parentElement.querySelector('span').textContent : cb.value;
+                const extra = cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
+                const extraText = String(extra && extra.value || '').trim();
+                const label = extraText ? (String(base || '').trim() + ' - ' + extraText) : String(base || '').trim();
+                return {
+                    id: cb.getAttribute('data-id'),
+                    value: label,
+                    label: label
+                };
+            });
+        }
+
+        function applySavedPrefsToHidden(voucherType) {
+            if (!hiddenSelected) return Promise.resolve(false);
+            return loadSavedPrefs(voucherType).then(function(saved) {
+                const filtered = filterSavedToTemplate(voucherType, saved);
+                if (!filtered.length) return false;
+                hiddenSelected.value = JSON.stringify(filtered);
+                hiddenSelected.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            });
+        }
+
+        window.vtramsApplySavedCoaForwardPrefs = function(voucherType) {
+            applySavedPrefsToHidden(voucherType);
+        };
 
         function attachExtraTextInput(checkbox, wrapEl, labelText) {
             if (!checkbox || !wrapEl || !labelNeedsExtraText(labelText)) return;
@@ -1370,6 +1556,10 @@ function session_contains_phrase($phrase)
                 if (typeof showNotify === 'function') showNotify('Please select a voucher type first.', 'warning', 3000);
                 return;
             }
+            if (persistBtn) {
+                persistBtn.disabled = false;
+                persistBtn.textContent = 'Save';
+            }
 
             const t = templates[voucherType] || {
                 title: 'SUPPORTING DOCUMENTS',
@@ -1395,15 +1585,6 @@ function session_contains_phrase($phrase)
                     empty.textContent = 'No checklist configured for this voucher type.';
                     optionsList.appendChild(empty);
                 } else {
-                    function parseChecklistItem(raw) {
-                        if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.label) {
-                            const subs = Array.isArray(raw.subitems)
-                                ? raw.subitems.map(function(s) { return String(s || '').trim(); }).filter(Boolean)
-                                : [];
-                            return { label: String(raw.label || '').trim(), subitems: subs };
-                        }
-                        return { label: String(raw || '').trim(), subitems: [] };
-                    }
                     items.forEach((raw, idx) => {
                         const meta = parseChecklistItem(raw);
                         const itemLabel = meta.label;
@@ -1482,10 +1663,27 @@ function session_contains_phrase($phrase)
                         optionsList.appendChild(row);
                     });
                 }
+
+                const confirmed = getConfirmedSelectionsForVoucher();
+                const applyToModal = function(savedItems) {
+                    const savedForModal = filterSavedToTemplate(voucherType, savedItems);
+                    if (savedForModal.length) {
+                        applySelectionsToList(savedForModal);
+                    }
+                };
+                if (confirmed) {
+                    applyToModal(confirmed);
+                } else {
+                    loadSavedPrefs(voucherType).then(function(saved) {
+                        applyToModal(saved || []);
+                    });
+                }
             }
 
-            // Reset Select-all button label
-            if (selectAllBtn) selectAllBtn.textContent = 'Select all';
+            // Reset Select-all button label when list is empty
+            if (selectAllBtn && (!optionsList || !optionsList.querySelector('input[type="checkbox"][name="coa_options_checklist_forward[]"]'))) {
+                selectAllBtn.textContent = 'Select all';
+            }
 
             // Store the "selection path" in hidden fields for the backend (no UI for these).
             if (hiddenCategory) hiddenCategory.value = voucherType;
@@ -1514,34 +1712,43 @@ function session_contains_phrase($phrase)
             });
         }
 
+        if (persistBtn) {
+            persistBtn.addEventListener('click', function() {
+                const selectedOptions = collectSelectedOptionsFromCheckboxes();
+                if (selectedOptions.length === 0) {
+                    if (typeof showNotify === 'function') showNotify('Please select at least one requirement to save.', 'warning', 3000);
+                    return;
+                }
+                const voucherType = getCurrentVoucherType();
+                persistBtn.disabled = true;
+                const prevLabel = persistBtn.textContent;
+                persistBtn.textContent = 'Saving...';
+                saveSavedPrefsToDb(voucherType, selectedOptions)
+                    .then(function() {
+                        if (typeof showNotify === 'function') {
+                            showNotify('Default checklist saved for this voucher type.', 'success', 3000);
+                        }
+                    })
+                    .catch(function(err) {
+                        if (typeof showNotify === 'function') {
+                            showNotify(err && err.message ? err.message : 'Could not save checklist.', 'error', 3500);
+                        }
+                    })
+                    .finally(function() {
+                        persistBtn.disabled = false;
+                        persistBtn.textContent = prevLabel;
+                    });
+            });
+        }
+
         if (saveBtn) {
             saveBtn.addEventListener('click', function() {
-                if (!optionsList || !hiddenSelected) return;
-                const allCheckboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
-                const checked = allCheckboxes.filter(cb => cb.checked);
-
-                // COA options are not all mandatory; require at least one confirmed selection.
-                if (checked.length === 0) {
+                if (!hiddenSelected) return;
+                const selectedOptions = collectSelectedOptionsFromCheckboxes();
+                if (selectedOptions.length === 0) {
                     if (typeof showNotify === 'function') showNotify('Please select at least one requirement.', 'warning', 3000);
                     return;
                 }
-
-                const selectedOptions = checked.map(cb => ({
-                    id: cb.getAttribute('data-id'),
-                    value: (function() {
-                        const base = cb.parentElement.querySelector('span')?.textContent || cb.value;
-                        const extra = cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
-                        const extraText = String(extra?.value || '').trim();
-                        return extraText ? (String(base || '').trim() + ' - ' + extraText) : String(base || '').trim();
-                    })(),
-                    label: (function() {
-                        const base = cb.parentElement.querySelector('span')?.textContent || cb.value;
-                        const extra = cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
-                        const extraText = String(extra?.value || '').trim();
-                        return extraText ? (String(base || '').trim() + ' - ' + extraText) : String(base || '').trim();
-                    })()
-                }));
-
                 hiddenSelected.value = JSON.stringify(selectedOptions);
                 hiddenSelected.dispatchEvent(new Event('change', { bubbles: true }));
                 closeModal();

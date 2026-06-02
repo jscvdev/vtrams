@@ -11,27 +11,31 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
 
     try {
-        $query = 'SELECT * FROM voucher_tracking WHERE 1=1';
+        // Exclude encoded-only drafts still in vouchers (not yet forwarded by the encoder).
+        $query = 'SELECT vt.* FROM voucher_tracking vt
+            WHERE NOT EXISTS (
+                SELECT 1 FROM vouchers v WHERE v.processing_no = vt.processing_no
+            )';
         $params = [];
 
         if ($voucher_type !== null && $voucher_type !== '') {
-            $query .= ' AND voucher_type = :voucher_type';
+            $query .= ' AND vt.voucher_type = :voucher_type';
             $params[':voucher_type'] = $voucher_type;
         }
 
         if ($month !== null && $day !== null && $yearDate !== null) {
-            $query .= ' AND DATE(voucher_date) = :date_filter';
+            $query .= ' AND DATE(vt.voucher_date) = :date_filter';
             $params[':date_filter'] = sprintf('%04d-%02d-%02d', $yearDate, $month, $day);
         } elseif ($month !== null && $yearDate !== null) {
-            $query .= ' AND MONTH(voucher_date) = :month AND YEAR(voucher_date) = :yearDate';
+            $query .= ' AND MONTH(vt.voucher_date) = :month AND YEAR(vt.voucher_date) = :yearDate';
             $params[':month'] = $month;
             $params[':yearDate'] = $yearDate;
         } elseif ($yearDate !== null) {
-            $query .= ' AND YEAR(voucher_date) = :yearDate';
+            $query .= ' AND YEAR(vt.voucher_date) = :yearDate';
             $params[':yearDate'] = $yearDate;
         }
 
-        $query .= ' ORDER BY voucher_date DESC';
+        $query .= ' ORDER BY vt.voucher_date DESC';
 
         $stmt = $pdo->prepare($query);
         foreach ($params as $key => $value) {
@@ -301,7 +305,7 @@ if ($scriptName !== '') {
     </div>
     <div class="main-content main_dashboard">
         <h1>Voucher Analytics Dashboard</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Comprehensive analytics and insights for all voucher data</p>
+        <p style="color: rgb(75 85 99 / 0.9)">Analytics for vouchers already forwarded by encoders (excludes encoded-only drafts)</p>
 
         <section class="filter_options">
             <div>
