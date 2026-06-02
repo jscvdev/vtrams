@@ -31,10 +31,13 @@ if (!$invalidSearch && $q !== '') {
     $searchSql = ' AND (' . implode(' OR ', $parts) . ')';
 }
 
+// Exclude encoded-only drafts still in vouchers (not yet forwarded by the encoder).
+$forwardedOnlySql = ' AND NOT EXISTS (SELECT 1 FROM vouchers v_pending WHERE v_pending.processing_no = vt.processing_no)';
+
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking vt WHERE vt.office_from = :office_from' . str_replace(
+    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking vt WHERE vt.office_from = :office_from' . $forwardedOnlySql . str_replace(
         ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
         ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
         $searchSql
@@ -59,7 +62,7 @@ $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)
 $fetch_voucher_status_log_query = 'SELECT vt.*, COALESCE(NULLIF(TRIM(CAST(vt.charged_amount AS CHAR)), \'\'), NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(vt.amount AS CHAR)) AS amount_resolved
     FROM voucher_tracking vt
     LEFT JOIN vouchers v ON v.processing_no = vt.processing_no
-    WHERE vt.office_from = :office_from' . str_replace(
+    WHERE vt.office_from = :office_from' . $forwardedOnlySql . str_replace(
     ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
     ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
     $searchSql
@@ -82,6 +85,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 <div class="main main--dashboard" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Voucher Status</h1>
+        <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">Forwarded vouchers only (excludes encoded-only drafts)</p>
     </header>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-download_container">
