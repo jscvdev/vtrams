@@ -57,14 +57,14 @@ $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $rowsPerPage;
 $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)) : 0;
 
-$fetch_voucher_action_logs_query = 'SELECT val.*, COALESCE(NULLIF(TRIM(CAST(v.amount AS CHAR)), \'\'), CAST(val.amount AS CHAR)) AS amount_resolved
+// Each log row keeps its own amount snapshot; do not join vouchers (current amount).
+$fetch_voucher_action_logs_query = 'SELECT val.*, CAST(val.amount AS CHAR) AS amount_log
     FROM voucher_action_logs val
-    LEFT JOIN vouchers v ON v.processing_no = val.processing_no
     WHERE val.office_from = :office_from' . str_replace(
     ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
     ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
     $searchSql
-) . ' ORDER BY val.processing_no DESC LIMIT :lim OFFSET :off';
+) . ' ORDER BY val.id DESC LIMIT :lim OFFSET :off';
 $fetch_voucher_action_logs = $pdo->prepare($fetch_voucher_action_logs_query);
 $fetch_voucher_action_logs->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
 foreach ($searchParams as $key => $pair) {
@@ -168,7 +168,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                             <td data-label="address"><?php echo $row['address']; ?></td>
                             <td data-label="particulars" class="status"><?php echo $row['particulars']; ?></td>
                             <?php
-                                $amountRaw = amount_pdo_value_to_string($row['amount_resolved'] ?? $row['amount'] ?? '');
+                                $amountRaw = amount_pdo_value_to_string($row['amount_log'] ?? $row['amount'] ?? '');
                                 $amountNormalized = normalize_amount_string($amountRaw);
                                 $amountShown = format_amount_display($amountRaw);
                             ?>
