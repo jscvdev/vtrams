@@ -814,7 +814,6 @@ function session_contains_phrase($phrase)
         if (!tableBody) return;
         const perPage = 50;
         let searchQ = '';
-        let debounceTimer = null;
         let currentPage = 1;
         let totalPages = 1;
         let totalRows = 0;
@@ -822,17 +821,19 @@ function session_contains_phrase($phrase)
         if (tableWrapper) tableWrapper.setAttribute('data-table-loading', 'true');
         const filterEl = document.getElementById('filterInput');
 
-        function scheduleSearchReload() {
+        function applySearch() {
             if (!filterEl) return;
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(function() {
-                searchQ = String(filterEl.value || '');
-                currentPage = 1;
-                loadPage(1);
-            }, 200);
+            searchQ = String(filterEl.value || '');
+            currentPage = 1;
+            loadPage(1);
         }
         if (filterEl) {
-            filterEl.addEventListener('input', scheduleSearchReload);
+            filterEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applySearch();
+                }
+            });
         }
 
         const typeLabels = <?php echo json_encode($voucher_types_for_select ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;

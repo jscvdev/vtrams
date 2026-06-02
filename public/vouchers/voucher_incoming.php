@@ -724,22 +724,24 @@ $totalRows = $displayTotal;
         var inp = document.getElementById('filterInput');
         if (!inp) return;
         var initial = String(inp.value || '');
-        var t = null;
-        inp.addEventListener('input', function() {
-            clearTimeout(t);
-            t = setTimeout(function() {
-                var v = String(inp.value || '');
-                if (v === initial) return;
-                var u = new URL(window.location.href);
-                u.searchParams.set('page', '1');
-                u.searchParams.set('rowsPerPage', '50');
-                if (v === '') {
-                    u.searchParams.delete('q');
-                } else {
-                    u.searchParams.set('q', v);
-                }
-                window.location.href = u.toString();
-            }, 400);
+        function applyFilterSearch() {
+            var v = String(inp.value || '');
+            if (v === initial) return;
+            var u = new URL(window.location.href);
+            u.searchParams.set('page', '1');
+            u.searchParams.set('rowsPerPage', '50');
+            if (v === '') {
+                u.searchParams.delete('q');
+            } else {
+                u.searchParams.set('q', v);
+            }
+            window.location.href = u.toString();
+        }
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyFilterSearch();
+            }
         });
     })();
 </script>

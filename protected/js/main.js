@@ -87,6 +87,27 @@ function filterNameFunction() {
     }
 }
 
+(function bindFilterInputEnter() {
+    function attach() {
+        var el = document.getElementById("filterInput");
+        if (!el || el.getAttribute("data-filter-enter-bound") === "1") return;
+        if (!document.getElementById("my-Table")) return;
+        el.setAttribute("data-filter-enter-bound", "1");
+        el.removeAttribute("onkeyup");
+        el.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                filterNameFunction();
+            }
+        });
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", attach);
+    } else {
+        attach();
+    }
+})();
+
 function filterNameFunctionType() {
     // Declare variables
     var input, filter, table, tr, td, i, txtValue;

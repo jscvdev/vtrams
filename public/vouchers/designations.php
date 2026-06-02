@@ -311,19 +311,21 @@ try {
         var filterInput = document.getElementById('filterInput');
         if (filterInput) {
             var initial = String(filterInput.value || '');
-            var t = null;
-            filterInput.addEventListener('input', function() {
-                clearTimeout(t);
-                t = setTimeout(function() {
-                    var v = String(filterInput.value || '');
-                    if (v === initial) return;
-                    var u = new URL(window.location.href);
-                    u.searchParams.set('page', '1');
-                    u.searchParams.set('rowsPerPage', '50');
-                    if (v === '') u.searchParams.delete('q');
-                    else u.searchParams.set('q', v);
-                    window.location.href = u.toString();
-                }, 400);
+            function applyFilterSearch() {
+                var v = String(filterInput.value || '');
+                if (v === initial) return;
+                var u = new URL(window.location.href);
+                u.searchParams.set('page', '1');
+                u.searchParams.set('rowsPerPage', '50');
+                if (v === '') u.searchParams.delete('q');
+                else u.searchParams.set('q', v);
+                window.location.href = u.toString();
+            }
+            filterInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyFilterSearch();
+                }
             });
         }
         var form = document.getElementById('designation_form_container');

@@ -373,14 +373,16 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
         var inp = document.getElementById('filterInput');
         if (!inp) return;
         var initial = String(inp.value || '');
-        var t = null;
-        inp.addEventListener('input', function() {
-            clearTimeout(t);
-            t = setTimeout(function() {
-                var v = String(inp.value || '');
-                if (v === initial) return;
-                window.location.href = '?page=1&rowsPerPage=50&searchTerm=' + encodeURIComponent(v);
-            }, 400);
+        function applyFilterSearch() {
+            var v = String(inp.value || '');
+            if (v === initial) return;
+            window.location.href = '?page=1&rowsPerPage=50&searchTerm=' + encodeURIComponent(v);
+        }
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyFilterSearch();
+            }
         });
     })();
 </script>

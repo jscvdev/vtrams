@@ -38,7 +38,7 @@ function session_contains_phrase($phrase)
     <div class="filter-download_container">
         <div class="filter_options_container">
             <div class="filter-container">
-                <input type="text" id="filterInput" onkeyup="filterNameFunction()" placeholder="Search">
+                <input type="text" id="filterInput" placeholder="Search">
             </div>
         </div>
         <a class="btn-add popupForm-add" id="openPopup">Reply document</a>
