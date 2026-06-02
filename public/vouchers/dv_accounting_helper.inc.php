@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
 
 /** Valid user_group.emp_tag / form "tag" values for salary UACS mapping. */
 function dv_known_emp_tags(?PDO $pdo = null): array
