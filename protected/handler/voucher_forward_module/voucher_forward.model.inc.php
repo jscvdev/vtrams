@@ -97,7 +97,7 @@ function voucher_pending_to_sent(object $pdo, string $processing_no, string $ors
 
 function update_returned_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $combined_remarks)
 {
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :combined_remarks WHERE processing_no = :processing_no";
+    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :combined_remarks, active_status = 'yes' WHERE processing_no = :processing_no";
 
     $statement = $pdo->prepare($query);
 

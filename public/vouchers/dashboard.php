@@ -11,12 +11,9 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
 
     try {
-        // Forwarded vouchers only: voucher_tracking rows not still pending in vouchers, excluding returns.
+        // Active forwarded vouchers only (active_status set on encode->forward, cleared on return).
         $query = 'SELECT vt.* FROM voucher_tracking vt
-            WHERE NOT EXISTS (
-                SELECT 1 FROM vouchers v WHERE v.processing_no = vt.processing_no
-            )
-            AND vt.voucher_status NOT LIKE \'Returned%\'';
+            WHERE vt.active_status = \'yes\'';
         $params = [];
 
         if ($voucher_type !== null && $voucher_type !== '') {
@@ -306,7 +303,7 @@ if ($scriptName !== '') {
     </div>
     <div class="main-content main_dashboard">
         <h1>Voucher Analytics Dashboard</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Analytics for forwarded vouchers from tracking (excludes encoded-only drafts and returned vouchers)</p>
+        <p style="color: rgb(75 85 99 / 0.9)">Analytics for active forwarded vouchers only (excludes encoded, edited, and returned)</p>
 
         <section class="filter_options">
             <div>
