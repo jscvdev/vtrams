@@ -284,12 +284,14 @@ function session_contains_phrase($phrase)
             data.forEach(function(row) {
                 const tr = document.createElement('tr');
                 tr.className = 'voucher-data-row';
+                var amountNorm = normalizeAmountInput(row.amount || '');
+                var amountShown = amountNorm !== '' ? formatAmountDisplay(amountNorm) : escapeHtml(row.amount || '');
                 tr.innerHTML =
                     '<td data-label="processing_no">' + escapeHtml(row.processing_no) + '</td>' +
                     '<td data-label="payee">' + escapeHtml(row.payee) + '</td>' +
                     '<td data-label="address">' + escapeHtml(row.address) + '</td>' +
                     '<td data-label="particulars">' + escapeHtml(row.particulars) + '</td>' +
-                    '<td data-label="amount" class="amount">' + escapeHtml(row.amount) + '</td>' +
+                    '<td data-label="amount" class="amount" data-amount="' + escapeHtml(amountNorm) + '">' + escapeHtml(amountShown) + '</td>' +
                     '<td data-label="voucher_date">' + escapeHtml(row.voucher_date) + '</td>' +
                     '<td data-label="voucher_type_display" class="voucher-type-cell">' + typeBadge(row.voucher_type) + '</td>' +
                     '<td data-label="return_remarks" class="return-remarks-cell">' + remarksBadge(row.return_remarks) + '</td>' +
@@ -311,10 +313,9 @@ function session_contains_phrase($phrase)
                 frag.appendChild(tr);
             });
             tableBody.appendChild(frag);
-            document.querySelectorAll('.amount').forEach(function(el) {
-                var formatted = formatAmountDisplay(el.innerText);
-                if (formatted !== '') el.innerText = formatted;
-            });
+            if (typeof formatAmountTableCells === 'function') {
+                formatAmountTableCells('.amount[data-amount]:not([data-amount-skip])');
+            }
         }
         function listUrl(page) {
             var u = '../../protected/handler/fetch_handlers/fetch_my_dv_entries.php?page=' + encodeURIComponent(String(page))

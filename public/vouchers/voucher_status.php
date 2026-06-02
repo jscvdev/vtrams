@@ -158,7 +158,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                                     $amountNormalized = normalize_amount_string($amountRaw);
                                     $amountShown = format_amount_display($amountRaw);
                                 ?>
-                                <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td data-label="amount" class="amount-cell" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>" data-amount-formatted="php" data-amount-skip="1"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                                 <td data-label="datetime_encoded"><?php echo $row['datetime_encoded']; ?></td>
                                 <td data-label="voucher_status"><?php echo $row['voucher_status']; ?></td>
@@ -403,8 +403,6 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 <?php endif; ?>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
-<script src="../../protected/js/amount_helper.js"></script>
-<script src="../../protected/js/voucher.js"></script>
 </body>
 
 </html>

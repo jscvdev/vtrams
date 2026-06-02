@@ -39,10 +39,14 @@ function syncAmountFields(sourceValue, outputElement) {
 }
 
 function formatAmountTableCells(selector) {
-    document.querySelectorAll(selector || '.amount').forEach(function(el) {
+    var nodes = document.querySelectorAll(selector || '.amount[data-amount]:not([data-amount-skip])');
+    nodes.forEach(function(el) {
+        if (el.getAttribute('data-amount-skip') === '1' || el.getAttribute('data-amount-formatted') === 'php') {
+            return;
+        }
         var raw = el.getAttribute('data-amount');
-        if (raw === null || raw === '') {
-            raw = el.textContent;
+        if (raw === null || String(raw).trim() === '') {
+            return;
         }
         var formatted = formatAmountDisplay(raw);
         if (formatted !== '') {
