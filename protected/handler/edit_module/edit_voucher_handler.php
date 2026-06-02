@@ -116,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo "<script>process_functionAlert('Edit failed!', 'voucher_edit_err')</script>";
                     die();
                 } else {
+                    vouchers_amount_ensure_string_column($pdo);
                     //QUERY
                     $query = "UPDATE vouchers SET dv_no = :dv_no, payee = :payee, address = :address, particulars = :particulars, tin_employee_no = :tin_employee_no, amount = :amount, voucher_date = :voucher_date WHERE processing_no=:processing_no";
 

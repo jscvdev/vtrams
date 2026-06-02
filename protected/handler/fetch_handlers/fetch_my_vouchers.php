@@ -93,6 +93,7 @@ try {
     );
 
     foreach ($rows as &$row) {
+        $row['amount'] = trim((string) ($row['amount'] ?? ''));
         $row['emp_tag'] = dv_resolve_emp_tag_for_payee(
             $empTagLookup,
             (string) ($row['payee'] ?? ''),

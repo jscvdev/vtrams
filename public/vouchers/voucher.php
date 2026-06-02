@@ -350,6 +350,13 @@ function session_contains_phrase($phrase)
                                         particularsEl.focus();
                                     } else {
                                         errorEl.style.display = "none"; // hide error if edited
+                                        var amountInput = document.getElementById('amount');
+                                        if (amountInput) {
+                                            var normalizedAmount = normalizeAmountInput(amountInput.value);
+                                            if (normalizedAmount !== '') {
+                                                amountInput.value = normalizedAmount;
+                                            }
+                                        }
                                     }
                                 });
                             </script>
@@ -358,7 +365,7 @@ function session_contains_phrase($phrase)
                                 <input class="form-custom-input"
                                     type="text"
                                     min="1.00"
-                                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\.\d{2})\d+/g, '$1')"
+                                    oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/(\..*)\./g, '$1')"
                                     name="amount"
                                     value="1.00"
                                     placeholder="Amount"
@@ -427,7 +434,7 @@ function session_contains_phrase($phrase)
                                 <input class="form-custom-input encoded_amount" id="encoded_amount"
                                     type="text"
                                     min="1"
-                                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\.\d{2})\d+/g, '$1')"
+                                    oninput="this.value = this.value.replace(/[^0-9.,]/g, '').replace(/(\..*)\./g, '$1')"
                                     name="encoded_amount"
                                     placeholder="Amount"
                                     required>
@@ -794,6 +801,27 @@ function session_contains_phrase($phrase)
 <div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
 
 <script>
+    /** Strip commas; keep digits and one decimal point; preserve all decimal digits exactly. */
+    function normalizeAmountInput(raw) {
+        var v = String(raw || '').replace(/,/g, '').trim();
+        if (v === '') return '';
+        v = v.replace(/[^\d.]/g, '');
+        var dot = v.indexOf('.');
+        if (dot !== -1) {
+            v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
+        }
+        return v;
+    }
+
+    /** Add thousand separators without parseFloat (no rounding). */
+    function formatAmountDisplay(raw) {
+        var normalized = normalizeAmountInput(raw);
+        if (normalized === '') return '';
+        var parts = normalized.split('.');
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.length > 1 ? intPart + '.' + parts[1] : intPart;
+    }
+
     // Load table rows async so the page shell renders fast (1000+ rows won't block initial render).
     (function() {
         const tableBody = document.getElementById('tableBody');
@@ -904,14 +932,14 @@ function session_contains_phrase($phrase)
             var slipPrintedInput = document.getElementById('slip_printed_flag');
             var dynamicBtn = document.querySelector('.btn-dynamic');
             var encodedTypeHidden = document.getElementById('encoded_type_hidden');
-            var convertedBack = parseFloat(amount.replace(/[,]/g, ''));
+            var normalizedAmount = normalizeAmountInput(amount);
 
             if (document.querySelector('.processing_no')) document.querySelector('.processing_no').value = processing_no;
             if (document.querySelector('.encoded_payee')) document.querySelector('.encoded_payee').value = payee;
             if (document.querySelector('.encoded_address')) document.querySelector('.encoded_address').value = address;
             if (document.querySelector('.encoded_particulars')) document.querySelector('.encoded_particulars').value = particulars;
             if (document.querySelector('.string_amount')) document.querySelector('.string_amount').value = amount;
-            if (document.querySelector('.encoded_amount') && !isNaN(convertedBack)) document.querySelector('.encoded_amount').value = convertedBack;
+            if (document.querySelector('.encoded_amount') && normalizedAmount !== '') document.querySelector('.encoded_amount').value = normalizedAmount;
             if (document.querySelector('.encoded_voucher_date')) document.querySelector('.encoded_voucher_date').value = voucher_date;
             if (document.querySelector('.encoded_by')) document.querySelector('.encoded_by').value = encoded_by;
             if (document.querySelector('.datetime_encoded')) document.querySelector('.datetime_encoded').value = datetime_encoded;
@@ -1060,13 +1088,10 @@ function session_contains_phrase($phrase)
                 frag.appendChild(tr);
             });
             tableBody.appendChild(frag);
-            if (typeof Intl !== 'undefined') {
-                document.querySelectorAll('.amount').forEach(function(el) {
-                    const num = parseFloat(String(el.innerText).replace(/,/g, ''));
-                    if (isNaN(num)) return;
-                    el.innerText = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-                });
-            }
+            document.querySelectorAll('.amount').forEach(function(el) {
+                var formatted = formatAmountDisplay(el.innerText);
+                if (formatted !== '') el.innerText = formatted;
+            });
         }
 
         function listUrl(page) {
@@ -1163,8 +1188,8 @@ function session_contains_phrase($phrase)
             var currentValue = inputElement.value;
             if (currentValue !== lastValue) {
                 lastValue = currentValue;
-                var convertedBack = parseFloat(String(currentValue).replace(/,/g, ''));
-                if (!isNaN(convertedBack)) outputElement.value = convertedBack.toFixed(2);
+                var normalized = normalizeAmountInput(currentValue);
+                if (normalized !== '') outputElement.value = normalized;
             }
         }
         setInterval(checkForChange, 100);
@@ -1285,6 +1310,18 @@ function session_contains_phrase($phrase)
         if (encodedTypeSelect && encodedTypeHidden) {
             encodedTypeHidden.value = encodedTypeSelect.value;
         }
+
+        var stringAmount = document.getElementById('string_amount');
+        var encodedAmount = document.getElementById('encoded_amount');
+        if (stringAmount && encodedAmount) {
+            var normalized = normalizeAmountInput(stringAmount.value);
+            if (normalized !== '') {
+                encodedAmount.value = normalized;
+            } else if (encodedAmount.value !== '') {
+                encodedAmount.value = normalizeAmountInput(encodedAmount.value);
+            }
+        }
+
         return true; // Allow form submission
     }
 </script>

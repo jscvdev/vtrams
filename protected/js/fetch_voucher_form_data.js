@@ -257,24 +257,31 @@ function buildSignatorySelection(certKey, accountingKey, approvedKey) {
     };
 }
 
+function formatAmountDisplayFromRaw(raw) {
+    var v = String(raw || '').replace(/,/g, '').trim();
+    if (v === '') return '';
+    v = v.replace(/[^\d.]/g, '');
+    var dot = v.indexOf('.');
+    if (dot !== -1) {
+        v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
+    }
+    if (v === '') return '';
+    var parts = v.split('.');
+    var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.length > 1 ? intPart + '.' + parts[1] : intPart;
+}
+
 function passItem(itemList, processing_no) {
     const items = itemList[processing_no];
 
-    // Get the original number from the table cell
-    const originalAmount = getValueByKey(items, 'amount');;
-
-    const number = parseFloat(originalAmount);
-    // Format the number
-    const formattedNumber = new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(number);
+    const originalAmount = getValueByKey(items, 'amount');
+    const formattedNumber = formatAmountDisplayFromRaw(originalAmount);
 
     if (items) {
         const payee = getValueByKey(items, 'payee');
         const address = getValueByKey(items, 'address');
         const voucher_date = getValueByKey(items, 'voucher_date');
-        const amount = formattedNumber;
+        const amount = formattedNumber || String(originalAmount || '');
         const tin_employee_no = getValueByKey(items, 'tin_employee_no') || '';
         const particulars = getValueByKey(items, 'particulars');
         const voucher_type = getValueByKey(items, 'voucher_type') || '';

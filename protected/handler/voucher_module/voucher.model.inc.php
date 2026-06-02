@@ -182,7 +182,19 @@ function insert_dv_entry(
     return true;
 }
 
+/** Store amount as exact string (legacy installs may use DECIMAL which rounds). */
+function vouchers_amount_ensure_string_column(object $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    dv_entries_try_exec($pdo, "ALTER TABLE vouchers MODIFY amount VARCHAR(64) NOT NULL DEFAULT ''");
+}
+
 function insert_to_vouchers(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee_name, string $address, string $tin_employee_no, string $voucher_date, string $amount, string $voucher_type, string $particulars, string $datetime_action, string $encoded_from, string $encoded_by) {
+    vouchers_amount_ensure_string_column($pdo);
     $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, amount, voucher_type, particulars, datetime_encoded, encoded_from, encoded_by, tin_employee_no, voucher_date) 
                         VALUES (:processing_no, :dv_no, :ada_check_no, :payee, :address, :amount, :voucher_type, :particulars, :datetime_encoded, :encoded_from, :encoded_by, :tin_employee_no, :voucher_date)";
 
