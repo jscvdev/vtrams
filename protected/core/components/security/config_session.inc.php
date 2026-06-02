@@ -63,8 +63,3 @@ function check_session_regeneration() {
 // Call the function to check and handle session regeneration
 check_session_regeneration();
 
-?>
-
-
-
-

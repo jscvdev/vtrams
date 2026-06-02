@@ -435,7 +435,10 @@ $header_text = $pageTitleHelper->getHeaderText();
         function confirmLogout() {
             var confirmation = confirm("Are you sure to logout?")
             if (confirmation) {
-                window.location.href = "/sys/protected/core/components/security/logout_handler.inc.php";
+                window.location.href = <?php
+                    require_once __DIR__ . '/../../protected/core/components/redirects/redirect_config.inc.php';
+                    echo json_encode(redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php', JSON_UNESCAPED_SLASHES);
+                ?>;
                 document.getElementById("user-options").selectedIndex = 0;
             } else {
                 document.getElementById("user-options").selectedIndex = 0;

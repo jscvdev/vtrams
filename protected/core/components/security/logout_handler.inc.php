@@ -1,6 +1,5 @@
 <?php
 require __DIR__ . '/config_session.inc.php';
-require __DIR__ . '/err_blocker.inc.php';
 require_once __DIR__ . '/session_login_helper.inc.php';
 require_once __DIR__ . '/../redirects/redirect_config.inc.php';
 
@@ -16,12 +15,4 @@ if (isset($_SESSION['logged_user_emp_name'])) {
 
 destroy_login_session();
 
-$loginUrl = get_redirect_url('documents_index');
-if ($loginUrl === null) {
-    http_response_code(500);
-    echo 'Login redirect is not configured.';
-    exit;
-}
-
-header('Location: ' . $loginUrl);
-exit;
+redirect_to('documents_index');

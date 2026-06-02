@@ -15,6 +15,8 @@ function change_user_password(object $pdo, string $confirm_password, string $emp
     $statement->bindParam(":emp_id",$emp_id);
 
     if ($statement->execute()) {
-        echo "<script>alert('success'); window.location.href='../../core/components/security/logout_handler.inc.php'</script>";
+        require_once __DIR__ . '/../../core/components/redirects/redirect_config.inc.php';
+        $logoutUrl = redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php';
+        echo "<script>alert('success'); window.location.href=" . json_encode($logoutUrl) . ";</script>";
     }
 }
