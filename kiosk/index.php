@@ -26,7 +26,7 @@
 
     <section class="voucher-card kiosk-stepper-card stepper_container">
         <div class="head">
-            <p class="head_1" style="font-size: 1.35rem; font-style: italic;">Disbursement <span>Voucher</span></p>
+            <p class="head_1 kiosk-stepper-title">Disbursement <span>Voucher</span></p>
             <p class="head_2 kiosk-stepper-sub">Workflow progress</p>
         </div>
 
@@ -169,10 +169,10 @@
                             String(item.tracking_status) :
                             (item.voucher_status != null ? String(item.voucher_status) : '');
                         const row = '<tr>' +
-                            '<td data-label="processing_no">' + escapeHtml(proc) + '</td>' +
-                            '<td data-label="dv_no">' + escapeHtml(dv) + '</td>' +
-                            '<td data-label="payee">' + escapeHtml(payee) + '</td>' +
-                            '<td data-label="voucher_status">' + escapeHtml(vstat) + '</td>' +
+                            '<td data-label="Processing No.">' + escapeHtml(proc) + '</td>' +
+                            '<td data-label="DV No.">' + escapeHtml(dv) + '</td>' +
+                            '<td data-label="Payee">' + escapeHtml(payee) + '</td>' +
+                            '<td data-label="Status">' + escapeHtml(vstat) + '</td>' +
                             '</tr>';
                         resultsContainer.insertAdjacentHTML('beforeend', row);
 
