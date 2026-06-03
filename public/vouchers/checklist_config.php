@@ -685,9 +685,52 @@ function checklist_always_available_types()
  *
  * @return array<string, array{title: string, items: string[]}>
  */
+/**
+ * Load checklist templates from the database when configured.
+ *
+ * @return array<string, array{title: string, items: array<int, string|array<string, mixed>>}>
+ */
+function checklist_get_db_templates(): array
+{
+    global $pdo;
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        $dbFile = dirname(__DIR__, 2) . '/protected/dbconnection.inc.php';
+        if (is_file($dbFile)) {
+            require_once $dbFile;
+        }
+    }
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        return [];
+    }
+
+    static $helperLoaded = false;
+    if (!$helperLoaded) {
+        require_once dirname(__DIR__, 2) . '/protected/core/components/helpers/utilities_checklist_helper.inc.php';
+        $helperLoaded = true;
+    }
+
+    if (!utilities_checklist_has_types($pdo)) {
+        return [];
+    }
+
+    return utilities_checklist_build_templates($pdo, true);
+}
+
 function checklist_get_active_templates()
 {
     return RequestCache::remember(CHECKLIST_CACHE_NS, 'active_templates', static function (): array {
+        $dbTemplates = checklist_get_db_templates();
+        if (!empty($dbTemplates)) {
+            $builtin = checklist_get_builtin_templates();
+            foreach (checklist_always_available_types() as $type) {
+                if (!isset($dbTemplates[$type]) && isset($builtin[$type])) {
+                    $dbTemplates[$type] = $builtin[$type];
+                }
+            }
+
+            return $dbTemplates;
+        }
+
         $folder = checklist_get_folder_templates();
         $builtin = checklist_get_builtin_templates();
         if (!empty($folder)) {
@@ -735,6 +778,27 @@ function checklist_for_type($voucherType)
 function checklist_types_with_labels()
 {
     return RequestCache::remember(CHECKLIST_CACHE_NS, 'types_with_labels', static function (): array {
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            $dbFile = dirname(__DIR__, 2) . '/protected/dbconnection.inc.php';
+            if (is_file($dbFile)) {
+                require_once $dbFile;
+            }
+        }
+        if (isset($pdo) && $pdo instanceof PDO) {
+            static $helperLoaded = false;
+            if (!$helperLoaded) {
+                require_once dirname(__DIR__, 2) . '/protected/core/components/helpers/utilities_checklist_helper.inc.php';
+                $helperLoaded = true;
+            }
+            if (utilities_checklist_has_types($pdo)) {
+                $out = utilities_checklist_types_with_labels($pdo);
+                ksort($out, SORT_NATURAL | SORT_FLAG_CASE);
+
+                return $out;
+            }
+        }
+
         $templates = checklist_get_active_templates();
         // Display-label fixes for legacy/misspelled stored type values.
         // IMPORTANT: keys remain unchanged to preserve existing saved voucher_type values.

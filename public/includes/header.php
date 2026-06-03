@@ -237,6 +237,13 @@ $header_text = $pageTitleHelper->getHeaderText();
                                                 <span class="sidebar__link-floating">Utilities</span>
                                             </a>
                                         </div>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/checklist.php" class="sidebar__link">
+                                                <i class="ri-checkbox-multiple-line"></i>
+                                                <span class="sidebar__link-name">Checklist</span>
+                                                <span class="sidebar__link-floating">Checklist</span>
+                                            </a>
+                                        </div>
                                     <?php endif; ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_status.php" class="sidebar__link" id="button1">

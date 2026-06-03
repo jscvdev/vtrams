@@ -3,6 +3,7 @@ include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
 AuditHelper::logPageView('Utilities');
 
 // Utilities: System Admin only
@@ -73,8 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Value is required.'];
                     } else {
-                        $stmt = $pdo->prepare("INSERT INTO ada_signatory_options (option_type, office, option_value, sort_order, is_active) VALUES (:t, :office, :v, :s, 1)");
-                        $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value, ':s' => $sort]);
+                        $pdo->beginTransaction();
+                        $stmt = $pdo->prepare("INSERT INTO ada_signatory_options (option_type, office, option_value, sort_order, is_active) VALUES (:t, :office, :v, 0, 1)");
+                        $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value]);
+                        sort_order_place_at_position($pdo, 'ada_signatory_options', (int) $pdo->lastInsertId(), $sort, [
+                            'option_type' => $type,
+                            'office' => $formOffice,
+                        ]);
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Added successfully.'];
                     }
                 } elseif ($scope === 'ada' && $action === 'update') {
@@ -85,12 +92,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($id <= 0 || $value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
                     } else {
+                        $pdo->beginTransaction();
+                        sort_order_handle_update($pdo, 'ada_signatory_options', $id, $sort, [
+                            'option_type' => $type,
+                            'office' => $formOffice,
+                        ]);
                         $stmt = $pdo->prepare("
                             UPDATE ada_signatory_options
                             SET option_value = :v, sort_order = :s, is_active = :a
                             WHERE id = :id AND option_type = :t AND office = :office
                         ");
                         $stmt->execute([':v' => $value, ':s' => $sort, ':a' => $active, ':id' => $id, ':t' => $type, ':office' => $formOffice]);
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Updated successfully.'];
                     }
                 } elseif ($scope === 'ada' && $action === 'delete') {
@@ -112,16 +125,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } elseif (!$uacsCheck['ok']) {
                         $flash = ['type' => 'error', 'msg' => $uacsCheck['error']];
                     } else {
+                        $pdo->beginTransaction();
                         $stmt = $pdo->prepare("
                             INSERT INTO emp_tag_options (tag_value, uacs_code, sort_order, is_active, is_default)
-                            VALUES (:v, :uacs, :s, 1, :d)
+                            VALUES (:v, :uacs, 0, 1, :d)
                         ");
-                        $stmt->execute([':v' => $value, ':uacs' => $uacsCheck['uacs'], ':s' => $sort, ':d' => $isDefault]);
+                        $stmt->execute([':v' => $value, ':uacs' => $uacsCheck['uacs'], ':d' => $isDefault]);
                         $newTagId = (int) $pdo->lastInsertId();
+                        sort_order_place_at_position($pdo, 'emp_tag_options', $newTagId, $sort);
                         utilities_emp_tag_seed_sub_uacs($pdo, $newTagId);
                         if ($isDefault === 1) {
                             utilities_emp_tag_set_default($pdo, $newTagId);
                         }
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Employee tag added.'];
                     }
                 } elseif ($scope === 'emp_tag' && $action === 'emp_tag_update') {
@@ -138,6 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } elseif ($active === 0 && $isDefault === 1) {
                         $flash = ['type' => 'error', 'msg' => 'The default tag must stay active.'];
                     } else {
+                        $pdo->beginTransaction();
+                        sort_order_handle_update($pdo, 'emp_tag_options', $id, $sort);
                         $stmt = $pdo->prepare("
                             UPDATE emp_tag_options
                             SET tag_value = :v, uacs_code = :uacs, sort_order = :s, is_active = :a, is_default = :d
@@ -147,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($isDefault === 1) {
                             utilities_emp_tag_set_default($pdo, $id);
                         }
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Employee tag updated.'];
                     }
                 } elseif ($scope === 'emp_tag' && $action === 'emp_tag_delete') {
@@ -183,11 +202,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } elseif (!$uacsCheck['ok']) {
                         $flash = ['type' => 'error', 'msg' => $uacsCheck['error']];
                     } else {
+                        $pdo->beginTransaction();
                         $stmt = $pdo->prepare("
                             INSERT INTO emp_tag_sub_uacs (emp_tag_id, account_title, uacs_code, sort_order, is_active)
-                            VALUES (:tag_id, :title, :uacs, :sort, 1)
+                            VALUES (:tag_id, :title, :uacs, 0, 1)
                         ");
-                        $stmt->execute([':tag_id' => $tagId, ':title' => $title, ':uacs' => $uacsCheck['uacs'], ':sort' => $sort]);
+                        $stmt->execute([':tag_id' => $tagId, ':title' => $title, ':uacs' => $uacsCheck['uacs']]);
+                        sort_order_place_at_position(
+                            $pdo,
+                            'emp_tag_sub_uacs',
+                            (int) $pdo->lastInsertId(),
+                            $sort,
+                            ['emp_tag_id' => $tagId]
+                        );
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Sub UACS added.'];
                     }
                 } elseif ($scope === 'emp_tag' && $action === 'emp_tag_sub_update') {
@@ -202,6 +230,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } elseif (!$uacsCheck['ok']) {
                         $flash = ['type' => 'error', 'msg' => $uacsCheck['error']];
                     } else {
+                        $pdo->beginTransaction();
+                        sort_order_handle_update($pdo, 'emp_tag_sub_uacs', $id, $sort, ['emp_tag_id' => $tagId]);
                         $stmt = $pdo->prepare("
                             UPDATE emp_tag_sub_uacs
                             SET account_title = :title, uacs_code = :uacs, sort_order = :s, is_active = :a
@@ -215,6 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ':id' => $id,
                             ':tag_id' => $tagId,
                         ]);
+                        $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Sub UACS updated.'];
                     }
                 } elseif ($scope === 'emp_tag' && $action === 'emp_tag_sub_delete') {
@@ -251,6 +282,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash = ['type' => 'error', 'msg' => 'Unknown action.'];
                 }
             } catch (PDOException $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 // Duplicate key => already exists
                 if (str_contains(strtolower($e->getMessage()), 'duplicate')) {
                     $flash = ['type' => 'warning', 'msg' => 'That value already exists.'];
@@ -292,8 +326,8 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
 ?>
 
 <style>
-    /* Utilities — sleek modern UI */
-    .util-page {
+    /* Utilities — scoped as utl-page (separate from checklist chk-page) */
+    .utl-page {
         --util-bg: #f8fafc;
         --util-card: #fff;
         --util-border: #e2e8f0;
@@ -306,18 +340,18 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         --util-shadow-lg: 0 10px 40px -10px rgba(15, 23, 42, .12);
     }
 
-    .util-page .voucher-dashboard-header {
+    .utl-page .voucher-dashboard-header {
         margin-bottom: 1.5rem;
     }
 
-    .util-page .voucher-dashboard-title {
+    .utl-page .voucher-dashboard-title {
         font-size: 1.75rem;
         font-weight: 800;
         letter-spacing: -0.02em;
         color: var(--util-text);
     }
 
-    .util-page .voucher-card {
+    .utl-page .voucher-card {
         background: var(--util-card);
         border: 1px solid var(--util-border);
         border-radius: var(--util-radius);
@@ -325,7 +359,7 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         overflow: hidden;
     }
 
-    .util-page .voucher-card-title {
+    .utl-page .voucher-card-title {
         font-size: 1.125rem;
         font-weight: 700;
         color: var(--util-text);
@@ -340,19 +374,19 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         flex-wrap: wrap;
     }
 
-    .util-page .voucher-card-title__label {
+    .utl-page .voucher-card-title__label {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
         min-width: 0;
     }
 
-    .util-page .voucher-card-title .ri-icon {
+    .utl-page .voucher-card-title .ri-icon {
         font-size: 1.25rem;
         color: var(--util-accent);
     }
 
-    .util-page .content-wrapper {
+    .utl-page .content-wrapper {
         padding: 1.25rem;
     }
 
@@ -623,7 +657,7 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         margin-top: 0.5rem;
     }
 
-    .util-page .form-custom-input {
+    .utl-page .form-custom-input {
         border-radius: 8px;
         border: 1px solid var(--util-border);
         padding: 0.5rem 0.75rem;
@@ -633,13 +667,13 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         box-sizing: border-box;
     }
 
-    .util-page .form-custom-input:focus {
+    .utl-page .form-custom-input:focus {
         outline: none;
         border-color: var(--util-accent);
         box-shadow: 0 0 0 3px rgba(79, 70, 229, .12);
     }
 
-    .util-page .form-custom-input::placeholder {
+    .utl-page .form-custom-input::placeholder {
         color: #94a3b8;
     }
 
@@ -734,12 +768,140 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         color: var(--util-muted);
     }
 
-    .util-sub-uacs-table {
+    .utl-subuacs {
         margin-top: 0.5rem;
+        --utl-subuacs-cols: minmax(200px, 1fr) 140px 72px minmax(120px, auto) 100px;
     }
 
-    .util-sub-uacs-table th {
-        font-size: 0.625rem;
+    .utl-subuacs__row {
+        display: grid;
+        grid-template-columns: var(--utl-subuacs-cols);
+        gap: 0.75rem;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .utl-subuacs__row--head {
+        padding: 0 0 0.5rem 0;
+        border-bottom: 1px solid var(--util-border);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--util-muted);
+    }
+
+    .utl-subuacs__row--head .utl-subuacs__cell--actions {
+        text-align: right;
+    }
+
+    .utl-subuacs__row form {
+        display: contents;
+    }
+
+    .utl-subuacs__cell {
+        min-width: 0;
+    }
+
+    .utl-subuacs__cell--active {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .utl-subuacs__cell--actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    .utl-subuacs__cell .form-custom-input {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        border: 1px solid var(--util-border);
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8125rem;
+    }
+
+    .utl-subuacs__cell .util-uacs-input {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        letter-spacing: 0.02em;
+    }
+
+    .utl-subuacs__cell .chk {
+        display: flex;
+        gap: 0.375rem;
+        align-items: center;
+        font-size: 0.8125rem;
+        color: var(--util-muted);
+        white-space: nowrap;
+    }
+
+    .utl-subuacs__cell .btn.success,
+    .utl-subuacs__cell .btn.danger {
+        border-radius: 8px;
+        font-size: 0.75rem;
+        padding: 0.4rem 0.75rem;
+        height: 2.5rem;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .utl-subuacs__add .field {
+        margin: 0;
+    }
+
+    .utl-subuacs__add label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--util-muted);
+        margin-bottom: 0.375rem;
+    }
+
+    .utl-subuacs__empty {
+        grid-column: 1 / -1;
+        color: var(--util-muted);
+        font-size: 0.8125rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .utl-add-btn-field {
+        flex: 0 0 auto;
+        min-width: auto;
+        align-self: flex-end;
+    }
+
+    .utl-add-btn-field label.utl-field-spacer {
+        display: block;
+        visibility: hidden;
+        height: 0;
+        margin: 0 0 0.375rem 0;
+        padding: 0;
+        overflow: hidden;
+        line-height: 0;
+    }
+
+    .utl-btn-add {
+        width: 2.5rem;
+        height: 2.5rem;
+        min-width: 2.5rem;
+        padding: 0;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 1.375rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
 
     .util-inline input[type="text"].util-sub-title-input {
@@ -772,7 +934,7 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
     }
 </style>
 
-<div class="main main--dashboard util-page" id="main">
+<div class="main main--dashboard utl-page" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Utilities</h1>
     </header>
@@ -838,7 +1000,10 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
                                     <label>Sort</label>
                                     <input class="form-custom-input" type="number" name="sort_order" value="0">
                                 </div>
-                                <button class="btn primary" type="submit">Add</button>
+                                <div class="field utl-add-btn-field">
+                                    <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
+                                    <button class="btn primary utl-btn-add" type="submit" title="Add entry" aria-label="Add entry">+</button>
+                                </div>
                             </form>
 
                             <table class="util-table">
@@ -969,7 +1134,10 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
                                 <input type="checkbox" name="is_default">
                                 <span>Default</span>
                             </label>
-                            <button class="btn primary" type="submit">Add tag</button>
+                            <div class="field utl-add-btn-field">
+                                <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
+                                <button class="btn primary utl-btn-add" type="submit" title="Add tag" aria-label="Add tag">+</button>
+                            </div>
                         </form>
                         <form method="post" class="util-emp-tag-fill" onsubmit="return confirm('Set empty emp_tag values to the default tag for all users?');">
                             <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
@@ -1023,75 +1191,81 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
                                 <div class="util-emp-tag-block__subs">
                                     <p class="util-emp-tag-block__subs-title">Sub UACS codes for <?= htmlspecialchars((string)$r['tag_value'], ENT_QUOTES, 'UTF-8') ?></p>
 
-                                    <form method="post" class="util-add" style="margin-bottom:0.75rem;">
-                                        <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                                        <input type="hidden" name="scope" value="emp_tag">
-                                        <input type="hidden" name="action" value="emp_tag_sub_add">
-                                        <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
-                                        <div class="field">
-                                            <label>Account title</label>
-                                            <input class="form-custom-input util-sub-title-input" type="text" name="account_title" placeholder="e.g., Due to PhilHealth" required>
+                                    <div class="utl-subuacs">
+                                        <div class="utl-subuacs__row utl-subuacs__row--head">
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--title">Account title</div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--uacs">UACS</div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--sort">Sort</div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--active">Active</div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--actions">Actions</div>
                                         </div>
-                                        <div class="field util-uacs-field">
-                                            <label>UACS code</label>
-                                            <input class="form-custom-input util-uacs-input" type="text" name="uacs_code" placeholder="2020104000" inputmode="numeric" pattern="[0-9]{10}" maxlength="10">
-                                        </div>
-                                        <div class="field" style="max-width:110px;">
-                                            <label>Sort</label>
-                                            <input class="form-custom-input" type="number" name="sort_order" value="0">
-                                        </div>
-                                        <button class="btn primary" type="submit">Add sub UACS</button>
-                                    </form>
 
-                                    <table class="util-table util-sub-uacs-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Account title</th>
-                                                <th style="width:140px;">UACS</th>
-                                                <th style="width:70px;">Sort</th>
-                                                <th style="width:90px;">Active</th>
-                                                <th style="width:110px; text-align:right;">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (!$subRows): ?>
-                                                <tr>
-                                                    <td colspan="5" class="util-empty">No sub UACS rows yet.</td>
-                                                </tr>
-                                            <?php endif; ?>
-                                            <?php foreach ($subRows as $sub): ?>
-                                                <tr>
-                                                    <td colspan="5">
-                                                        <div class="util-inline">
-                                                            <form method="post" class="util-inline" style="flex:1; min-width:0;">
-                                                                <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                                                                <input type="hidden" name="scope" value="emp_tag">
-                                                                <input type="hidden" name="action" value="emp_tag_sub_update">
-                                                                <input type="hidden" name="id" value="<?= (int)$sub['id'] ?>">
-                                                                <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
-                                                                <input class="form-custom-input util-sub-title-input" type="text" name="account_title" value="<?= htmlspecialchars((string)$sub['account_title']) ?>" required>
-                                                                <input class="form-custom-input util-uacs-input" type="text" name="uacs_code" value="<?= htmlspecialchars((string)($sub['uacs_code'] ?? '')) ?>" inputmode="numeric" pattern="[0-9]{10}" maxlength="10">
-                                                                <input class="form-custom-input" type="number" name="sort_order" value="<?= (int)$sub['sort_order'] ?>">
-                                                                <label class="chk">
-                                                                    <input type="checkbox" name="is_active" <?= ((int)$sub['is_active'] === 1) ? 'checked' : '' ?>>
-                                                                    <span>Active</span>
-                                                                </label>
-                                                                <button class="btn success" type="submit">Save</button>
-                                                            </form>
-                                                            <form method="post" onsubmit="return confirm('Delete this sub UACS row?');" class="util-row-actions">
-                                                                <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                                                                <input type="hidden" name="scope" value="emp_tag">
-                                                                <input type="hidden" name="action" value="emp_tag_sub_delete">
-                                                                <input type="hidden" name="id" value="<?= (int)$sub['id'] ?>">
-                                                                <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
-                                                                <button class="btn danger" type="submit">Delete</button>
-                                                            </form>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
+                                        <form method="post" class="utl-subuacs__row utl-subuacs__add">
+                                            <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                            <input type="hidden" name="scope" value="emp_tag">
+                                            <input type="hidden" name="action" value="emp_tag_sub_add">
+                                            <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--title">
+                                                <label>Account title</label>
+                                                <input class="form-custom-input util-sub-title-input" type="text" name="account_title" placeholder="e.g., Due to PhilHealth" required>
+                                            </div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--uacs">
+                                                <label>UACS code</label>
+                                                <input class="form-custom-input util-uacs-input" type="text" name="uacs_code" placeholder="2020104000" inputmode="numeric" pattern="[0-9]{10}" maxlength="10">
+                                            </div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--sort">
+                                                <label>Sort</label>
+                                                <input class="form-custom-input" type="number" name="sort_order" value="0">
+                                            </div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--active"></div>
+                                            <div class="utl-subuacs__cell utl-subuacs__cell--actions">
+                                                <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
+                                                <button class="btn primary utl-btn-add" type="submit" title="Add sub UACS" aria-label="Add sub UACS">+</button>
+                                            </div>
+                                        </form>
+
+                                        <?php if (!$subRows): ?>
+                                            <div class="utl-subuacs__empty">No sub UACS rows yet.</div>
+                                        <?php endif; ?>
+
+                                        <?php foreach ($subRows as $sub): ?>
+                                            <div class="utl-subuacs__row">
+                                                <form method="post">
+                                                    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                    <input type="hidden" name="scope" value="emp_tag">
+                                                    <input type="hidden" name="action" value="emp_tag_sub_update">
+                                                    <input type="hidden" name="id" value="<?= (int)$sub['id'] ?>">
+                                                    <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
+                                                    <div class="utl-subuacs__cell utl-subuacs__cell--title">
+                                                        <input class="form-custom-input util-sub-title-input" type="text" name="account_title" value="<?= htmlspecialchars((string)$sub['account_title']) ?>" required>
+                                                    </div>
+                                                    <div class="utl-subuacs__cell utl-subuacs__cell--uacs">
+                                                        <input class="form-custom-input util-uacs-input" type="text" name="uacs_code" value="<?= htmlspecialchars((string)($sub['uacs_code'] ?? '')) ?>" inputmode="numeric" pattern="[0-9]{10}" maxlength="10">
+                                                    </div>
+                                                    <div class="utl-subuacs__cell utl-subuacs__cell--sort">
+                                                        <input class="form-custom-input" type="number" name="sort_order" value="<?= (int)$sub['sort_order'] ?>">
+                                                    </div>
+                                                    <div class="utl-subuacs__cell utl-subuacs__cell--active">
+                                                        <label class="chk">
+                                                            <input type="checkbox" name="is_active" <?= ((int)$sub['is_active'] === 1) ? 'checked' : '' ?>>
+                                                            <span>Active</span>
+                                                        </label>
+                                                        <button class="btn success" type="submit">Save</button>
+                                                    </div>
+                                                </form>
+                                                <form method="post" onsubmit="return confirm('Delete this sub UACS row?');">
+                                                    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                    <input type="hidden" name="scope" value="emp_tag">
+                                                    <input type="hidden" name="action" value="emp_tag_sub_delete">
+                                                    <input type="hidden" name="id" value="<?= (int)$sub['id'] ?>">
+                                                    <input type="hidden" name="emp_tag_id" value="<?= $tagId ?>">
+                                                    <div class="utl-subuacs__cell utl-subuacs__cell--actions">
+                                                        <button class="btn danger" type="submit">Delete</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>

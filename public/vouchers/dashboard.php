@@ -61,6 +61,7 @@ $can_view_dashboard = (
         || in_array("Cashiers Unit", $target)
         || in_array("Accounting Unit", $target)
         || in_array("Processor", $target)
+        || in_array("Accountant III", $target)
     ))
 );
 if (!$can_view_dashboard) {
@@ -474,6 +475,7 @@ if ($scriptName !== '') {
                     'rgba(199, 199, 199, 0.6)',
                     'rgba(83, 102, 255, 0.6)'
                 ];
+
                 function colorsForCount(n) {
                     const out = [];
                     for (let i = 0; i < n; i++) {
