@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         voucher_apply_exact_amount($amount);
 
-        $target = explode(",", $_SESSION['logged_user_designation']);
+        $target = array_map('trim', explode(',', (string) ($_SESSION['logged_user_designation'] ?? '')));
 
         if (isset($_SESSION["logged_user_udc"])) {
             $receiver_udc = $_SESSION["logged_user_udc"];
@@ -118,8 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $status = "For Charging";
                     } elseif (in_array("Budget Unit", $target)) {
                         $status = "Verifying Availability of Fund and Allotment";
-                    } elseif (in_array("Accounting Unit", $target)) {
-                        $status = "Processing the Disbursement Voucher";
+                    } elseif (in_array('Accounting Unit', $target, true) || in_array('Processor', $target, true)) {
+                        $status = 'Processing the Disbursement Voucher';
                     } elseif (in_array("Office of the PENRO", $target)) {
                         $status = "For Approval of the PENRO";
                     } elseif (in_array("Cashiers Unit", $target)) {

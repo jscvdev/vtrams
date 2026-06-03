@@ -373,6 +373,7 @@ if ($showCashierArchiveCol) {
                                     <option value="" disabled selected>Please Select</option>
                                     <?php if (in_array("ICU", $target)) : ?>
                                         <option value='Accounting Unit'>Accounting Unit</option>
+                                        <option value='Accountant III' class="processed">Chief Accountant</option>
                                     <?php elseif (in_array("Planning Section", $target)) : ?>
                                         <option value='Budget Unit'>Budget Unit</option>
                                         <?php if (!in_array("Planning Section Chief", $target)) : ?>
@@ -905,6 +906,7 @@ if ($showCashierArchiveCol) {
         var inp = document.getElementById('filterInput');
         if (!inp) return;
         var initial = String(inp.value || '');
+
         function applyFilterSearch() {
             var v = String(inp.value || '');
             if (v === initial) return;
