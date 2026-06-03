@@ -32,25 +32,25 @@
 
         <ul class="kiosk-stepper-list">
             <li>
-                <i class="icon ri-map-pin-line" aria-hidden="true"></i>
+                <i class="icon ri-shield-check-line" aria-hidden="true"></i>
                 <div class="progress one p1">
                     <p>1</p><i class="ri-check-line" aria-hidden="true"></i>
+                </div>
+                <p class="text">Internal Control Unit</p>
+            </li>
+            <li>
+                <i class="icon ri-map-pin-line" aria-hidden="true"></i>
+                <div class="progress two p2">
+                    <p>2</p><i class="ri-check-line" aria-hidden="true"></i>
                 </div>
                 <p class="text">Planning Section</p>
             </li>
             <li>
                 <i class="icon ri-funds-line" aria-hidden="true"></i>
-                <div class="progress two p2">
-                    <p>2</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Budget Unit</p>
-            </li>
-            <li>
-                <i class="icon ri-shield-check-line" aria-hidden="true"></i>
                 <div class="progress three p3">
                     <p>3</p><i class="ri-check-line" aria-hidden="true"></i>
                 </div>
-                <p class="text">Internal Control Unit</p>
+                <p class="text">Budget Unit</p>
             </li>
             <li>
                 <i class="icon ri-file-chart-line" aria-hidden="true"></i>
@@ -212,9 +212,9 @@
                 const lowerStatus = String(status).toLowerCase();
                 let activeIndex = -1;
 
-                if (lowerStatus.includes('charging')) activeIndex = 0;
-                else if (lowerStatus.includes('verifying')) activeIndex = 1;
-                else if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) activeIndex = 2;
+                if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) activeIndex = 0;
+                else if (lowerStatus.includes('charging')) activeIndex = 1;
+                else if (lowerStatus.includes('verifying')) activeIndex = 2;
                 else if (lowerStatus.includes('processing')) activeIndex = 3;
                 else if (lowerStatus.includes('approval')) activeIndex = 4;
                 else if (lowerStatus.includes('preparation')) activeIndex = 5;
