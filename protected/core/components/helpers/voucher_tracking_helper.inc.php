@@ -137,32 +137,228 @@ function voucher_tracking_return_forward_target(object $pdo, ?string $tracking_v
 }
 
 /**
- * @return array{receiver_udc: string, forwarded_to: string, temp_errors: array<string, string>}
+ * Map a section/unit label (e.g. Planning Section) to a forward designation.
+ *
+ * @return array{designation: string, label: string, returned_by: string}
  */
-function voucher_forward_receiver_udcs_for_designation(object $pdo, string $target_to, string $office_to): array
+function voucher_tracking_forward_target_from_section(object $pdo, string $sectionOrUnit): array
 {
-    $temp_dump = [];
-    $receiver_udc_array = [];
-    $forwarded_to = $target_to;
+    $sectionOrUnit = trim($sectionOrUnit);
+    if ($sectionOrUnit === '') {
+        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+    }
 
-    $check_exists_query = 'SELECT * FROM user_group WHERE FIND_IN_SET(:designation, designation)';
-    $check_exists_query_statement = $pdo->prepare($check_exists_query);
-    $check_exists_query_statement->bindParam(':designation', $target_to);
-    $check_exists_query_statement->execute();
-
-    while ($row3 = $check_exists_query_statement->fetch(PDO::FETCH_ASSOC)) {
-        if ($row3['office'] === $office_to) {
-            if (!empty($row3['udc'])) {
-                $receiver_udc_array[] = $row3['udc'];
-                $forwarded_to = $target_to;
-            } else {
-                $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
-            }
+    $designation = $sectionOrUnit;
+    $stmt = $pdo->prepare(
+        'SELECT designation, section FROM user_group
+         WHERE section = :s_section OR FIND_IN_SET(:s_designation, designation) > 0
+         LIMIT 1'
+    );
+    $stmt->bindValue(':s_section', $sectionOrUnit, PDO::PARAM_STR);
+    $stmt->bindValue(':s_designation', $sectionOrUnit, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) {
+        $primary = voucher_tracking_primary_designation($row['designation'] ?? '');
+        if ($primary !== '') {
+            $designation = $primary;
+        } elseif (trim((string) ($row['section'] ?? '')) !== '') {
+            $designation = trim((string) $row['section']);
         }
     }
 
     return [
-        'receiver_udc' => implode(',', array_unique($receiver_udc_array)),
+        'designation' => $designation,
+        'label' => $sectionOrUnit,
+        'returned_by' => '',
+    ];
+}
+
+/**
+ * Resolve Forward To when encoder re-forwards after a return (active_status may be "no").
+ *
+ * @return array{designation: string, label: string, returned_by: string}
+ */
+function voucher_tracking_resolve_return_forward_target(
+    object $pdo,
+    ?string $tracking_voucher_status,
+    ?string $encoded_from,
+    ?string $encoder_section = null
+): array {
+    if (voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
+        return voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
+    }
+
+    $encodedFrom = trim((string) $encoded_from);
+    $encoderSection = trim((string) $encoder_section);
+    if ($encodedFrom === '') {
+        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+    }
+    if ($encoderSection !== '' && strcasecmp($encodedFrom, $encoderSection) === 0) {
+        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+    }
+
+    return voucher_tracking_forward_target_from_section($pdo, $encodedFrom);
+}
+
+/**
+ * Pick designated_udc entries that belong to the given PENRO office when designated_office is CSV-aligned.
+ */
+function voucher_pick_designated_udcs_for_office(string $designated_udc, string $designated_office, string $penro_office): string
+{
+    $udcs = array_values(array_filter(array_map('trim', explode(',', $designated_udc)), static fn(string $v): bool => $v !== ''));
+    if ($udcs === []) {
+        return '';
+    }
+
+    $offices = array_map('trim', explode(',', $designated_office));
+    $penro_office = trim($penro_office);
+    if ($penro_office === '' || count($offices) <= 1) {
+        return implode(',', array_unique($udcs));
+    }
+
+    $picked = [];
+    foreach ($offices as $i => $off) {
+        if (strcasecmp($off, $penro_office) !== 0) {
+            continue;
+        }
+        if (isset($udcs[$i]) && $udcs[$i] !== '') {
+            $picked[] = $udcs[$i];
+        }
+    }
+
+    if ($picked !== []) {
+        return implode(',', array_values(array_unique($picked)));
+    }
+
+    return implode(',', array_unique($udcs));
+}
+
+/**
+ * Resolve receiver_udc for a forward/return target (designation, section label, or UDC).
+ * Uses designation_limit (same as voucher_receiving forward) then user_group fallbacks.
+ */
+function voucher_resolve_receiver_udc_for_destination(object $pdo, string $destination, string $penro_office): string
+{
+    $destination = trim($destination);
+    $penro_office = trim($penro_office);
+    if ($destination === '') {
+        return '';
+    }
+
+    $candidates = [$destination];
+    $mapped = voucher_tracking_forward_target_from_section($pdo, $destination);
+    if (($mapped['designation'] ?? '') !== '' && !in_array($mapped['designation'], $candidates, true)) {
+        $candidates[] = trim((string) $mapped['designation']);
+    }
+
+    $limitStmt = $pdo->prepare(
+        'SELECT designated_udc, designated_office FROM designation_limit
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation)) LIMIT 1'
+    );
+
+    foreach ($candidates as $candidate) {
+        $limitStmt->bindValue(':designation', $candidate, PDO::PARAM_STR);
+        $limitStmt->execute();
+        $limitRow = $limitStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$limitRow) {
+            continue;
+        }
+        $designated = voucher_pick_designated_udcs_for_office(
+            (string) ($limitRow['designated_udc'] ?? ''),
+            (string) ($limitRow['designated_office'] ?? ''),
+            $penro_office
+        );
+        if ($designated !== '') {
+            return $designated;
+        }
+    }
+
+    if ($penro_office !== '') {
+        $udcStmt = $pdo->prepare(
+            "SELECT udc FROM user_group
+             WHERE udc = :dest AND office = :office AND TRIM(udc) <> ''
+             LIMIT 1"
+        );
+        $udcStmt->bindValue(':dest', $destination, PDO::PARAM_STR);
+        $udcStmt->bindValue(':office', $penro_office, PDO::PARAM_STR);
+        $udcStmt->execute();
+        $udcRow = $udcStmt->fetch(PDO::FETCH_ASSOC);
+        if ($udcRow && trim((string) ($udcRow['udc'] ?? '')) !== '') {
+            return trim((string) $udcRow['udc']);
+        }
+
+        $groupStmt = $pdo->prepare(
+            "SELECT udc FROM user_group
+             WHERE office = :office AND TRIM(udc) <> ''
+               AND (
+                    section = :dest_section
+                    OR FIND_IN_SET(:dest_designation, designation) > 0
+                    OR FIND_IN_SET(:dest_designation_spaced, REPLACE(designation, ', ', ',')) > 0
+               )"
+        );
+        foreach ($candidates as $candidate) {
+            $groupStmt->bindValue(':office', $penro_office, PDO::PARAM_STR);
+            $groupStmt->bindValue(':dest_section', $candidate, PDO::PARAM_STR);
+            $groupStmt->bindValue(':dest_designation', $candidate, PDO::PARAM_STR);
+            $groupStmt->bindValue(':dest_designation_spaced', $candidate, PDO::PARAM_STR);
+            $groupStmt->execute();
+            $udcs = [];
+            while ($row = $groupStmt->fetch(PDO::FETCH_ASSOC)) {
+                $udc = trim((string) ($row['udc'] ?? ''));
+                if ($udc !== '') {
+                    $udcs[] = $udc;
+                }
+            }
+            if ($udcs !== []) {
+                return implode(',', array_values(array_unique($udcs)));
+            }
+        }
+    }
+
+    $fallbackStmt = $pdo->prepare(
+        "SELECT udc FROM user_group
+         WHERE TRIM(udc) <> ''
+           AND (
+                section = :dest_section
+                OR FIND_IN_SET(:dest_designation, designation) > 0
+                OR FIND_IN_SET(:dest_designation_spaced, REPLACE(designation, ', ', ',')) > 0
+           )"
+    );
+    foreach ($candidates as $candidate) {
+        $fallbackStmt->bindValue(':dest_section', $candidate, PDO::PARAM_STR);
+        $fallbackStmt->bindValue(':dest_designation', $candidate, PDO::PARAM_STR);
+        $fallbackStmt->bindValue(':dest_designation_spaced', $candidate, PDO::PARAM_STR);
+        $fallbackStmt->execute();
+        $udcs = [];
+        while ($row = $fallbackStmt->fetch(PDO::FETCH_ASSOC)) {
+            $udc = trim((string) ($row['udc'] ?? ''));
+            if ($udc !== '') {
+                $udcs[] = $udc;
+            }
+        }
+        if ($udcs !== []) {
+            return implode(',', array_values(array_unique($udcs)));
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @return array{receiver_udc: string, forwarded_to: string, temp_errors: array<string, string>}
+ */
+function voucher_forward_receiver_udcs_for_designation(object $pdo, string $target_to, string $office_to): array
+{
+    $forwarded_to = trim($target_to);
+    $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $target_to, $office_to);
+    $temp_dump = [];
+    if ($receiver_udc === '') {
+        $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
+    }
+
+    return [
+        'receiver_udc' => $receiver_udc,
         'forwarded_to' => $forwarded_to,
         'temp_errors' => $temp_dump,
     ];

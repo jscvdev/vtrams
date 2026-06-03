@@ -103,13 +103,12 @@ try {
 
     foreach ($rows as &$row) {
         $row['active_status'] = voucher_tracking_normalize_active_status($row['active_status'] ?? 'no');
-        $returnTarget = ['designation' => '', 'label' => '', 'returned_by' => ''];
-        if ($row['active_status'] === 'returned') {
-            $returnTarget = voucher_tracking_return_forward_target(
-                $pdo,
-                (string) ($row['tracking_voucher_status'] ?? '')
-            );
-        }
+        $returnTarget = voucher_tracking_resolve_return_forward_target(
+            $pdo,
+            (string) ($row['tracking_voucher_status'] ?? ''),
+            (string) ($row['encoded_from'] ?? ''),
+            (string) ($_SESSION['logged_user_section'] ?? '')
+        );
         $row['returned_by_name'] = $returnTarget['returned_by'];
         $row['forward_return_designation'] = $returnTarget['designation'];
         $row['forward_return_label'] = $returnTarget['label'];

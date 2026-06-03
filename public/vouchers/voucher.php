@@ -904,13 +904,30 @@ function session_contains_phrase($phrase)
             });
         }
 
+        function voucherRowNeedsReturnForwardTarget(row) {
+            if (!row) return false;
+            if (String(row.active_status || '') === 'returned') return true;
+            if (/^Returned\s+by:/i.test(String(row.tracking_voucher_status || ''))) return true;
+            if (String(row.forward_return_designation || '').trim() !== '') return true;
+            if (String(row.forward_return_label || '').trim() !== '') return true;
+            return false;
+        }
+
         function setForwardReturnTarget(row) {
             var container = document.getElementById('forward_target_container');
             var display = document.getElementById('forward_target_display');
             var hidden = document.getElementById('forward_return_designation');
-            var isReturned = row && String(row.active_status || '') === 'returned';
-            var designation = isReturned ? String(row.forward_return_designation || '').trim() : '';
-            var label = isReturned ? String(row.forward_return_label || row.returned_by_name || '').trim() : '';
+            var needsTarget = voucherRowNeedsReturnForwardTarget(row);
+            var designation = needsTarget ? String(row.forward_return_designation || '').trim() : '';
+            var label = needsTarget ? String(row.forward_return_label || row.returned_by_name || '').trim() : '';
+
+            if (needsTarget && !designation && !label) {
+                var encodedFrom = String(row.encoded_from || '').trim();
+                if (encodedFrom) {
+                    designation = encodedFrom;
+                    label = encodedFrom;
+                }
+            }
 
             if (hidden) {
                 hidden.value = designation;
@@ -919,7 +936,7 @@ function session_contains_phrase($phrase)
                 display.value = label;
             }
             if (container) {
-                container.style.display = isReturned && label ? '' : 'none';
+                container.style.display = needsTarget && (designation || label) ? '' : 'none';
             }
         }
 

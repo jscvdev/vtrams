@@ -7,6 +7,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_receiving.model.inc.php';
     require_once 'voucher_receiving.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -157,10 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         die();
                     }
                 } elseif (isset($_REQUEST['forward_voucher'])) {
-                    $query2 = "SELECT * FROM designation_limit";
-                    $statement2 = $pdo->prepare($query2);
-                    $statement2->execute();
-
                     date_default_timezone_set('Asia/Singapore'); // Set timezone to GMT+8
                     $currTime = $date = date('Y-m-d H:i:s', time()); // Format the current time
 
@@ -182,61 +179,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
-                    $target = explode(",", $_SESSION['logged_user_designation']);
-
-                    if (in_array("Accounting Unit", $target)) {
-                        if ($process_status === "Processed") {
-                            while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-                                if ($row2['designation'] === $document_to) {
-                                    if (!empty($row2['designated_udc'])) {
-                                        $receiver_udc = $row2['designated_udc'];
-                                    } else {
-                                        $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                    }
-                                } else {
-                                    $query3 = "SELECT udc FROM user_group";
-                                    $statement3 = $pdo->prepare($query3);
-                                    $statement3->execute();
-                                    while ($row3 = $statement3->fetch(PDO::FETCH_ASSOC)) {
-                                        if ($row3['udc'] === $document_to) {
-                                            if (!empty($row3['udc'])) {
-                                                $receiver_udc = $row3['udc'];
-                                            } else {
-                                                $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            $query3 = "SELECT udc FROM user_group";
-                            $statement3 = $pdo->prepare($query3);
-                            $statement3->execute();
-                            while ($row3 = $statement3->fetch(PDO::FETCH_ASSOC)) {
-                                if ($row3['udc'] === $document_to) {
-                                    if (!empty($row3['udc'])) {
-                                        $receiver_udc = $row3['udc'];
-                                    } else {
-                                        $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-                            if ($row2['designation'] == $document_to) {
-                                if (!empty($row2['designated_udc'])) {
-                                    $receiver_udc = $row2['designated_udc'];
-                                } else {
-                                    $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                }
-                            }
-                        }
+                    $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $document_to, $office_to);
+                    if ($receiver_udc === '') {
+                        $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
                     }
-
-                    $query2 = "SELECT * FROM designation_limit";
-                    $statement2 = $pdo->prepare($query2);
-                    $statement2->execute();
 
                     $variables_to_check = [
                         'processing_no' => $processing_no,

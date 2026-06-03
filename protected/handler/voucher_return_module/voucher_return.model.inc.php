@@ -82,6 +82,42 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
     return $statement->rowCount() > 0;
 }
 
+/** Section/unit of the user returning a voucher (same source as encode "encoded_from"). */
+function voucher_return_returner_encoded_from(): string
+{
+    $section = trim((string) ($_SESSION['logged_user_section'] ?? ''));
+    if ($section !== '') {
+        return $section;
+    }
+    $designation = trim((string) ($_SESSION['logged_user_designation'] ?? ''));
+    if ($designation === '') {
+        return '';
+    }
+    $parts = array_map('trim', explode(',', $designation));
+
+    return $parts[0] ?? '';
+}
+
+/** Keep dv_entries.encoded_from aligned when a returned voucher is back at the encoder. */
+function voucher_return_sync_dv_encoded_from(object $pdo, string $processing_no, string $encoded_from): void
+{
+    $encoded_from = trim($encoded_from);
+    if ($encoded_from === '') {
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'UPDATE dv_entries SET encoded_from = :encoded_from WHERE processing_no = :processing_no'
+        );
+        $stmt->bindValue(':encoded_from', $encoded_from, PDO::PARAM_STR);
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+    } catch (PDOException $e) {
+        // dv_entries may be absent on older installs
+    }
+}
+
 function voucher_incoming_sent_to_pending(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $encoded_by, string $encoded_from, string $datetime_encoded) {
     $amount = voucher_prepare_stored_amount($pdo, $amount);
     $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, particulars, tin_employee_no,  amount, voucher_type, voucher_date, encoded_by, encoded_from, datetime_encoded) 
@@ -161,29 +197,16 @@ function voucher_incoming_return_exists(object $pdo, string $processing_no): boo
     return (bool) $statement->fetchColumn();
 }
 
-/** @return list<string> */
-function voucher_return_receiver_udcs_for_office(object $pdo, string $office): array
+/**
+ * Resolve receiver_udc for a return target (section/designation or UDC).
+ */
+function voucher_return_resolve_receiver_udc(object $pdo, string $destination, string $penro_office): string
 {
-    $office = trim($office);
-    if ($office === '') {
-        return [];
+    if (!function_exists('voucher_resolve_receiver_udc_for_destination')) {
+        require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
     }
 
-    $stmt = $pdo->prepare(
-        "SELECT udc FROM user_group
-         WHERE office = :office AND udc IS NOT NULL AND TRIM(udc) <> ''"
-    );
-    $stmt->bindValue(':office', $office, PDO::PARAM_STR);
-    $stmt->execute();
-    $udcs = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $udc = trim((string) ($row['udc'] ?? ''));
-        if ($udc !== '') {
-            $udcs[] = $udc;
-        }
-    }
-
-    return array_values(array_unique($udcs));
+    return voucher_resolve_receiver_udc_for_destination($pdo, $destination, $penro_office);
 }
 
 function voucher_update_return_remarks(object $pdo, string $processing_no, string $return_remarks) {

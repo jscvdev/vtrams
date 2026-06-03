@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_return.model.inc.php';
     require_once 'voucher_return.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -35,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "combined_remarks",
             "remarks",
             "return_destination",
+            "return_target_section",
             "return_source"
         );
 
@@ -64,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'combined_remarks' => 'combined_remarks',
             'remarks' => 'remarks',
             'return_destination' => 'return_destination',
+            'return_target_section' => 'return_target_section',
             'return_source' => 'return_source',
         );
 
@@ -104,23 +107,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!empty($return_destination) && $return_destination === 'encoder') {
-            $office_to = isset($encoded_from) ? $encoded_from : '';
+            // Route back to the encoder's unit; show the returner as encoded_from (forward-from) on re-forward.
+            $encoder_destination = trim((string) $encoded_from);
+            $returner_section = voucher_return_returner_encoded_from();
+            if ($returner_section !== '') {
+                $encoded_from = $returner_section;
+            }
+            $office_to = $encoder_destination;
+            $penro_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
             $receiver_udc = '';
             if (!empty($encoded_by)) {
-                $enc_stmt = $pdo->prepare("SELECT udc FROM user_group WHERE TRIM(CONCAT(COALESCE(emp_fn,''), ' ', COALESCE(emp_mi,''), ' ', COALESCE(emp_ln,''))) = :encoded_by LIMIT 1");
-                $enc_stmt->bindParam(":encoded_by", $encoded_by);
+                $enc_stmt = $pdo->prepare(
+                    "SELECT udc FROM user_group
+                     WHERE TRIM(CONCAT(COALESCE(emp_fn,''), ' ', COALESCE(emp_mi,''), ' ', COALESCE(emp_ln,''))) = :encoded_by
+                     LIMIT 1"
+                );
+                $enc_stmt->bindParam(':encoded_by', $encoded_by);
                 $enc_stmt->execute();
                 $enc_row = $enc_stmt->fetch(PDO::FETCH_ASSOC);
                 if ($enc_row && !empty($enc_row['udc'])) {
-                    $receiver_udc = $enc_row['udc'];
+                    $receiver_udc = trim((string) $enc_row['udc']);
                 }
             }
-        } elseif ($return_source === 'forwarding' && !empty($return_destination) && $return_destination === 'previous_sender') {
-            if (!empty($document_to)) {
-                $office_to = $document_to;
+            if ($receiver_udc === '' && $encoder_destination !== '') {
+                $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $encoder_destination, $penro_office);
             }
+        } elseif ($return_source === 'forwarding' && !empty($return_destination) && $return_destination === 'previous_sender') {
+            $destination_designation = trim((string) (
+                ($return_target_section ?? '') !== ''
+                    ? $return_target_section
+                    : (($document_to ?? '') !== '' ? $document_to : '')
+            ));
+            $penro_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+            if ($penro_office !== '') {
+                $office_to = $penro_office;
+            }
+            $previous_sender_udc = trim((string) ($_POST['sender_udc'] ?? ''));
             $sender_udc = $_SESSION['logged_user_udc'] ?? $sender_udc;
-            $receiver_udc = implode(',', voucher_return_receiver_udcs_for_office($pdo, $office_to));
+            $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination_designation, $penro_office);
+            if ($receiver_udc === '' && $previous_sender_udc !== '') {
+                $receiver_udc = $previous_sender_udc;
+            }
         }
 
         try {
@@ -257,6 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $encoded_from,
                                     $datetime_encoded
                                 );
+                                voucher_return_sync_dv_encoded_from($pdo, $processing_no, $encoded_from);
                             } else {
                                 voucher_forwarding_return_move_to_incoming(
                                     $pdo,
@@ -305,6 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $encoded_from,
                                     $datetime_encoded
                                 );
+                                voucher_return_sync_dv_encoded_from($pdo, $processing_no, $encoded_from);
                             } else {
                                 voucher_incoming_sent_move_to_receiving(
                                     $pdo,

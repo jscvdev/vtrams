@@ -492,6 +492,7 @@ if ($showCashierArchiveCol) {
                                 <input type="text" name="sender_remarks" class="sender_remarks" id="sender_remarks" value="">
                             </div>
                             <input type="hidden" name="return_destination" id="return_destination" value="">
+                            <input type="hidden" name="return_target_section" id="return_target_section" value="">
                             <input type="hidden" name="return_source" id="return_source" value="forwarding">
                             <div class="label-input__container hidden_input">
                                 <label for="">Priority</label>
@@ -2405,12 +2406,14 @@ if ($showCashierArchiveCol) {
                 var remarksValue = (document.getElementById('return_remarks_popup')?.value || '').trim();
                 var destinationInput = document.getElementById('return_destination');
                 var remarksInput = document.querySelector('#myForm_Forwarding .remarks');
-                var docToEl = document.getElementById('document_to');
-                var officeToEl = document.querySelector('#myForm_Forwarding .office_to');
+                var returnTargetEl = document.getElementById('return_target_section');
 
                 if (destinationInput) destinationInput.value = destinationValue;
                 if (remarksInput) {
                     remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
+                }
+                if (returnTargetEl) {
+                    returnTargetEl.value = '';
                 }
                 if (destinationValue === 'previous_sender') {
                     var office = document.getElementById('return_office_select')?.value || '';
@@ -2420,8 +2423,9 @@ if ($showCashierArchiveCol) {
                         }
                         return;
                     }
-                    if (docToEl) docToEl.value = office;
-                    if (officeToEl) officeToEl.value = office;
+                    if (returnTargetEl) {
+                        returnTargetEl.value = office;
+                    }
                 }
 
                 var form = document.getElementById('myForm_Forwarding');

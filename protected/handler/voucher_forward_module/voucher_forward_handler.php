@@ -82,6 +82,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $process_status = "N/A";
         $receiver_udc = "";
         $forward_return_designation = isset($forward_return_designation) ? trim((string) $forward_return_designation) : '';
+        if ($forward_return_designation === '') {
+            $returnForward = voucher_tracking_resolve_return_forward_target(
+                $pdo,
+                null,
+                $encoded_from ?? '',
+                (string) ($_SESSION['logged_user_section'] ?? '')
+            );
+            if ($returnForward['designation'] !== '') {
+                $forward_return_designation = $returnForward['designation'];
+            }
+        }
         if (empty($combined_remarks)) {
             $combined_remarks = "";
         }
