@@ -81,11 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ada_check_no = "TBD";
         $process_status = "N/A";
         $receiver_udc = "";
+        $tracking_row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no ?? '');
+        $tracking_voucher_status = $tracking_row['voucher_status'] ?? null;
         $forward_return_designation = isset($forward_return_designation) ? trim((string) $forward_return_designation) : '';
         if ($forward_return_designation === '') {
             $returnForward = voucher_tracking_resolve_return_forward_target(
                 $pdo,
-                null,
+                $tracking_voucher_status,
                 $encoded_from ?? '',
                 (string) ($_SESSION['logged_user_section'] ?? '')
             );
@@ -120,10 +122,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $forwarded_to = '';
-                    if ($forward_return_designation !== '') {
-                        // Re-forward returned voucher to the office/designation of whoever returned it.
-                        $resolved = voucher_forward_receiver_udcs_for_designation(
+                    if ($forward_return_designation !== '' || voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
+                        // Re-forward returned voucher to whoever returned it (from voucher_tracking).
+                        $resolved = voucher_forward_receiver_for_return_target(
                             $pdo,
+                            $tracking_voucher_status,
                             $forward_return_designation,
                             $office_to
                         );
