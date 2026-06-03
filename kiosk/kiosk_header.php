@@ -4,11 +4,20 @@ send_no_cache_headers();
 header('Content-type: text/html; charset=utf-8');
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
 require_once __DIR__ . '/../protected/page_title_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/asset_version_helper.inc.php';
 
 /** @var PageTitleHelper $pageTitleHelper */
 $pageTitleHelper = new PageTitleHelper($pdo);
 $browser_title = $pageTitleHelper->getBrowserTitle();
 $header_text = $pageTitleHelper->getHeaderText();
+
+$kioskStylesDir = __DIR__ . '/../public/styles/css';
+$kioskBaseStyles = [
+    'hstyle.css',
+    'ppop.css',
+    'gen_slip.css',
+    'custom_buttons.css',
+];
 ?>
 <!doctype html>
 <html lang="en">
@@ -20,8 +29,12 @@ $header_text = $pageTitleHelper->getHeaderText();
         content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title><?php echo htmlspecialchars($browser_title, ENT_QUOTES, 'UTF-8'); ?></title>
-    <link rel="stylesheet" href="../public/styles/css/base.css">
-    <link rel="stylesheet" href="kiosk.css">
+    <?php
+    foreach ($kioskBaseStyles as $styleFile) {
+        asset_stylesheet('../public/styles/css/' . $styleFile, $kioskStylesDir . '/' . $styleFile);
+    }
+    asset_stylesheet('kiosk.css', __DIR__ . '/kiosk.css');
+    ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
     <link rel="shortcut icon" href="../public/assets/icons/DENR3.ico">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -32,7 +45,7 @@ $header_text = $pageTitleHelper->getHeaderText();
 <?php require_once __DIR__ . '/../protected/core/components/notifications/notification.inc.php'; ?>
 
 <body class="kiosk-body">
-    <script src="../protected/js/table_loader.js"></script>
+    <?php asset_script('../protected/js/table_loader.js', __DIR__ . '/../protected/js/table_loader.js'); ?>
     <div class="popup-form3" id="popupForm3">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
