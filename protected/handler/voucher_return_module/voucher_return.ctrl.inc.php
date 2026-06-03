@@ -61,3 +61,65 @@ function voucher_incoming_return_update_document_tracking(object $pdo, string $p
 {
     voucher_incoming_return_log_to_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, $active_status);
 }
+
+function voucher_forwarding_return_move_to_incoming(
+    object $pdo,
+    string $processing_no,
+    string $dv_no,
+    string $ors_no,
+    string $ada_check_no,
+    string $payee,
+    string $address,
+    string $particulars,
+    string $tin_employee_no,
+    string $amount,
+    string $voucher_type,
+    string $voucher_date,
+    string $datetime_action,
+    string $office_from,
+    string $office_to,
+    string $sender_udc,
+    string $receiver_udc,
+    string $encoded_by,
+    string $encoded_from,
+    string $datetime_encoded,
+    string $forwarded_by,
+    string $process_status,
+    string $combined_remarks,
+    string $remarks
+): void {
+    require_once __DIR__ . '/../voucher_receiving_module/voucher_receiving.model.inc.php';
+
+    voucher_pending_to_incoming(
+        $pdo,
+        $processing_no,
+        $dv_no,
+        $ors_no,
+        $ada_check_no,
+        $payee,
+        $address,
+        $particulars,
+        $tin_employee_no,
+        $amount,
+        $voucher_type,
+        $voucher_date,
+        $datetime_action,
+        $office_from,
+        $office_to,
+        $sender_udc,
+        $receiver_udc,
+        $encoded_by,
+        $encoded_from,
+        $datetime_encoded,
+        $forwarded_by,
+        $process_status,
+        $combined_remarks,
+        $remarks
+    );
+}
+
+function voucher_forwarding_return_remove_from_receiving(object $pdo, string $processing_no): void
+{
+    require_once __DIR__ . '/../voucher_receiving_module/voucher_receiving.model.inc.php';
+    voucher_delete_from_receiving($pdo, $processing_no);
+}

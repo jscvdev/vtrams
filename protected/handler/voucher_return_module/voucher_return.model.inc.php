@@ -141,6 +141,51 @@ function voucher_incoming_return_get_document_id (object $pdo, $processing_no){
     return $statement->rowCount() > 0;
 }
 
+function voucher_receiving_return_exists(object $pdo, string $processing_no): bool
+{
+    $query = 'SELECT 1 FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1';
+    $statement = $pdo->prepare($query);
+    $statement->bindParam(':processing_no', $processing_no);
+    $statement->execute();
+
+    return (bool) $statement->fetchColumn();
+}
+
+function voucher_incoming_return_exists(object $pdo, string $processing_no): bool
+{
+    $query = 'SELECT 1 FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1';
+    $statement = $pdo->prepare($query);
+    $statement->bindParam(':processing_no', $processing_no);
+    $statement->execute();
+
+    return (bool) $statement->fetchColumn();
+}
+
+/** @return list<string> */
+function voucher_return_receiver_udcs_for_office(object $pdo, string $office): array
+{
+    $office = trim($office);
+    if ($office === '') {
+        return [];
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT udc FROM user_group
+         WHERE office = :office AND udc IS NOT NULL AND TRIM(udc) <> ''"
+    );
+    $stmt->bindValue(':office', $office, PDO::PARAM_STR);
+    $stmt->execute();
+    $udcs = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $udc = trim((string) ($row['udc'] ?? ''));
+        if ($udc !== '') {
+            $udcs[] = $udc;
+        }
+    }
+
+    return array_values(array_unique($udcs));
+}
+
 function voucher_update_return_remarks(object $pdo, string $processing_no, string $return_remarks) {
     // Append new return remarks to existing (retain history).
     // If existing is empty/NULL, store just the new remarks.

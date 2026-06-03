@@ -150,6 +150,8 @@ $GLOBALS['REDIRECT_CODE_TO_KEY'] = [
     'voucher_pending_err_redirect' => 'voucher',
     'voucher_incoming_err_redirect' => 'voucher_incoming',
     'voucher_incoming_return_err_redirect' => 'voucher_incoming',
+    'voucher_forwarding_return_redirect' => 'voucher_forwarding',
+    'voucher_forwarding_return_err_redirect' => 'voucher_forwarding',
     'voucher_sent_err_redirect'  => 'voucher_sent',
     'ada_save_err'              => 'voucher_ada',
 

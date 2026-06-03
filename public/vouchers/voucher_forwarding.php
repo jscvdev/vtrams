@@ -4,12 +4,14 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 AuditHelper::logPageView('Voucher Forwarding');
 include('../../protected/handler/voucher_receiving_module/voucher_receiving_errhandler.inc.php');
 include('../../protected/handler/voucher_archiving_module/voucher_archiving_errhandler.inc.php');
+include('../../protected/handler/voucher_return_module/voucher_return_errhandler.inc.php');
 require '../../protected/core/components/notifications/err_handler_custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 
 check_voucher_receiving_errors();
 check_voucher_archiving_errors();
+check_voucher_return_errors();
 
 require_once __DIR__ . '/checklist_config.php';
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
@@ -482,6 +484,16 @@ if ($showCashierArchiveCol) {
                                 <input type="text" name="datetime_encoded" class="datetime_encoded" id="datetime_encoded" value="">
                             </div>
                             <div class="label-input__container hidden_input">
+                                <label for="">Forwarded By</label>
+                                <input type="text" name="forwarded_by" class="forwarded_by" id="forwarded_by" value="">
+                            </div>
+                            <div class="label-input__container hidden_input">
+                                <label for="">Sender Remarks</label>
+                                <input type="text" name="sender_remarks" class="sender_remarks" id="sender_remarks" value="">
+                            </div>
+                            <input type="hidden" name="return_destination" id="return_destination" value="">
+                            <input type="hidden" name="return_source" id="return_source" value="forwarding">
+                            <div class="label-input__container hidden_input">
                                 <label for="">Priority</label>
                                 <input type="text" name="priority" class="priority form-custom-input" id="priority" value="">
                             </div>
@@ -512,6 +524,7 @@ if ($showCashierArchiveCol) {
                 <div class="popupForm-footer__container">
                     <div class="footer-button__container">
                         <button class="btn transparent btn-dynamic" name="" type="submit"></button>
+                        <button type="submit" name="return_voucher" id="hidden_return_submit" style="display:none;"></button>
                         <button class="btn secondary transparent" id="close_popup3" type="button">CANCEL</button>
                     </div>
                 </div>
@@ -519,6 +532,53 @@ if ($showCashierArchiveCol) {
         </div>
     </div>
     <div class="overlay" id="overlay"></div>
+
+    <!-- Return Options Popup -->
+    <div class="popup-form" id="returnOptionsPopup" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p>Return Voucher</p>
+                <i class="ri-close-fill close-icon" id="close_return_options"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container">
+                        <div class="form-container">
+                            <div class="label-input__container">
+                                <label for="">Return to</label>
+                                <div class="return-destination-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                                    <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="return_destination_popup" value="previous_sender">
+                                        <span>Return to previous section/unit</span>
+                                    </label>
+                                    <div id="return_office_container" style="margin-left: 26px; margin-top: 4px; display: none;">
+                                        <select id="return_office_select" class="form-custom-input" style="width: 100%;">
+                                            <option value="" disabled selected>Select section/unit</option>
+                                        </select>
+                                    </div>
+                                    <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="return_destination_popup" value="encoder">
+                                        <span>Return to encoder</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="return_remarks_popup">Remarks (optional)</label>
+                                <textarea id="return_remarks_popup" class="form-custom-multi-input" rows="3" placeholder="Enter remarks for returning this voucher (optional)"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn warning" id="confirm_return_options" type="button">Return</button>
+                        <button class="btn secondary transparent" id="cancel_return_options" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="returnOptionsOverlay" style="display: none;"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">Forwarding Summary</h2>
         <style>
@@ -576,6 +636,7 @@ if ($showCashierArchiveCol) {
                         <th>Date/Time Forwarded</th>
                         <th>Remarks</th>
                         <th>History</th>
+                        <th>Return</th>
                         <th>Edit</th>
                         <?php if (!$hideForwardForCashiersUnit) : ?>
                             <th id="forward_header">Forward</th>
@@ -663,6 +724,8 @@ if ($showCashierArchiveCol) {
                             <td data-label="encoded_by" class="hidden"><?php echo $row['encoded_by']; ?></td>
                             <td data-label="encoded_from" class="hidden"><?php echo $row['encoded_from']; ?></td>
                             <td data-label="datetime_encoded" class="hidden"><?php echo $row['datetime_encoded']; ?></td>
+                            <td data-label="forwarded_by" class="hidden"><?php echo isset($row['forwarded_by']) ? htmlspecialchars((string)$row['forwarded_by']) : ''; ?></td>
+                            <td data-label="sender_remarks_raw" class="hidden"><?php echo isset($row['sender_remarks']) ? htmlspecialchars((string)$row['sender_remarks']) : ''; ?></td>
                             <td data-label="priority" class="hidden"><?php echo isset($row['priority']) ? htmlspecialchars((string)$row['priority']) : ''; ?></td>
                             <td data-label="process_status" class="hidden"><?php echo $row['process_status']; ?></td>
                             <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
@@ -670,6 +733,7 @@ if ($showCashierArchiveCol) {
                             <td data-label="history">
                                 <button class="btn tertiary" name="btn-history" type="button">View</button>
                             </td>
+                            <td data-label="return"><button class="btn warning" name="btn-return" type="button">Return</button></td>
                             <?php if (isset($row['coa_options'])) : ?>
                                 <td data-label="coa_options" class="hidden"><?php echo $row['coa_options']; ?></td>
                             <?php else : ?>
@@ -747,7 +811,7 @@ if ($showCashierArchiveCol) {
                                         <?php if ($transmitEmpty) : ?>
                                             <button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>
                                         <?php elseif ($transmitYes) : ?>
-                                            <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Return</button>
+                                            <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>
                                         <?php endif; ?>
                                     </td>
                                 <?php endif; ?>
@@ -798,7 +862,7 @@ if ($showCashierArchiveCol) {
                                     ($rolePlanning && !$rolePlanningChief && $transmitYes)
                                 ) : ?>
                                     <td data-label="">
-                                        <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Return</button>
+                                        <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>
                                     </td>
                                 <?php endif; ?>
                                 <?php if ($showCashierArchiveCol) : ?>
@@ -1346,6 +1410,41 @@ if ($showCashierArchiveCol) {
 
                 if (modal) modal.style.display = 'block';
                 if (overlay) overlay.style.display = 'block';
+                return;
+            }
+
+            if (name === "btn-return") {
+                document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
+                document.getElementById("document_to").required = false;
+                document.querySelector(".btn-dynamic").textContent = "Return";
+                document.getElementById("form_title").textContent = "Return Voucher";
+                document.querySelector(".btn-dynamic").setAttribute("name", "return_voucher");
+                document.querySelector(".btn-dynamic").classList.remove("success");
+                document.querySelector(".btn-dynamic").classList.add("warning");
+                document.querySelectorAll('.input-dynamic').forEach(function(input) {
+                    input.style.display = 'none';
+                });
+                var forwardedByCell = row.querySelector('[data-label="forwarded_by"]');
+                var forwardedBy = forwardedByCell ? forwardedByCell.textContent.trim() : '';
+                var forwardedByInput = document.getElementById('forwarded_by');
+                if (forwardedByInput) {
+                    forwardedByInput.value = forwardedBy;
+                }
+                var senderRemarksCell = row.querySelector('[data-label="sender_remarks_raw"]');
+                var senderRemarksVal = senderRemarksCell ? senderRemarksCell.textContent.trim() : '';
+                var senderRemarksInput = document.getElementById('sender_remarks');
+                if (senderRemarksInput) {
+                    senderRemarksInput.value = senderRemarksVal;
+                }
+                var returnSourceInput = document.getElementById('return_source');
+                if (returnSourceInput) {
+                    returnSourceInput.value = 'forwarding';
+                }
+                var process_history = process_history_val;
+                var office_from_val = office_from;
+                if (typeof openReturnOptionsPopup === 'function') {
+                    openReturnOptionsPopup(processing_no, process_history, office_from_val);
+                }
                 return;
             }
 
@@ -2156,6 +2255,189 @@ if ($showCashierArchiveCol) {
         </div>
     </div>
 <?php endif; ?>
+<script>
+    // Return options popup (Forwarding table)
+    (function() {
+        const popup = document.getElementById('returnOptionsPopup');
+        const overlay = document.getElementById('returnOptionsOverlay');
+        const closeBtn = document.getElementById('close_return_options');
+        const cancelBtn = document.getElementById('cancel_return_options');
+        const confirmBtn = document.getElementById('confirm_return_options');
+
+        var currentUserSection = '<?php echo htmlspecialchars($_SESSION["logged_user_section"] ?? "", ENT_QUOTES); ?>';
+        var currentUserDesignations = '<?php echo htmlspecialchars($_SESSION["logged_user_designation"] ?? "", ENT_QUOTES); ?>';
+
+        var sectionMap = {
+            'BUDGET': 'Budget Unit',
+            'BUDGET UNIT': 'Budget Unit',
+            'ACCOUNTING': 'Accounting Unit',
+            'ACCOUNTING UNIT': 'Accounting Unit',
+            'PLANNING': 'Planning Section',
+            'PLANNING SECTION': 'Planning Section',
+            'CASHIERS': 'Cashiers Unit',
+            'CASHIERS UNIT': 'Cashiers Unit',
+            'PENRO': 'Office of the PENRO',
+            'PENRO OFFICE': 'Office of the PENRO',
+            'OFFICE OF THE PENRO': 'Office of the PENRO',
+            'ICU': 'ICU'
+        };
+
+        function normalizeUnitLabel(raw) {
+            if (!raw) return '';
+            var s = String(raw).trim();
+            if (!s) return '';
+            return sectionMap[s.toUpperCase()] || s;
+        }
+
+        function buildExcludedUnitsSet() {
+            var excluded = {};
+            var sec = normalizeUnitLabel(currentUserSection);
+            if (sec) excluded[sec] = true;
+            var desigs = String(currentUserDesignations || '').split(',');
+            for (var i = 0; i < desigs.length; i++) {
+                var d = normalizeUnitLabel(desigs[i]);
+                if (d) excluded[d] = true;
+            }
+            return excluded;
+        }
+
+        function parseProcessHistory(processHistory) {
+            var offices = [],
+                seen = {};
+            if (!processHistory || !processHistory.trim()) return offices;
+            var lines = processHistory.split(/\r\n|\r|\n/);
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                var parts = line.split(/\s*:\s*/);
+                var section = (parts.length >= 3) ? (parts.slice(2).join(' : ')).trim() : (parts.length === 2 ? (parts[1] || '').trim() : '');
+                if (!section) continue;
+                var raw = section.toUpperCase();
+                var mapped = sectionMap[raw] || section;
+                if (mapped && !seen[mapped]) {
+                    seen[mapped] = true;
+                    offices.push(mapped);
+                }
+            }
+            return offices;
+        }
+
+        function loadReturnOffices(processHistory, officeFrom) {
+            var selectEl = document.getElementById('return_office_select');
+            var containerEl = document.getElementById('return_office_container');
+            if (!selectEl) return;
+
+            selectEl.innerHTML = '<option value="" disabled selected>Select section/unit</option>';
+            if (containerEl) containerEl.style.display = 'none';
+
+            var offices = parseProcessHistory(processHistory || '');
+            if (offices.length === 0 && officeFrom) {
+                var raw = officeFrom.toUpperCase();
+                offices = [sectionMap[raw] || officeFrom];
+            }
+
+            var excluded = buildExcludedUnitsSet();
+            offices = offices.filter(function(o) {
+                var unit = normalizeUnitLabel(o);
+                return unit && !excluded[unit];
+            });
+
+            offices.forEach(function(office) {
+                var opt = document.createElement('option');
+                opt.value = office;
+                opt.textContent = office;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function showPopup(processingNo, processHistory, officeFrom) {
+            if (popup) popup.style.display = 'block';
+            if (overlay) overlay.style.display = 'block';
+            loadReturnOffices(processHistory, officeFrom);
+        }
+
+        function hidePopup() {
+            if (popup) popup.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+            document.querySelectorAll('input[name="return_destination_popup"]').forEach(function(r) {
+                r.checked = false;
+            });
+            var returnOfficeContainer = document.getElementById('return_office_container');
+            var returnOfficeSelect = document.getElementById('return_office_select');
+            if (returnOfficeContainer) returnOfficeContainer.style.display = 'none';
+            if (returnOfficeSelect) returnOfficeSelect.selectedIndex = 0;
+            var remarksField = document.getElementById('return_remarks_popup');
+            if (remarksField) remarksField.value = '';
+        }
+
+        window.openReturnOptionsPopup = showPopup;
+
+        if (closeBtn) closeBtn.addEventListener('click', hidePopup);
+        if (cancelBtn) cancelBtn.addEventListener('click', hidePopup);
+        if (overlay) overlay.addEventListener('click', hidePopup);
+
+        var previousSenderRadio = document.querySelector('input[name="return_destination_popup"][value="previous_sender"]');
+        var encoderRadio = document.querySelector('input[name="return_destination_popup"][value="encoder"]');
+        var returnOfficeContainer = document.getElementById('return_office_container');
+
+        if (previousSenderRadio && returnOfficeContainer) {
+            previousSenderRadio.addEventListener('change', function() {
+                if (this.checked) returnOfficeContainer.style.display = 'block';
+            });
+        }
+        if (encoderRadio && returnOfficeContainer) {
+            encoderRadio.addEventListener('change', function() {
+                if (this.checked) returnOfficeContainer.style.display = 'none';
+            });
+        }
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                var selected = document.querySelector('input[name="return_destination_popup"]:checked');
+                if (!selected) {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Please select where to return the voucher (previous section/unit or encoder).', 'error', 3000);
+                    }
+                    return;
+                }
+
+                var destinationValue = selected.value;
+                var remarksValue = (document.getElementById('return_remarks_popup')?.value || '').trim();
+                var destinationInput = document.getElementById('return_destination');
+                var remarksInput = document.querySelector('#myForm_Forwarding .remarks');
+                var docToEl = document.getElementById('document_to');
+                var officeToEl = document.querySelector('#myForm_Forwarding .office_to');
+
+                if (destinationInput) destinationInput.value = destinationValue;
+                if (remarksInput) {
+                    remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
+                }
+                if (destinationValue === 'previous_sender') {
+                    var office = document.getElementById('return_office_select')?.value || '';
+                    if (!office) {
+                        if (typeof showNotify === 'function') {
+                            showNotify('Please select the section/unit to return to.', 'error', 3000);
+                        }
+                        return;
+                    }
+                    if (docToEl) docToEl.value = office;
+                    if (officeToEl) officeToEl.value = office;
+                }
+
+                var form = document.getElementById('myForm_Forwarding');
+                if (form) {
+                    var hiddenReturnSubmit = document.getElementById('hidden_return_submit');
+                    if (hiddenReturnSubmit) {
+                        hiddenReturnSubmit.click();
+                    } else {
+                        form.submit();
+                    }
+                }
+                hidePopup();
+            });
+        }
+    })();
+</script>
 </body>
 
 </html>
