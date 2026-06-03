@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 require_once __DIR__ . '/../../protected/handler/voucher_module/voucher.model.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 AuditHelper::logPageView('Voucher Status');
 
@@ -31,8 +32,8 @@ if (!$invalidSearch && $q !== '') {
     $searchSql = ' AND (' . implode(' OR ', $parts) . ')';
 }
 
-// Active forwarded vouchers only (active_status set on forward, cleared on return).
-$activeOnlySql = " AND vt.active_status = 'yes'";
+// Exclude encoded/pending at encoder only (active_status = no).
+$activeOnlySql = voucher_tracking_counts_include_sql('vt');
 
 if ($invalidSearch) {
     $dbCount = 0;
@@ -85,7 +86,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 <div class="main main--dashboard" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Voucher Status</h1>
-        <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">Active forwarded/received vouchers only (excludes encoded and returned)</p>
+        <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">Forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
     </header>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-download_container">

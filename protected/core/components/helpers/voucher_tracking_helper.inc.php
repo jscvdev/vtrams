@@ -13,6 +13,24 @@ function voucher_tracking_normalize_active_status(?string $status): string
     return 'no';
 }
 
+/** Excluded from dashboard / voucher status counts only when encoded or pending at encoder. */
+function voucher_tracking_is_excluded_from_counts(?string $status): bool
+{
+    return voucher_tracking_normalize_active_status($status) === 'no';
+}
+
+/**
+ * SQL fragment for voucher_tracking listings that omit encoded/pending rows only.
+ *
+ * Includes active_status yes (forwarded/received) and returned (office return).
+ */
+function voucher_tracking_counts_include_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return " AND {$alias}.active_status <> 'no'";
+}
+
 function voucher_tracking_parse_returned_by(?string $voucher_status): string
 {
     $status = trim((string) $voucher_status);

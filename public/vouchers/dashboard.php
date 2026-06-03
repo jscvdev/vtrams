@@ -4,6 +4,7 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     require __DIR__ . '/../../protected/dbconnection.inc.php';
     require __DIR__ . '/../../protected/core/components/security/config_session.inc.php';
     require __DIR__ . '/../../protected/core/components/security/router.inc.php';
+    require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 
     $voucher_type = isset($_GET['voucher_type']) && $_GET['voucher_type'] !== 'all' ? trim((string) $_GET['voucher_type']) : null;
     $month = isset($_GET['month']) && $_GET['month'] !== 'all' ? (int) $_GET['month'] : null;
@@ -11,9 +12,8 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
 
     try {
-        // Active forwarded vouchers only (active_status set on encode->forward, cleared on return).
-        $query = 'SELECT vt.* FROM voucher_tracking vt
-            WHERE vt.active_status = \'yes\'';
+        // Exclude encoded/pending at encoder only (active_status = no).
+        $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
         $params = [];
 
         if ($voucher_type !== null && $voucher_type !== '') {
@@ -303,7 +303,7 @@ if ($scriptName !== '') {
     </div>
     <div class="main-content main_dashboard">
         <h1>Voucher Analytics Dashboard</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Analytics for active forwarded/received vouchers only (excludes encoded and returned)</p>
+        <p style="color: rgb(75 85 99 / 0.9)">Analytics for forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
 
         <section class="filter_options">
             <div>

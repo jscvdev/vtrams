@@ -275,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $coa_category,
                                 $coa_subsection
                             );
-                            // active_status=yes: include in dashboard and voucher status counts
+                            // active_status=yes: included in dashboard and voucher status (returned also included via <> no)
                             update_returned_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
                             voucher_log_user_action(
                                 $pdo,
