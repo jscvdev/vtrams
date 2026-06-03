@@ -1203,7 +1203,7 @@ $totalRows = $displayTotal;
         return String(v || '').trim();
     }); // Convert to a trimmed array
 
-    if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor")) {
+    if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III")) {
         const dvInput = document.getElementById("dv_no");
         if (dvInput) {
             dvInput.required = true;
@@ -1517,7 +1517,7 @@ $totalRows = $displayTotal;
                 document.querySelector(".btn-dynamic").setAttribute("name", "receive_voucher");
                 document.querySelector(".btn-dynamic").classList.remove("warning");
                 document.querySelector(".btn-dynamic").classList.add("success");
-                if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor")) {
+                if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III")) {
                     const dvInput = document.getElementById("dv_no");
                     if (dvInput) {
                         dvInput.required = true;
@@ -1552,7 +1552,7 @@ $totalRows = $displayTotal;
         form.addEventListener('submit', function(e) {
             const actionButton = document.querySelector('.btn-dynamic');
             const actionName = actionButton ? actionButton.getAttribute('name') : '';
-            const isAccountingRole = targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor");
+            const isAccountingRole = targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III");
 
             if (actionName === 'receive_voucher' && isAccountingRole) {
                 const dvInput = document.getElementById('dv_no');

@@ -118,7 +118,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $status = "For Charging";
                     } elseif (in_array("Budget Unit", $target)) {
                         $status = "Verifying Availability of Fund and Allotment";
-                    } elseif (in_array('Accounting Unit', $target, true) || in_array('Processor', $target, true)) {
+                    } elseif (
+                        in_array('Accounting Unit', $target, true)
+                        || in_array('Processor', $target, true)
+                        || in_array('Accountant III', $target, true)
+                    ) {
                         $status = 'Processing the Disbursement Voucher';
                     } elseif (in_array("Office of the PENRO", $target)) {
                         $status = "For Approval of the PENRO";
