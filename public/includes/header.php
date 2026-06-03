@@ -207,6 +207,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                             || in_array("Budget Unit", $target)
                             || in_array("Cashiers Unit", $target)
                             || in_array("Accounting Unit", $target)
+                            || in_array("Accountant III", $target)
                             || in_array("Processor", $target)
                         );
                         $can_view_designations = ($_SESSION["acl"] >= 8);
@@ -438,9 +439,9 @@ $header_text = $pageTitleHelper->getHeaderText();
             var confirmation = confirm("Are you sure to logout?")
             if (confirmation) {
                 window.location.href = <?php
-                    require_once __DIR__ . '/../../protected/core/components/redirects/redirect_config.inc.php';
-                    echo json_encode(redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php', JSON_UNESCAPED_SLASHES);
-                ?>;
+                                        require_once __DIR__ . '/../../protected/core/components/redirects/redirect_config.inc.php';
+                                        echo json_encode(redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php', JSON_UNESCAPED_SLASHES);
+                                        ?>;
                 document.getElementById("user-options").selectedIndex = 0;
             } else {
                 document.getElementById("user-options").selectedIndex = 0;

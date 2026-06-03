@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             voucher_remove_incoming_from_sent($pdo, $processing_no);
                             voucher_remove_from_sent($pdo, $processing_no);
-                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
+                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, 'no');
                             voucher_log_user_action(
                                 $pdo,
                                 $processing_no,
@@ -250,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             voucher_remove_incoming_from_sent($pdo, $processing_no);
                             voucher_remove_from_sent($pdo, $processing_no);
-                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
+                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, 'returned');
                             voucher_log_user_action(
                                 $pdo,
                                 $processing_no,

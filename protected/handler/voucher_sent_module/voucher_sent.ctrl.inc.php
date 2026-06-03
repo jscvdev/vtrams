@@ -60,9 +60,9 @@ function voucher_sent_return_document (object $pdo, string $processing_no, strin
 }
 
 //UPDATE THE DOCUMENT FORWARDED LOG IN DOCUMENT TRACKING
-function voucher_sent_update_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks)
+function voucher_sent_update_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks, string $active_status = 'returned')
 {
-    voucher_sent_log_to_document_tracking($pdo, $processing_no, $action, $datetime_action, $remarks);
+    voucher_sent_log_to_document_tracking($pdo, $processing_no, $action, $datetime_action, $remarks, $active_status);
 }
 
 

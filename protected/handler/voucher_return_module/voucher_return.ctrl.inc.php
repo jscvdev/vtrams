@@ -57,7 +57,7 @@ function voucher_incoming_sent_return_document (object $pdo, string $processing_
         $voucher_type, $voucher_date, $encoded_by, $encoded_from, $datetime_encoded);
 }
 
-function voucher_incoming_return_update_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $combined_remarks)
+function voucher_incoming_return_update_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $combined_remarks, string $active_status = 'returned')
 {
-    voucher_incoming_return_log_to_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
+    voucher_incoming_return_log_to_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, $active_status);
 }

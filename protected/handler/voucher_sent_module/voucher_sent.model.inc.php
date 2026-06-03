@@ -108,8 +108,11 @@ function voucher_sent_to_pending(object $pdo, string $processing_no, string $dv_
     return $statement->rowCount() > 0;
 }
 
-function voucher_sent_log_to_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks) {
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, active_status = 'returned' WHERE processing_no = :processing_no";
+function voucher_sent_log_to_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks, string $active_status = 'returned') {
+    if (!in_array($active_status, ['no', 'yes', 'returned'], true)) {
+        $active_status = 'returned';
+    }
+    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, active_status = :active_status WHERE processing_no = :processing_no";
 
     $statement = $pdo->prepare($query);
 
@@ -117,6 +120,7 @@ function voucher_sent_log_to_document_tracking(object $pdo, string $processing_n
     $statement->bindParam(":datetime_status",$datetime_action);
     $statement->bindParam(":processing_no",$processing_no);
     $statement->bindParam(":remarks",$remarks);
+    $statement->bindParam(":active_status",$active_status);
 
     $statement->execute();
 

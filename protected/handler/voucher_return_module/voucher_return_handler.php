@@ -265,7 +265,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         incoming_voucher_remove_incoming_from_sent($pdo, $processing_no);
                         incoming_voucher_remove_from_sent($pdo, $processing_no);
-                        voucher_incoming_return_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
+                        $return_active_status = (!empty($return_destination) && $return_destination === 'encoder') ? 'no' : 'returned';
+                        voucher_incoming_return_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, $return_active_status);
                         if (!empty($remarks)) {
                             // Persist the accumulated remarks history so it remains visible
                             // when the voucher is forwarded again.
