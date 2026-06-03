@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 
 $query = trim((string)($_POST['query'] ?? ''));
 $query = preg_replace('/\s+/u', ' ', $query);
@@ -36,6 +37,10 @@ try {
     $stmt->execute();
 
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($results as &$row) {
+        $row['voucher_status'] = voucher_tracking_action_label($row['voucher_status'] ?? '');
+    }
+    unset($row);
     echo json_encode($results, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (PDOException $e) {
     echo json_encode(['error' => 'Query error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);

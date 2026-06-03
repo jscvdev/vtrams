@@ -92,7 +92,8 @@
                         <th>Processing No.</th>
                         <th>DV No.</th>
                         <th>Payee</th>
-                        <th>Status</th>
+                        <th>Tracking Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="results">
@@ -131,7 +132,7 @@
                 return;
             }
 
-            resultsContainer.innerHTML = '<tr><td colspan="4" class="kiosk-table-msg">Searching…</td></tr>';
+            resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">Searching…</td></tr>';
 
             fetch('search.php', {
                     method: 'POST',
@@ -151,12 +152,12 @@
 
                     if (data && data.error) {
                         notify(data.error, 'error', 3200);
-                        resultsContainer.innerHTML = '<tr><td colspan="4" class="kiosk-table-msg">Could not complete search.</td></tr>';
+                        resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">Could not complete search.</td></tr>';
                         return;
                     }
 
                     if (!Array.isArray(data) || data.length === 0) {
-                        resultsContainer.innerHTML = '<tr><td colspan="4" class="kiosk-table-msg">No matching voucher found. Try the full processing number (e.g. PN-26-01-0001) or check the payee spelling.</td></tr>';
+                        resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">No matching voucher found. Try the full processing number (e.g. PN-26-01-0001) or check the payee spelling.</td></tr>';
                         notify('No matching voucher found.', 'warning', 2500);
                         return;
                     }
@@ -165,27 +166,27 @@
                         const proc = item.processing_no != null ? String(item.processing_no) : '';
                         const dv = item.dv_no != null ? String(item.dv_no) : '—';
                         const payee = item.payee != null ? String(item.payee) : '';
-                        const vstat = item.tracking_status != null ?
-                            String(item.tracking_status) :
-                            (item.voucher_status != null ? String(item.voucher_status) : '');
+                        const trackingStatus = item.tracking_status != null ? String(item.tracking_status) : '—';
+                        const voucherStatus = item.voucher_status != null ? String(item.voucher_status) : '—';
                         const row = '<tr>' +
                             '<td data-label="Processing No.">' + escapeHtml(proc) + '</td>' +
                             '<td data-label="DV No.">' + escapeHtml(dv) + '</td>' +
                             '<td data-label="Payee">' + escapeHtml(payee) + '</td>' +
-                            '<td data-label="Status">' + escapeHtml(vstat) + '</td>' +
+                            '<td data-label="Tracking Status">' + escapeHtml(trackingStatus) + '</td>' +
+                            '<td data-label="Action">' + escapeHtml(voucherStatus) + '</td>' +
                             '</tr>';
                         resultsContainer.insertAdjacentHTML('beforeend', row);
 
                         if (index === 0) {
                             // Progress is driven by voucher_tracking.status (tracking_status alias from search.php).
-                            const progressStatus = item.tracking_status || item.voucher_status || '';
+                            const progressStatus = item.tracking_status || '';
                             setProgress(progressStatus);
                         }
                     });
                     notify('Found ' + data.length + ' matching voucher' + (data.length > 1 ? 's.' : '.'), 'success', 2200);
                 })
                 .catch(function(error) {
-                    resultsContainer.innerHTML = '<tr><td colspan="4" class="kiosk-table-msg">A network error occurred.</td></tr>';
+                    resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">A network error occurred.</td></tr>';
                     resetProgress();
                     notify('Could not reach the server. Try again in a moment.', 'error', 3200);
                     console.error('Kiosk search error:', error);

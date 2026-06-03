@@ -26,6 +26,20 @@ function voucher_tracking_parse_returned_by(?string $voucher_status): string
     return '';
 }
 
+/** e.g. "Forwarded by: Jane Doe" → "Forwarded" */
+function voucher_tracking_action_label(?string $voucher_status): string
+{
+    $status = trim((string) $voucher_status);
+    if ($status === '') {
+        return '';
+    }
+    if (preg_match('/^(.+?)\s+by\s*:/i', $status, $m)) {
+        return trim($m[1]);
+    }
+
+    return $status;
+}
+
 /**
  * @return array{udc: string, designation: string, section: string, office: string, display_name: string}|null
  */
