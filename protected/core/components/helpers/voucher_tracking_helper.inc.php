@@ -31,6 +31,33 @@ function voucher_tracking_counts_include_sql(string $alias = 'vt'): string
     return " AND {$alias}.active_status <> 'no'";
 }
 
+/** @return array<string, mixed>|null */
+function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing_no): ?array
+{
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return null;
+    }
+    $stmt = $pdo->prepare(
+        'SELECT voucher_status, active_status, process_history
+         FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1'
+    );
+    $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function voucher_tracking_fetch_process_history(object $pdo, string $processing_no): ?string
+{
+    $row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no);
+    if ($row === null) {
+        return null;
+    }
+    $hist = trim((string) ($row['process_history'] ?? ''));
+    return $hist !== '' ? $hist : null;
+}
+
 function voucher_tracking_parse_returned_by(?string $voucher_status): string
 {
     $status = trim((string) $voucher_status);
@@ -112,12 +139,14 @@ function voucher_tracking_return_forward_target(object $pdo, ?string $tracking_v
 {
     $returnedBy = voucher_tracking_parse_returned_by($tracking_voucher_status);
     if ($returnedBy === '') {
-        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
 
     $user = voucher_tracking_lookup_user_by_display_name($pdo, $returnedBy);
     $designation = '';
+    $udc = '';
     if ($user !== null) {
+        $udc = trim((string) ($user['udc'] ?? ''));
         $designation = voucher_tracking_primary_designation($user['designation']);
         if ($designation === '' && $user['section'] !== '') {
             $designation = $user['section'];
@@ -133,6 +162,7 @@ function voucher_tracking_return_forward_target(object $pdo, ?string $tracking_v
         'designation' => $designation,
         'label' => $label,
         'returned_by' => $returnedBy,
+        'udc' => $udc,
     ];
 }
 
@@ -145,7 +175,7 @@ function voucher_tracking_forward_target_from_section(object $pdo, string $secti
 {
     $sectionOrUnit = trim($sectionOrUnit);
     if ($sectionOrUnit === '') {
-        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
 
     $designation = $sectionOrUnit;
@@ -171,6 +201,7 @@ function voucher_tracking_forward_target_from_section(object $pdo, string $secti
         'designation' => $designation,
         'label' => $sectionOrUnit,
         'returned_by' => '',
+        'udc' => '',
     ];
 }
 
@@ -192,13 +223,43 @@ function voucher_tracking_resolve_return_forward_target(
     $encodedFrom = trim((string) $encoded_from);
     $encoderSection = trim((string) $encoder_section);
     if ($encodedFrom === '') {
-        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
     if ($encoderSection !== '' && strcasecmp($encodedFrom, $encoderSection) === 0) {
-        return ['designation' => '', 'label' => '', 'returned_by' => ''];
+        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
 
     return voucher_tracking_forward_target_from_section($pdo, $encodedFrom);
+}
+
+/** Receiver for encoder re-forward after "Returned by:" (specific person, then designation). */
+function voucher_forward_receiver_for_return_target(
+    object $pdo,
+    ?string $tracking_voucher_status,
+    string $forward_designation,
+    string $office_to
+): array {
+    $returnTarget = voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
+    $returnedByUdc = trim((string) ($returnTarget['udc'] ?? ''));
+    if ($returnedByUdc !== '') {
+        return [
+            'receiver_udc' => $returnedByUdc,
+            'forwarded_to' => $returnTarget['label'] !== '' ? $returnTarget['label'] : $returnTarget['returned_by'],
+            'temp_errors' => [],
+        ];
+    }
+    $designation = trim($forward_designation);
+    if ($designation === '') {
+        $designation = trim((string) ($returnTarget['designation'] ?? ''));
+    }
+    if ($designation === '') {
+        return [
+            'receiver_udc' => '',
+            'forwarded_to' => '',
+            'temp_errors' => ['unassigned_udc' => 'No user is assigned to accept'],
+        ];
+    }
+    return voucher_forward_receiver_udcs_for_designation($pdo, $designation, $office_to);
 }
 
 /**
