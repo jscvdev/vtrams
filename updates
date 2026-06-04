@@ -26,4 +26,17 @@ UPDATE action_logs to include office as a separate column - done
 remember to change to sys in path for style.css
 
 CHANGED DATABASE TO ALL COLUMN TO BE NULLABLE & > 255 if varchar should be less than 65k total for all rowsALTER TABLE `vouchers`
-  MODIFY `id` INT(10) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` INT(10) NOT NULL AUTO_INCREMENT; Error
+SQL query: Copy
+
+
+--
+-- Indexes for table `ada_signatory_options`
+--
+ALTER TABLE `ada_signatory_options`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_type_value_office` (`option_type`,`option_value`,`office`),
+  ADD KEY `idx_type_active_sort` (`option_type`,`is_active`,`sort_order`,`option_value`);
+MySQL said: Documentation
+
+#1061 - Duplicate key name 'uniq_type_value_office'
