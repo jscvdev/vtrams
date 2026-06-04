@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($keyList as $key) {
         $variable_name = $variable_map[$key];
         if (isset($_POST[$key])) {
-            $$variable_name = htmlspecialchars($_POST[$key]);
+            $$variable_name = voucher_post_string($_POST[$key]);
         } else {
             $$variable_name = "";
         }

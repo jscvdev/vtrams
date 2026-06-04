@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'return_source' => 'return_source',
         );
 
-        $return_source = isset($_POST['return_source']) ? htmlspecialchars((string) $_POST['return_source']) : 'incoming';
+        $return_source = isset($_POST['return_source']) ? voucher_post_string($_POST['return_source']) : 'incoming';
         $success_redirect = $return_source === 'forwarding' ? 'voucher_forwarding_return_redirect' : 'voucher_incoming_redirect';
         $_SESSION['voucher_return_redirect_key'] = $return_source === 'forwarding'
             ? 'voucher_forwarding_return_err_redirect'
@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($keyList as $key) {
             $variable_name = $variable_map[$key];
             if (isset($_POST[$key])) {
-                $$variable_name = htmlspecialchars($_POST[$key]);
+                $$variable_name = voucher_post_string($_POST[$key]);
             } else {
                 $$variable_name = "";
             }

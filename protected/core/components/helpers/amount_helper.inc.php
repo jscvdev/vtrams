@@ -63,6 +63,12 @@ function format_amount_display(mixed $raw): string
     return isset($parts[1]) ? $intPart . '.' . $parts[1] : $intPart;
 }
 
+/** POST/session text for DB storage — do not HTML-escape (escape on output only). */
+function voucher_post_string(mixed $value): string
+{
+    return trim((string) $value);
+}
+
 /** Apply exact amount normalization to a handler-mapped POST variable. */
 function voucher_apply_exact_amount(?string &$amount): void
 {

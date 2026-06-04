@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($keyList as $key) {
             $variable_name = $variable_map[$key];
             if (isset($_POST[$key])) {
-                $$variable_name = htmlspecialchars($_POST[$key]);
+                $$variable_name = voucher_post_string($_POST[$key]);
             } else {
                 $$variable_name = "";
             }
@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $processing_no = "PN" . "-" . date("y-m") . "-" . "{$totalFormatted}";
 
                     // PASSED HIDDEN INPUT
-                    $action_from = htmlspecialchars($_SESSION['logged_user_section']);
-                    $encoded_by = htmlspecialchars($_SESSION['logged_user_emp_name']);
+                    $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
+                    $encoded_by = voucher_post_string($_SESSION['logged_user_emp_name'] ?? '');
 
                     date_default_timezone_set('Asia/Singapore'); // SET TIMEZONE TO GMT+8
                     $currTime = $date = date('Y-m-d H:i:s', time()); // FORMAT THE CURRENT TIME

@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($key === 'selected_coa_options') {
                     $$variable_name = trim((string)$_POST[$key]);
                 } else {
-                    $$variable_name = htmlspecialchars($_POST[$key]);
+                    $$variable_name = voucher_post_string($_POST[$key]);
                 }
             } else {
                 $$variable_name = "";

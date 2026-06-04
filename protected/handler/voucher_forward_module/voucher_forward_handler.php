@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($key === 'selected_coa_options_forward') {
                     $$variable_name = trim((string)$_POST[$key]);
                 } else {
-                    $$variable_name = htmlspecialchars($_POST[$key]);
+                    $$variable_name = voucher_post_string($_POST[$key]);
                 }
             } else {
                 $$variable_name = "";
@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $office_from = $_SESSION['logged_user_office'];
                     $office_to = $_SESSION['logged_user_office'];
                     $forwarded_by = $_SESSION['logged_user_emp_name'];
-                    $action_from = htmlspecialchars($_SESSION['logged_user_section']);
+                    $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
 
                     //REMARKS
                     if (!empty($remarks)) {
