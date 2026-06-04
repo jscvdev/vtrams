@@ -740,13 +740,13 @@ tr {
     content: "0";
     display: none;
     position: absolute;
-    top: 10%;
+    top: -5%;
     left: 0%;
     margin-left: 0.5rem;
     transform: translateY(-50%);
     background-color: var(--sidebar-badge-bg);
     color: var(--sidebar-text);
-    min-width: 22px;
+    min-width: 18px;
     height: 20px;
     padding: 0 6px;
     border-radius: 10px;
@@ -754,6 +754,7 @@ tr {
     line-height: 20px;
     font-size: 0.75rem;
     font-weight: 600;
+    background-color: #DC2626;
 }
 
 /* LABEL TAGS */
