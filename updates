@@ -25,4 +25,5 @@ FILTER BY USER ?? POSSIBLE?
 UPDATE action_logs to include office as a separate column - done 
 remember to change to sys in path for style.css
 
-CHANGED DATABASE TO ALL COLUMN TO BE NULLABLE & > 255 if varchar should be less than 65k total for all rows
+CHANGED DATABASE TO ALL COLUMN TO BE NULLABLE & > 255 if varchar should be less than 65k total for all rowsALTER TABLE `vouchers`
+  MODIFY `id` INT(10) NOT NULL AUTO_INCREMENT;
