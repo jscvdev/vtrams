@@ -1025,6 +1025,7 @@ tr {
     flex-direction: row;
     align-items: center;
     gap: 10px;
+    width: 100%;
 }
 
 .filter-container2 {
@@ -1339,6 +1340,7 @@ tr {
     border-radius: 8px;
     padding: 10px 14px;
     min-width: 280px;
+    width: 100%;
 }
 
 .voucher-card--filter .filter-download_container #filterInput {
