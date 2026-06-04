@@ -21,6 +21,31 @@ function asset_url(string $href, string $absolutePath): string
 }
 
 /**
+ * Stylesheets bundled by base.css (@import does not bust cache for imports).
+ *
+ * @return list<string>
+ */
+function asset_base_stylesheet_files(): array
+{
+    return [
+        'hstyle.css',
+        'ppop.css',
+        'gen_slip.css',
+        'custom_buttons.css',
+    ];
+}
+
+/**
+ * Echo cache-busted links for base layout CSS (includes hstyle / sidebar badge rules).
+ */
+function asset_base_stylesheets(string $hrefPrefix, string $absoluteDir): void
+{
+    foreach (asset_base_stylesheet_files() as $styleFile) {
+        asset_stylesheet($hrefPrefix . $styleFile, $absoluteDir . '/' . $styleFile);
+    }
+}
+
+/**
  * Echo a cache-busted stylesheet link tag.
  */
 function asset_stylesheet(string $href, string $absolutePath): void

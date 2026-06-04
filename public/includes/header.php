@@ -9,6 +9,10 @@ require '../../protected/core/components/security/router.inc.php';
 require '../../protected/core/components/security/user_check.php';
 require '../../protected/handler/change_password_module/change_password_errhandler.inc.php';
 require_once '../../protected/page_title_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/asset_version_helper.inc.php';
+
+$vtramsStylesDir = __DIR__ . '/../styles/css';
+$vtramsStylesHref = '/vtrams/public/styles/css/';
 
 check_change_password_errors();
 
@@ -81,14 +85,14 @@ $header_text = $pageTitleHelper->getHeaderText();
         strpos($file_path, '/vouchers/') !== false || strpos($file_path, '\\vouchers\\') !== false ||
         strpos($file_path, '/utilities/') !== false || strpos($file_path, '\\utilities\\') !== false
     ) {
-        echo '<link rel="stylesheet" href="/vtrams/public/styles/css/base.css">';
-        // Reuse SYS modern filter toolbar styles on voucher pages.
-        echo '<link rel="stylesheet" href="/vtrams/public/styles/css/modern_filter_card.css">';
+        asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
+        asset_stylesheet($vtramsStylesHref . 'modern_filter_card.css', $vtramsStylesDir . '/modern_filter_card.css');
     } elseif ($file_name == 'upload.php') {
-        echo '<link rel="stylesheet" href="/vtrams/public/styles/css/upload.css">';
+        asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
+        asset_stylesheet($vtramsStylesHref . 'ustyle.css', $vtramsStylesDir . '/ustyle.css');
     }
     if ($file_name == 'devtool.php') {
-        echo '<link rel="stylesheet" href="/vtrams/public/styles/css/base.css">';
+        asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
     }
     ?>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
@@ -102,7 +106,7 @@ $header_text = $pageTitleHelper->getHeaderText();
 <?php require '../../protected/core/components/notifications/custom_alert.php'; ?>
 
 <body>
-    <script src="../../protected/js/table_loader.js"></script>
+    <?php asset_script('../../protected/js/table_loader.js', __DIR__ . '/../../protected/js/table_loader.js'); ?>
     <div class="popup-form3" id="popupForm3">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">

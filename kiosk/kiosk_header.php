@@ -12,12 +12,6 @@ $browser_title = $pageTitleHelper->getBrowserTitle();
 $header_text = $pageTitleHelper->getHeaderText();
 
 $kioskStylesDir = __DIR__ . '/../public/styles/css';
-$kioskBaseStyles = [
-    'hstyle.css',
-    'ppop.css',
-    'gen_slip.css',
-    'custom_buttons.css',
-];
 ?>
 <!doctype html>
 <html lang="en">
@@ -30,9 +24,7 @@ $kioskBaseStyles = [
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title><?php echo htmlspecialchars($browser_title, ENT_QUOTES, 'UTF-8'); ?></title>
     <?php
-    foreach ($kioskBaseStyles as $styleFile) {
-        asset_stylesheet('../public/styles/css/' . $styleFile, $kioskStylesDir . '/' . $styleFile);
-    }
+    asset_base_stylesheets('../public/styles/css/', $kioskStylesDir);
     asset_stylesheet('kiosk.css', __DIR__ . '/kiosk.css');
     ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
