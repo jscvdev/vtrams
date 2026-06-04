@@ -211,6 +211,18 @@ function vouchers_amount_ensure_string_column(object $pdo): void
     }
 }
 
+/** Legacy installs: pending vouchers table may lack ors_no until first return-to-encoder. */
+function vouchers_ensure_ors_no_column(object $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    dv_entries_try_exec($pdo, "ALTER TABLE `vouchers` ADD COLUMN `ors_no` VARCHAR(64) NOT NULL DEFAULT '' AFTER `ada_check_no`");
+}
+
 function insert_to_vouchers(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee_name, string $address, string $tin_employee_no, string $voucher_date, string $amount, string $voucher_type, string $particulars, string $datetime_action, string $encoded_from, string $encoded_by) {
     vouchers_amount_ensure_string_column($pdo);
     $amount = normalize_amount_string($amount);

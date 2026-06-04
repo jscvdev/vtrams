@@ -80,9 +80,13 @@ try {
     }
     if ($fetchLimit > 0) {
         $stmt = $pdo->prepare(
-            'SELECT v.*, vt.active_status, vt.voucher_status AS tracking_voucher_status
+            'SELECT v.*, vt.active_status, vt.voucher_status AS tracking_voucher_status,
+                    COALESCE(NULLIF(v.ors_no, \'\'), NULLIF(de.ors_no, \'\'), NULLIF(vt.ors_no, \'\'), \'\') AS ors_no,
+                    COALESCE(NULLIF(de.dv_no, \'\'), v.dv_no) AS dv_no_resolved,
+                    COALESCE(NULLIF(de.ada_check_no, \'\'), v.ada_check_no) AS ada_check_no_resolved
              FROM vouchers v
              LEFT JOIN voucher_tracking vt ON vt.processing_no = v.processing_no
+             LEFT JOIN dv_entries de ON de.processing_no = v.processing_no
              WHERE ' . $baseWhere . $searchSql . '
              ORDER BY v.processing_no DESC LIMIT :lim OFFSET :off'
         );
@@ -103,6 +107,16 @@ try {
 
     foreach ($rows as &$row) {
         $row['active_status'] = voucher_tracking_normalize_active_status($row['active_status'] ?? 'no');
+        if (!empty($row['dv_no_resolved'])) {
+            $row['dv_no'] = trim((string) $row['dv_no_resolved']);
+        }
+        if (!empty($row['ada_check_no_resolved'])) {
+            $row['ada_check_no'] = trim((string) $row['ada_check_no_resolved']);
+        }
+        unset($row['dv_no_resolved'], $row['ada_check_no_resolved']);
+        if (voucher_field_is_placeholder((string) ($row['ors_no'] ?? ''))) {
+            $row['ors_no'] = '';
+        }
         $returnTarget = voucher_tracking_resolve_return_forward_target(
             $pdo,
             (string) ($row['tracking_voucher_status'] ?? ''),

@@ -50,11 +50,46 @@ function voucher_incoming_sent_move_to_receiving(object $pdo, string $ors_no, st
         $voucher_date, $datetime_action, $office_from, $office_to, $sender_udc, $receiver_udc, $encoded_by, $encoded_from, $datetime_encoded, $process_status, $combined_remarks);
 }
 
-function voucher_incoming_sent_return_document (object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount,
-                                       string $voucher_type, string $voucher_date, string $encoded_by, string $encoded_from, string $datetime_encoded)
-{
-    voucher_incoming_sent_to_pending ($pdo, $processing_no, $dv_no, $ada_check_no, $payee, $address, $particulars, $tin_employee_no, $amount,
-        $voucher_type, $voucher_date, $encoded_by, $encoded_from, $datetime_encoded);
+function voucher_incoming_sent_return_document(
+    object $pdo,
+    string $processing_no,
+    string $ors_no,
+    string $dv_no,
+    string $ada_check_no,
+    string $payee,
+    string $address,
+    string $particulars,
+    string $tin_employee_no,
+    string $amount,
+    string $voucher_type,
+    string $voucher_date,
+    string $encoded_by,
+    string $encoded_from,
+    string $datetime_encoded,
+    ?string $coa_options = null,
+    ?string $coa_category = null,
+    ?string $coa_subsection = null
+): void {
+    voucher_incoming_sent_to_pending(
+        $pdo,
+        $processing_no,
+        $ors_no,
+        $dv_no,
+        $ada_check_no,
+        $payee,
+        $address,
+        $particulars,
+        $tin_employee_no,
+        $amount,
+        $voucher_type,
+        $voucher_date,
+        $encoded_by,
+        $encoded_from,
+        $datetime_encoded,
+        $coa_options,
+        $coa_category,
+        $coa_subsection
+    );
 }
 
 function voucher_incoming_return_update_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $combined_remarks, string $active_status = 'returned')

@@ -31,6 +31,172 @@ function voucher_tracking_counts_include_sql(string $alias = 'vt'): string
     return " AND {$alias}.active_status <> 'no'";
 }
 
+/** True when a voucher identifier was never assigned (empty, TBD, etc.). */
+function voucher_field_is_placeholder(string $value): bool
+{
+    $v = trim($value);
+    if ($v === '') {
+        return true;
+    }
+    $upper = strtoupper($v);
+
+    return in_array($upper, ['TBD', 'N/A', 'NULL'], true);
+}
+
+/** Prefer the first non-placeholder candidate. */
+function voucher_pick_field(string ...$candidates): string
+{
+    foreach ($candidates as $candidate) {
+        $v = trim((string) $candidate);
+        if (!voucher_field_is_placeholder($v)) {
+            return $v;
+        }
+    }
+    foreach ($candidates as $candidate) {
+        $v = trim((string) $candidate);
+        if ($v !== '') {
+            return $v;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Read ors_no / dv_no / ada_check_no from a voucher table row, if present.
+ *
+ * @return array<string, string>
+ */
+function voucher_identifier_row(object $pdo, string $table, string $processing_no): array
+{
+    static $allowed = [
+        'voucher_tracking' => ['ors_no', 'dv_no', 'ada_check_no'],
+        'voucher_receiving' => ['ors_no', 'dv_no', 'ada_check_no'],
+        'voucher_incoming' => ['ors_no', 'dv_no', 'ada_check_no'],
+        'voucher_sent' => ['ors_no', 'dv_no', 'ada_check_no'],
+        'dv_entries' => ['ors_no', 'dv_no', 'ada_check_no'],
+        'vouchers' => ['dv_no', 'ada_check_no'],
+    ];
+
+    $processing_no = trim($processing_no);
+    if ($processing_no === '' || !isset($allowed[$table])) {
+        return [];
+    }
+
+    $cols = $allowed[$table];
+    $select = implode(', ', $cols);
+
+    try {
+        $stmt = $pdo->prepare("SELECT {$select} FROM {$table} WHERE processing_no = :processing_no LIMIT 1");
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($cols as $col) {
+            $out[$col] = trim((string) ($row[$col] ?? ''));
+        }
+
+        return $out;
+    } catch (PDOException) {
+        return [];
+    }
+}
+
+/**
+ * Best-known ORS/DV/ADA values across tracking, queue tables, dv_entries, and vouchers.
+ *
+ * @return array{ors_no: string, dv_no: string, ada_check_no: string}
+ */
+function voucher_fetch_identifiers(object $pdo, string $processing_no): array
+{
+    $processing_no = trim($processing_no);
+    $result = ['ors_no' => '', 'dv_no' => '', 'ada_check_no' => ''];
+    if ($processing_no === '') {
+        return $result;
+    }
+
+    $tables = [
+        'voucher_tracking',
+        'voucher_receiving',
+        'voucher_incoming',
+        'voucher_sent',
+        'dv_entries',
+        'vouchers',
+    ];
+
+    $ors = [];
+    $dv = [];
+    $ada = [];
+    foreach ($tables as $table) {
+        $row = voucher_identifier_row($pdo, $table, $processing_no);
+        if ($row !== []) {
+            if (isset($row['ors_no'])) {
+                $ors[] = $row['ors_no'];
+            }
+            if (isset($row['dv_no'])) {
+                $dv[] = $row['dv_no'];
+            }
+            if (isset($row['ada_check_no'])) {
+                $ada[] = $row['ada_check_no'];
+            }
+        }
+    }
+
+    $result['ors_no'] = voucher_pick_field(...$ors);
+    $result['dv_no'] = voucher_pick_field(...$dv);
+    $result['ada_check_no'] = voucher_pick_field(...$ada);
+
+    return $result;
+}
+
+/** Persist known identifiers on voucher_tracking when returning or re-forwarding. */
+function voucher_sync_tracking_identifiers(
+    object $pdo,
+    string $processing_no,
+    string $ors_no,
+    string $dv_no,
+    string $ada_check_no
+): void {
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return;
+    }
+
+    $current = voucher_identifier_row($pdo, 'voucher_tracking', $processing_no);
+    if ($current === []) {
+        return;
+    }
+
+    $finalOrs = voucher_pick_field($ors_no, $current['ors_no'] ?? '');
+    $finalDv = voucher_pick_field($dv_no, $current['dv_no'] ?? '');
+    $finalAda = voucher_pick_field($ada_check_no, $current['ada_check_no'] ?? '');
+
+    if (voucher_field_is_placeholder($finalOrs)
+        && voucher_field_is_placeholder($finalDv)
+        && voucher_field_is_placeholder($finalAda)) {
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'UPDATE voucher_tracking
+             SET ors_no = :ors_no, dv_no = :dv_no, ada_check_no = :ada_check_no
+             WHERE processing_no = :processing_no'
+        );
+        $stmt->bindValue(':ors_no', $finalOrs, PDO::PARAM_STR);
+        $stmt->bindValue(':dv_no', $finalDv, PDO::PARAM_STR);
+        $stmt->bindValue(':ada_check_no', $finalAda, PDO::PARAM_STR);
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+    } catch (PDOException) {
+        // tracking row may be absent on edge paths
+    }
+}
+
 /** @return array<string, mixed>|null */
 function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing_no): ?array
 {
@@ -39,7 +205,7 @@ function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing
         return null;
     }
     $stmt = $pdo->prepare(
-        'SELECT voucher_status, active_status, process_history
+        'SELECT voucher_status, active_status, process_history, ors_no, dv_no, ada_check_no
          FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1'
     );
     $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);

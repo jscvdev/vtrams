@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
 
 function incoming_voucher_sent_delete_from_incoming(object $pdo, string $processing_no) {
     $query = "DELETE FROM voucher_incoming WHERE processing_no = :processing_no";
@@ -98,46 +100,233 @@ function voucher_return_returner_encoded_from(): string
     return $parts[0] ?? '';
 }
 
-/** Keep dv_entries.encoded_from aligned when a returned voucher is back at the encoder. */
-function voucher_return_sync_dv_encoded_from(object $pdo, string $processing_no, string $encoded_from): void
+/** @deprecated Use voucher_field_is_placeholder() */
+function voucher_return_field_is_placeholder(string $value): bool
 {
+    return voucher_field_is_placeholder($value);
+}
+
+/** @deprecated Use voucher_pick_field() */
+function voucher_return_pick_field(string ...$candidates): string
+{
+    return voucher_pick_field(...$candidates);
+}
+
+/**
+ * Load current voucher values from the queue, tracking, and dv_entries before return deletes rows.
+ *
+ * @return array<string, string>
+ */
+function voucher_return_fetch_encoder_return_snapshot(object $pdo, string $processing_no, string $return_source): array
+{
+    $snapshot = [];
+    $sourceTable = $return_source === 'forwarding' ? 'voucher_receiving' : 'voucher_incoming';
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM {$sourceTable} WHERE processing_no = :processing_no LIMIT 1");
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            foreach ($row as $key => $value) {
+                if (is_string($key) && $value !== null && $value !== '') {
+                    $snapshot[$key] = trim((string) $value);
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        // Source row may already be gone on retry paths.
+    }
+
+    if (!function_exists('voucher_tracking_fetch_by_processing_no')) {
+        require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+    }
+    $tracking = voucher_tracking_fetch_by_processing_no($pdo, $processing_no);
+    if (is_array($tracking)) {
+        foreach ($tracking as $key => $value) {
+            if (is_string($key) && $value !== null && $value !== '') {
+                $snapshot[$key] = trim((string) $value);
+            }
+        }
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM dv_entries WHERE processing_no = :processing_no LIMIT 1');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            foreach ($row as $key => $value) {
+                if (is_string($key) && $value !== null && $value !== '') {
+                    $snapshot[$key] = trim((string) $value);
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        // dv_entries may be absent on older installs.
+    }
+
+    return $snapshot;
+}
+
+/**
+ * When returning to encoder, keep identifiers and other fields already set downstream.
+ *
+ * @param array<string, string> $posted
+ * @return array<string, string>
+ */
+function voucher_return_encoder_retention_values(object $pdo, string $processing_no, string $return_source, array $posted): array
+{
+    if (!function_exists('voucher_fetch_identifiers')) {
+        require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+    }
+
+    $snapshot = voucher_return_fetch_encoder_return_snapshot($pdo, $processing_no, $return_source);
+    $stored = voucher_fetch_identifiers($pdo, $processing_no);
+    $fields = [
+        'ors_no',
+        'dv_no',
+        'ada_check_no',
+        'payee',
+        'address',
+        'particulars',
+        'tin_employee_no',
+        'amount',
+        'voucher_type',
+        'voucher_date',
+        'coa_options',
+        'coa_category',
+        'coa_subsection',
+    ];
+
+    $retained = [];
+    foreach ($fields as $field) {
+        if (in_array($field, ['ors_no', 'dv_no', 'ada_check_no'], true)) {
+            $retained[$field] = voucher_pick_field(
+                $posted[$field] ?? '',
+                $snapshot[$field] ?? '',
+                $stored[$field] ?? ''
+            );
+            continue;
+        }
+        $retained[$field] = voucher_pick_field(
+            $posted[$field] ?? '',
+            $snapshot[$field] ?? ''
+        );
+    }
+
+    return $retained;
+}
+
+/** Keep dv_entries aligned when a returned voucher is back at the encoder. */
+function voucher_return_sync_dv_entry_for_encoder_return(
+    object $pdo,
+    string $processing_no,
+    string $encoded_from,
+    string $ors_no,
+    string $dv_no,
+    string $ada_check_no
+): void {
     $encoded_from = trim($encoded_from);
-    if ($encoded_from === '') {
+    if ($encoded_from === '' && voucher_field_is_placeholder($ors_no)
+        && voucher_field_is_placeholder($dv_no) && voucher_field_is_placeholder($ada_check_no)) {
         return;
     }
 
     try {
+        $existing = [];
+        $stmt = $pdo->prepare('SELECT ors_no, dv_no, ada_check_no, encoded_from FROM dv_entries WHERE processing_no = :processing_no LIMIT 1');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            $existing = $row;
+        }
+
+        if ($existing === []) {
+            return;
+        }
+
+        $stored = voucher_fetch_identifiers($pdo, $processing_no);
+        $finalOrs = voucher_pick_field($ors_no, (string) ($existing['ors_no'] ?? ''), $stored['ors_no'] ?? '');
+        $finalDv = voucher_pick_field($dv_no, (string) ($existing['dv_no'] ?? ''), $stored['dv_no'] ?? '');
+        $finalAda = voucher_pick_field($ada_check_no, (string) ($existing['ada_check_no'] ?? ''), $stored['ada_check_no'] ?? '');
+        $finalEncodedFrom = voucher_pick_field($encoded_from, (string) ($existing['encoded_from'] ?? ''));
+
         $stmt = $pdo->prepare(
-            'UPDATE dv_entries SET encoded_from = :encoded_from WHERE processing_no = :processing_no'
+            'UPDATE dv_entries
+             SET encoded_from = :encoded_from,
+                 ors_no = :ors_no,
+                 dv_no = :dv_no,
+                 ada_check_no = :ada_check_no
+             WHERE processing_no = :processing_no'
         );
-        $stmt->bindValue(':encoded_from', $encoded_from, PDO::PARAM_STR);
+        $stmt->bindValue(':encoded_from', $finalEncodedFrom, PDO::PARAM_STR);
+        $stmt->bindValue(':ors_no', $finalOrs, PDO::PARAM_STR);
+        $stmt->bindValue(':dv_no', $finalDv, PDO::PARAM_STR);
+        $stmt->bindValue(':ada_check_no', $finalAda, PDO::PARAM_STR);
         $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
         $stmt->execute();
     } catch (PDOException $e) {
-        // dv_entries may be absent on older installs
+        // dv_entries may be absent on older installs.
     }
 }
 
-function voucher_incoming_sent_to_pending(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $encoded_by, string $encoded_from, string $datetime_encoded) {
+/** @deprecated Use voucher_return_sync_dv_entry_for_encoder_return() */
+function voucher_return_sync_dv_encoded_from(object $pdo, string $processing_no, string $encoded_from): void
+{
+    voucher_return_sync_dv_entry_for_encoder_return($pdo, $processing_no, $encoded_from, '', '', '');
+}
+
+function voucher_incoming_sent_to_pending(
+    object $pdo,
+    string $processing_no,
+    string $ors_no,
+    string $dv_no,
+    string $ada_check_no,
+    string $payee,
+    string $address,
+    string $particulars,
+    string $tin_employee_no,
+    string $amount,
+    string $voucher_type,
+    string $voucher_date,
+    string $encoded_by,
+    string $encoded_from,
+    string $datetime_encoded,
+    ?string $coa_options = null,
+    ?string $coa_category = null,
+    ?string $coa_subsection = null
+) {
     $amount = voucher_prepare_stored_amount($pdo, $amount);
-    $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, particulars, tin_employee_no,  amount, voucher_type, voucher_date, encoded_by, encoded_from, datetime_encoded) 
-                        VALUES (:processing_no, :dv_no, :ada_check_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :voucher_date, :encoded_by, :encoded_from, :datetime_encoded)";
+    vouchers_ensure_ors_no_column($pdo);
+
+    $deleteStmt = $pdo->prepare('DELETE FROM vouchers WHERE processing_no = :processing_no');
+    $deleteStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $deleteStmt->execute();
+
+    $query = "INSERT INTO vouchers (processing_no, ors_no, dv_no, ada_check_no, payee, address, particulars, tin_employee_no, amount, voucher_type, voucher_date, encoded_by, encoded_from, datetime_encoded, coa_options, coa_category, coa_subsection)
+                        VALUES (:processing_no, :ors_no, :dv_no, :ada_check_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :voucher_date, :encoded_by, :encoded_from, :datetime_encoded, :coa_options, :coa_category, :coa_subsection)";
 
     $statement = $pdo->prepare($query);
 
-    $statement->bindParam(":processing_no",$processing_no);
-    $statement->bindParam(":dv_no",$dv_no);
-    $statement->bindParam(":ada_check_no",$ada_check_no);
-    $statement->bindParam(":payee",$payee);
-    $statement->bindParam(":address",$address);
-    $statement->bindParam(":particulars",$particulars);
-    $statement->bindParam(":tin_employee_no",$tin_employee_no);
-    $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
-    $statement->bindParam(":voucher_type",$voucher_type);
-    $statement->bindParam(":voucher_date",$voucher_date);
-    $statement->bindParam(":encoded_by",$encoded_by);
-    $statement->bindParam(":encoded_from",$encoded_from);
-    $statement->bindParam(":datetime_encoded",$datetime_encoded);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->bindValue(':ors_no', $ors_no, PDO::PARAM_STR);
+    $statement->bindValue(':dv_no', $dv_no, PDO::PARAM_STR);
+    $statement->bindValue(':ada_check_no', $ada_check_no, PDO::PARAM_STR);
+    $statement->bindValue(':payee', $payee, PDO::PARAM_STR);
+    $statement->bindValue(':address', $address, PDO::PARAM_STR);
+    $statement->bindValue(':particulars', $particulars, PDO::PARAM_STR);
+    $statement->bindValue(':tin_employee_no', $tin_employee_no, PDO::PARAM_STR);
+    $statement->bindValue(':amount', $amount, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_type', $voucher_type, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_date', $voucher_date, PDO::PARAM_STR);
+    $statement->bindValue(':encoded_by', $encoded_by, PDO::PARAM_STR);
+    $statement->bindValue(':encoded_from', $encoded_from, PDO::PARAM_STR);
+    $statement->bindValue(':datetime_encoded', $datetime_encoded, PDO::PARAM_STR);
+    $statement->bindValue(':coa_options', $coa_options, $coa_options === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_category', $coa_category, $coa_category === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_subsection', $coa_subsection, $coa_subsection === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
 
     $statement->execute();
 

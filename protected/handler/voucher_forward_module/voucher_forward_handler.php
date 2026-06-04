@@ -79,6 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dv_no = "";
         $ors_no = "TBD";
         $ada_check_no = "TBD";
+        $stored_identifiers = voucher_fetch_identifiers($pdo, trim((string) ($processing_no ?? '')));
+        $ors_no = voucher_pick_field($stored_identifiers['ors_no'], $ors_no);
+        $dv_no = voucher_pick_field($stored_identifiers['dv_no'], $dv_no);
+        $ada_check_no = voucher_pick_field($stored_identifiers['ada_check_no'], $ada_check_no);
         $process_status = "N/A";
         $receiver_udc = "";
         $tracking_row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no ?? '');
@@ -291,6 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             // active_status=yes: included in dashboard and voucher status (returned also included via <> no)
                             update_returned_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
+                            voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
                             voucher_log_user_action(
                                 $pdo,
                                 $processing_no,

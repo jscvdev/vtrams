@@ -266,11 +266,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ? $forwarded_by
                             : ($_SESSION['logged_user_emp_name'] ?? '');
 
+                        if (!empty($return_destination) && $return_destination === 'encoder') {
+                            $retained = voucher_return_encoder_retention_values($pdo, $processing_no, $return_source, [
+                                'ors_no' => $ors_no,
+                                'dv_no' => $dv_no,
+                                'ada_check_no' => $ada_check_no,
+                                'payee' => $payee,
+                                'address' => $address,
+                                'particulars' => $particulars,
+                                'tin_employee_no' => $tin_employee_no,
+                                'amount' => $amount,
+                                'voucher_type' => $voucher_type,
+                                'voucher_date' => $voucher_date,
+                                'coa_options' => '',
+                                'coa_category' => '',
+                                'coa_subsection' => '',
+                            ]);
+                            $ors_no = $retained['ors_no'];
+                            $dv_no = $retained['dv_no'];
+                            $ada_check_no = $retained['ada_check_no'];
+                            $payee = $retained['payee'];
+                            $address = $retained['address'];
+                            $particulars = $retained['particulars'];
+                            $tin_employee_no = $retained['tin_employee_no'];
+                            $amount = $retained['amount'];
+                            $voucher_type = $retained['voucher_type'];
+                            $voucher_date = $retained['voucher_date'];
+                            $retained_coa_options = voucher_field_is_placeholder($retained['coa_options']) ? null : $retained['coa_options'];
+                            $retained_coa_category = voucher_field_is_placeholder($retained['coa_category']) ? null : $retained['coa_category'];
+                            $retained_coa_subsection = voucher_field_is_placeholder($retained['coa_subsection']) ? null : $retained['coa_subsection'];
+                            voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
+                        }
+
                         if ($return_source === 'forwarding') {
                             if (!empty($return_destination) && $return_destination === 'encoder') {
                                 voucher_incoming_sent_return_document(
                                     $pdo,
                                     $processing_no,
+                                    $ors_no,
                                     $dv_no,
                                     $ada_check_no,
                                     $payee,
@@ -282,9 +315,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $voucher_date,
                                     $encoded_by,
                                     $encoded_from,
-                                    $datetime_encoded
+                                    $datetime_encoded,
+                                    $retained_coa_options ?? null,
+                                    $retained_coa_category ?? null,
+                                    $retained_coa_subsection ?? null
                                 );
-                                voucher_return_sync_dv_encoded_from($pdo, $processing_no, $encoded_from);
+                                voucher_return_sync_dv_entry_for_encoder_return(
+                                    $pdo,
+                                    $processing_no,
+                                    $encoded_from,
+                                    $ors_no,
+                                    $dv_no,
+                                    $ada_check_no
+                                );
                             } else {
                                 voucher_forwarding_return_move_to_incoming(
                                     $pdo,
@@ -320,6 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 voucher_incoming_sent_return_document(
                                     $pdo,
                                     $processing_no,
+                                    $ors_no,
                                     $dv_no,
                                     $ada_check_no,
                                     $payee,
@@ -331,9 +375,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $voucher_date,
                                     $encoded_by,
                                     $encoded_from,
-                                    $datetime_encoded
+                                    $datetime_encoded,
+                                    $retained_coa_options ?? null,
+                                    $retained_coa_category ?? null,
+                                    $retained_coa_subsection ?? null
                                 );
-                                voucher_return_sync_dv_encoded_from($pdo, $processing_no, $encoded_from);
+                                voucher_return_sync_dv_entry_for_encoder_return(
+                                    $pdo,
+                                    $processing_no,
+                                    $encoded_from,
+                                    $ors_no,
+                                    $dv_no,
+                                    $ada_check_no
+                                );
                             } else {
                                 voucher_incoming_sent_move_to_receiving(
                                     $pdo,
