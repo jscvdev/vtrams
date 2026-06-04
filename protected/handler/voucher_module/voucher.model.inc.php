@@ -223,8 +223,45 @@ function vouchers_ensure_ors_no_column(object $pdo): void
     dv_entries_try_exec($pdo, "ALTER TABLE `vouchers` ADD COLUMN `ors_no` VARCHAR(64) NOT NULL DEFAULT '' AFTER `ada_check_no`");
 }
 
+/** Legacy installs: id may be NOT NULL without AUTO_INCREMENT (breaks return-to-encoder INSERT). */
+function vouchers_ensure_id_auto_increment(object $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    try {
+        $idCol = $pdo->query("SHOW COLUMNS FROM vouchers WHERE Field = 'id'")->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($idCol) || stripos((string) ($idCol['Extra'] ?? ''), 'auto_increment') !== false) {
+            return;
+        }
+
+        $pk = $pdo->query("SHOW KEYS FROM vouchers WHERE Key_name = 'PRIMARY'")->fetch(PDO::FETCH_ASSOC);
+        if ($pk === false) {
+            dv_entries_try_exec($pdo, 'ALTER TABLE vouchers ADD PRIMARY KEY (id)');
+        }
+
+        $nextId = 1;
+        $maxStmt = $pdo->query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM vouchers');
+        $maxRow = $maxStmt ? $maxStmt->fetch(PDO::FETCH_ASSOC) : false;
+        if (is_array($maxRow) && isset($maxRow['next_id'])) {
+            $nextId = max(1, (int) $maxRow['next_id']);
+        }
+
+        dv_entries_try_exec(
+            $pdo,
+            'ALTER TABLE vouchers MODIFY id INT(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=' . $nextId
+        );
+    } catch (Throwable) {
+        // Table may be absent on partial installs.
+    }
+}
+
 function insert_to_vouchers(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee_name, string $address, string $tin_employee_no, string $voucher_date, string $amount, string $voucher_type, string $particulars, string $datetime_action, string $encoded_from, string $encoded_by) {
     vouchers_amount_ensure_string_column($pdo);
+    vouchers_ensure_id_auto_increment($pdo);
     $amount = normalize_amount_string($amount);
     $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, amount, voucher_type, particulars, datetime_encoded, encoded_from, encoded_by, tin_employee_no, voucher_date) 
                         VALUES (:processing_no, :dv_no, :ada_check_no, :payee, :address, :amount, :voucher_type, :particulars, :datetime_encoded, :encoded_from, :encoded_by, :tin_employee_no, :voucher_date)";

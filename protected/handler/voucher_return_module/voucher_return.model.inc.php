@@ -320,6 +320,7 @@ function voucher_incoming_sent_to_pending(
 ) {
     $amount = voucher_prepare_stored_amount($pdo, $amount);
     vouchers_ensure_ors_no_column($pdo);
+    vouchers_ensure_id_auto_increment($pdo);
 
     $deleteStmt = $pdo->prepare('DELETE FROM vouchers WHERE processing_no = :processing_no');
     $deleteStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
