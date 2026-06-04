@@ -3,7 +3,8 @@
  * One-time migration: normalize process_history section labels MSD / Accounting → ACCOUNTING.
  *
  * Each history line uses: "NAME | action | section | office"
- * Only the third field (section) is changed when it is MSD, Accounting, or Accounting Unit.
+ * Only lines for the target employees below are updated; only the third field (section)
+ * is changed when it is MSD, Accounting, or Accounting Unit.
  *
  * Usage (CLI, from project root or SQL folder):
  *   php SQL/migrate_process_history_msd_accounting.php           # dry-run (preview only)
@@ -39,6 +40,34 @@ $tables = [
     'dv_entries',
 ];
 
+/** @var list<string> Only history lines whose first field matches one of these names are updated. */
+$targetNames = [
+    'GRACILE B. PALCE',
+    'DIANA E. COSTUNA',
+    'NATHALLIE D. BALEÑA',
+];
+
+function line_matches_target_name(string $namePart, array $targetNames): bool
+{
+    $name = trim($namePart);
+    if ($name === '') {
+        return false;
+    }
+
+    foreach ($targetNames as $target) {
+        if (strcasecmp($name, $target) === 0) {
+            return true;
+        }
+    }
+
+    // Common DB encoding variant for Baleña
+    if (strcasecmp($name, 'NATHALLIE D. BALENA') === 0) {
+        return true;
+    }
+
+    return false;
+}
+
 /**
  * Return ACCOUNTING when the section should be normalized; null if unchanged.
  */
@@ -62,9 +91,11 @@ function section_to_accounting(string $section): ?string
 }
 
 /**
- * Rewrite pipe-delimited history lines; legacy colon lines are left unchanged.
+ * Rewrite pipe-delimited history lines for target employees only; legacy colon lines are left unchanged.
+ *
+ * @param list<string> $targetNames
  */
-function rewrite_process_history(?string $value): array
+function rewrite_process_history(?string $value, array $targetNames): array
 {
     if ($value === null || trim($value) === '') {
         return ['changed' => false, 'value' => $value, 'line_changes' => 0];
@@ -80,7 +111,11 @@ function rewrite_process_history(?string $value): array
         }
 
         $parts = preg_split('/\s*\|\s*/', $line, 4);
-        if (!isset($parts[2])) {
+        if (!isset($parts[0], $parts[2])) {
+            continue;
+        }
+
+        if (!line_matches_target_name($parts[0], $targetNames)) {
             continue;
         }
 
@@ -117,7 +152,8 @@ if (!$isCli) {
     echo '<pre style="font-family:monospace">';
 }
 
-out('process_history migration: MSD / Accounting → ACCOUNTING');
+out('process_history migration: MSD / Accounting → ACCOUNTING (target employees only)');
+out('Targets: ' . implode(', ', $targetNames));
 out('Mode: ' . ($apply ? 'APPLY (updates will be saved)' : 'DRY-RUN (preview only; pass --apply or ?apply=1 to commit)'));
 out(str_repeat('-', 72));
 
@@ -149,9 +185,18 @@ try {
             $idCol = null;
         }
 
+        $nameClauses = [];
+        foreach ($targetNames as $targetName) {
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $targetName);
+            $nameClauses[] = "process_history LIKE '%" . $escaped . "%'";
+        }
+        $nameClauses[] = "process_history LIKE '%NATHALLIE D. BALENA%'";
+        $nameFilter = implode(' OR ', $nameClauses);
+
         $where = "
             process_history IS NOT NULL
             AND process_history <> ''
+            AND ({$nameFilter})
             AND (
                 process_history LIKE '%| MSD |%'
                 OR process_history LIKE '%| Accounting |%'
@@ -173,7 +218,7 @@ try {
         $tableLines = 0;
 
         foreach ($rows as $row) {
-            $result = rewrite_process_history($row['process_history'] ?? null);
+            $result = rewrite_process_history($row['process_history'] ?? null, $targetNames);
             if (!$result['changed']) {
                 continue;
             }
