@@ -468,11 +468,11 @@ $totalRows = $displayTotal;
                                 <div class="return-destination-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="previous_sender">
-                                        <span>Return to previous section/unit</span>
+                                        <span>Return to previous process</span>
                                     </label>
                                     <div id="return_office_container" style="margin-left: 26px; margin-top: 4px; display: none;">
                                         <select id="return_office_select" class="form-custom-input" style="width: 100%;">
-                                            <option value="" disabled selected>Select section/unit</option>
+                                            <option value="" disabled selected>Select previous process</option>
                                         </select>
                                     </div>
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -1537,7 +1537,13 @@ $totalRows = $displayTotal;
                 var office_from_cell = row.querySelector('[data-label="office_from"]');
                 var office_from = office_from_cell ? office_from_cell.textContent.trim() : '';
                 if (typeof openReturnOptionsPopup === 'function') {
-                    openReturnOptionsPopup(processing_no, process_history, office_from);
+                    openReturnOptionsPopup(
+                        processing_no,
+                        process_history,
+                        office_from,
+                        String(encoded_from || '').trim(),
+                        String(encoded_by || '').trim()
+                    );
                 }
             }
 
@@ -1712,6 +1718,7 @@ $totalRows = $displayTotal;
         // Current user context (used to hide user's own unit in dropdown)
         var currentUserSection = '<?php echo htmlspecialchars($_SESSION["logged_user_section"] ?? "", ENT_QUOTES); ?>';
         var currentUserDesignations = '<?php echo htmlspecialchars($_SESSION["logged_user_designation"] ?? "", ENT_QUOTES); ?>';
+        var currentUserName = '<?php echo htmlspecialchars($_SESSION["logged_user_emp_name"] ?? "", ENT_QUOTES); ?>';
 
         var sectionMap = {
             'BUDGET': 'Budget Unit',
@@ -1736,7 +1743,91 @@ $totalRows = $displayTotal;
             return String(mapped).trim();
         }
 
-        function buildExcludedUnitsSet() {
+        function normalizePersonName(name) {
+            return String(name || '')
+                .replace(/\bencoded\s+by\b\s*:?/gi, '')
+                .replace(/[,]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function nameTokens(name) {
+            return normalizePersonName(name).split(' ').filter(function(t) {
+                return t.length > 1;
+            });
+        }
+
+        function employeeNamesMatch(a, b) {
+            var na = normalizePersonName(a);
+            var nb = normalizePersonName(b);
+            if (!na || !nb) return false;
+            if (na === nb) return true;
+            if (na.indexOf(nb) !== -1 || nb.indexOf(na) !== -1) return true;
+            var tokensA = nameTokens(a);
+            var tokensB = nameTokens(b);
+            if (tokensA.length === 0 || tokensB.length === 0) return false;
+            var shorter = tokensA.length <= tokensB.length ? tokensA : tokensB;
+            var longer = tokensA.length <= tokensB.length ? tokensB : tokensA;
+            var longerStr = ' ' + longer.join(' ') + ' ';
+            for (var i = 0; i < shorter.length; i++) {
+                if (longerStr.indexOf(' ' + shorter[i] + ' ') === -1) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function parseProcessHistoryLine(line) {
+            var user = '';
+            var action = '';
+            var section = '';
+            if (line.indexOf('|') !== -1) {
+                var pipeParts = line.split(/\s*\|\s*/);
+                user = (pipeParts[0] || '').trim();
+                action = (pipeParts[1] || '').trim();
+                section = (pipeParts[2] || '').trim();
+            } else {
+                var colonParts = line.split(/\s*:\s*/);
+                user = (colonParts[0] || '').trim();
+                if (colonParts.length >= 3) {
+                    action = (colonParts[1] || '').trim();
+                    section = (colonParts.slice(2).join(' : ')).trim();
+                } else {
+                    section = (colonParts[1] || '').trim();
+                }
+            }
+            return { user: user, action: action, section: section };
+        }
+
+        function isPersonInvolved(user, action, personName) {
+            if (!personName) return false;
+            if (employeeNamesMatch(user, personName)) return true;
+            if (employeeNamesMatch(action, personName)) return true;
+            var encodedInAction = String(action || '').match(/encoded\s+by\s*:?\s*(.+)$/i);
+            if (encodedInAction && encodedInAction[1] && employeeNamesMatch(encodedInAction[1], personName)) {
+                return true;
+            }
+            return false;
+        }
+
+        function collectSectionsForPerson(processHistory, personName) {
+            var sections = {};
+            if (!processHistory || !processHistory.trim() || !personName) return sections;
+            var normalized = String(processHistory).replace(/\\n/g, '\n');
+            var lines = normalized.split(/\r\n|\r|\n/);
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                var parsed = parseProcessHistoryLine(line);
+                if (!isPersonInvolved(parsed.user, parsed.action, personName)) continue;
+                var unit = normalizeUnitLabel(parsed.section);
+                if (unit) sections[unit] = true;
+            }
+            return sections;
+        }
+
+        function buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy) {
             var excluded = {};
             var sec = normalizeUnitLabel(currentUserSection);
             if (sec) excluded[sec] = true;
@@ -1746,23 +1837,38 @@ $totalRows = $displayTotal;
                 var d = normalizeUnitLabel(desigs[i]);
                 if (d) excluded[d] = true;
             }
+            var encoderUnit = normalizeUnitLabel(encodedFrom);
+            if (encoderUnit) excluded[encoderUnit] = true;
+            var encoderSections = collectSectionsForPerson(processHistory, encodedBy);
+            for (var encoderSection in encoderSections) {
+                if (Object.prototype.hasOwnProperty.call(encoderSections, encoderSection)) {
+                    excluded[encoderSection] = true;
+                }
+            }
+            var selfSections = collectSectionsForPerson(processHistory, currentUserName);
+            for (var selfSection in selfSections) {
+                if (Object.prototype.hasOwnProperty.call(selfSections, selfSection)) {
+                    excluded[selfSection] = true;
+                }
+            }
             return excluded;
         }
 
-        function parseProcessHistory(processHistory) {
+        function parseProcessHistory(processHistory, encodedBy) {
             var offices = [],
                 seen = {};
             if (!processHistory || !processHistory.trim()) return offices;
-            var lines = processHistory.split(/\r\n|\r|\n/);
+            var normalized = String(processHistory).replace(/\\n/g, '\n');
+            var lines = normalized.split(/\r\n|\r|\n/);
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i].trim();
                 if (!line) continue;
-                // Format: "USER : action : section/unit" or legacy "USER : section/unit"
-                var parts = line.split(/\s*:\s*/);
-                var section = (parts.length >= 3) ? (parts.slice(2).join(' : ')).trim() : (parts.length === 2 ? (parts[1] || '').trim() : '');
-                if (!section) continue;
-                var raw = section.toUpperCase();
-                var mapped = sectionMap[raw] || section;
+                var parsed = parseProcessHistoryLine(line);
+                if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
+                if (isPersonInvolved(parsed.user, parsed.action, currentUserName)) continue;
+                if (!parsed.section) continue;
+                var raw = parsed.section.toUpperCase();
+                var mapped = sectionMap[raw] || parsed.section;
                 if (mapped && !seen[mapped]) {
                     seen[mapped] = true;
                     offices.push(mapped);
@@ -1771,25 +1877,34 @@ $totalRows = $displayTotal;
             return offices;
         }
 
-        function loadReturnOffices(processingNo, processHistory, officeFrom) {
+        function isExcludedReturnOption(label, excludedUnits, encodedBy) {
+            var unit = normalizeUnitLabel(label);
+            if (!unit) return true;
+            if (excludedUnits[unit]) return true;
+            if (encodedBy && employeeNamesMatch(unit, encodedBy)) return true;
+            if (currentUserName && employeeNamesMatch(unit, currentUserName)) return true;
+            return false;
+        }
+
+        function loadReturnOffices(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
             var selectEl = document.getElementById('return_office_select');
             var containerEl = document.getElementById('return_office_container');
             if (!selectEl) return;
 
-            selectEl.innerHTML = '<option value="" disabled selected>Select section/unit</option>';
+            selectEl.innerHTML = '<option value="" disabled selected>Select previous process</option>';
             if (containerEl) containerEl.style.display = 'none';
 
-            var offices = parseProcessHistory(processHistory || '');
+            var excluded = buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy);
+            var offices = parseProcessHistory(processHistory || '', encodedBy);
             if (offices.length === 0 && officeFrom) {
-                var raw = officeFrom.toUpperCase();
-                offices = [sectionMap[raw] || officeFrom];
+                var fallbackUnit = normalizeUnitLabel(officeFrom);
+                if (fallbackUnit && !isExcludedReturnOption(fallbackUnit, excluded, encodedBy)) {
+                    offices = [fallbackUnit];
+                }
             }
 
-            // Hide options that match the current user's own unit/designations
-            var excluded = buildExcludedUnitsSet();
             offices = offices.filter(function(o) {
-                var unit = normalizeUnitLabel(o);
-                return unit && !excluded[unit];
+                return !isExcludedReturnOption(o, excluded, encodedBy);
             });
 
             offices.forEach(function(office) {
@@ -1800,11 +1915,11 @@ $totalRows = $displayTotal;
             });
         }
 
-        function showPopup(processingNo, processHistory, officeFrom) {
+        function showPopup(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
             if (popup) popup.style.display = 'block';
             if (overlay) overlay.style.display = 'block';
             document.getElementById("confirm_return_options").setAttribute("name", "return_voucher");
-            loadReturnOffices(processingNo, processHistory, officeFrom);
+            loadReturnOffices(processingNo, processHistory, officeFrom, encodedFrom, encodedBy);
         }
 
         function hidePopup() {
@@ -1836,7 +1951,7 @@ $totalRows = $displayTotal;
         if (cancelBtn) cancelBtn.addEventListener('click', hidePopup);
         if (overlay) overlay.addEventListener('click', hidePopup);
 
-        // When "previous section/unit" is selected, show the dropdown
+        // When "previous process" is selected, show the dropdown
         const previousSenderRadio = document.querySelector('input[name="return_destination_popup"][value="previous_sender"]');
         const encoderRadio = document.querySelector('input[name="return_destination_popup"][value="encoder"]');
         const returnOfficeContainer = document.getElementById('return_office_container');
@@ -1862,7 +1977,7 @@ $totalRows = $displayTotal;
                 const selected = document.querySelector('input[name="return_destination_popup"]:checked');
                 if (!selected) {
                     if (typeof showNotify === 'function') {
-                        showNotify('Please select where to return the voucher (previous section/unit or encoder).', 'error', 3000);
+                        showNotify('Please select where to return the voucher (previous process or encoder).', 'error', 3000);
                     }
                     return;
                 }

@@ -35,20 +35,39 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
     $amount = voucher_prepare_stored_amount($pdo, $amount);
     $transmit = 'No';
 
-    // Carry supporting_documents (and charged_amount) forward from voucher_incoming
+    // Carry supporting_documents, charged_amount, and process_history forward from voucher_incoming
     $charged_amount = null;
     $supporting_documents = null;
-    $selectQuery = "SELECT charged_amount, supporting_documents FROM voucher_incoming WHERE processing_no = :processing_no";
+    $process_history = null;
+    $selectQuery = "SELECT charged_amount, supporting_documents, process_history FROM voucher_incoming WHERE processing_no = :processing_no";
     $selectStmt = $pdo->prepare($selectQuery);
     $selectStmt->bindParam(":processing_no", $processing_no);
     $selectStmt->execute();
     if ($row = $selectStmt->fetch(PDO::FETCH_ASSOC)) {
         $charged_amount = $row['charged_amount'] ?? null;
         $supporting_documents = $row['supporting_documents'] ?? null;
+        $histValue = trim((string) ($row['process_history'] ?? ''));
+        if ($histValue !== '') {
+            $process_history = $histValue;
+        }
+    }
+    if ($process_history === null) {
+        try {
+            $histStmt = $pdo->prepare('SELECT process_history FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1');
+            $histStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+            $histStmt->execute();
+            $histRow = $histStmt->fetch(PDO::FETCH_ASSOC);
+            $histValue = trim((string) ($histRow['process_history'] ?? ''));
+            if ($histValue !== '') {
+                $process_history = $histValue;
+            }
+        } catch (PDOException $e) {
+            // Best-effort: proceed without process_history if unavailable.
+        }
     }
 
-    $query = "INSERT INTO voucher_receiving (processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, voucher_date, datetime_forwarded, office_from, office_to, sender_udc, receiver_udc, encoded_by, encoded_from, datetime_encoded, forwarded_by, transmit, process_status, remarks, sender_remarks, supporting_documents) 
-                        VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :voucher_date, :datetime_forwarded, :office_from, :office_to, :sender_udc, :receiver_udc, :encoded_by, :encoded_from, :datetime_encoded, :forwarded_by, :transmit, :process_status, :remarks, :sender_remarks, :supporting_documents)";
+    $query = "INSERT INTO voucher_receiving (processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, voucher_date, datetime_forwarded, office_from, office_to, sender_udc, receiver_udc, encoded_by, encoded_from, datetime_encoded, forwarded_by, transmit, process_status, remarks, sender_remarks, supporting_documents, process_history) 
+                        VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :voucher_date, :datetime_forwarded, :office_from, :office_to, :sender_udc, :receiver_udc, :encoded_by, :encoded_from, :datetime_encoded, :forwarded_by, :transmit, :process_status, :remarks, :sender_remarks, :supporting_documents, :process_history)";
 
     $statement = $pdo->prepare($query);
 
@@ -78,6 +97,7 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
     $statement->bindParam(":remarks",$combined_remarks);
     $statement->bindParam(":sender_remarks",$combined_remarks);
     $statement->bindParam(":supporting_documents",$supporting_documents);
+    $statement->bindParam(":process_history", $process_history);
 
     $statement->execute();
 

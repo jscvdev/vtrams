@@ -124,6 +124,18 @@ function session_contains_phrase($phrase)
 $target = explode(",", $_SESSION['logged_user_designation']);
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
+$showForwardCol = !$hideForwardForCashiersUnit;
+$showOptionsCol = (
+    (in_array("Accounting Unit", $target) && !in_array("Accountant III", $target))
+    || in_array("Processor", $target)
+);
+$showTransmitCol = (
+    (!in_array("Accountant III", $target) && in_array("Accounting Unit", $target))
+    || (in_array("Budget Unit", $target) && !in_array("Budget Officer", $target))
+    || in_array("Office of the PENRO", $target)
+    || (in_array("Planning Section", $target) && !in_array("Planning Section Chief", $target))
+    || in_array("Processor", $target)
+);
 
 $ada_options = [];
 if ($showCashierArchiveCol) {
@@ -550,11 +562,11 @@ if ($showCashierArchiveCol) {
                                 <div class="return-destination-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="previous_sender">
-                                        <span>Return to previous section/unit</span>
+                                        <span>Return to previous process</span>
                                     </label>
                                     <div id="return_office_container" style="margin-left: 26px; margin-top: 4px; display: none;">
                                         <select id="return_office_select" class="form-custom-input" style="width: 100%;">
-                                            <option value="" disabled selected>Select section/unit</option>
+                                            <option value="" disabled selected>Select previous process</option>
                                         </select>
                                     </div>
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -636,27 +648,18 @@ if ($showCashierArchiveCol) {
                         <th>Type</th>
                         <th>Date/Time Forwarded</th>
                         <th>Remarks</th>
-                        <th>History</th>
                         <th>Return</th>
                         <th>Edit</th>
-                        <?php if (!$hideForwardForCashiersUnit) : ?>
+                        <?php if ($showForwardCol) : ?>
                             <th id="forward_header">Forward</th>
                         <?php endif; ?>
-                        <?php if (
-                            in_array("Accounting Unit", $target) and
-                            !in_array("Accountant III", $target) or in_array("Processor", $target)
-                        ) : ?>
+                        <?php if ($showOptionsCol) : ?>
                             <th id="forward_header">Options</th>
                         <?php endif; ?>
-                        <?php if (
-                            !in_array("Accountant III", $target) and in_array("Accounting Unit", $target)
-                            or in_array("Budget Unit", $target) and !in_array("Budget Officer", $target)
-                            or in_array("Office of the PENRO", $target)
-                            or in_array("Planning Section", $target) and !in_array("Planning Section Chief", $target)
-                            or in_array("Processor", $target)
-                        ) : ?>
+                        <?php if ($showTransmitCol) : ?>
                             <th id="forward_header">Transmit</th>
                         <?php endif; ?>
+                        <th>History</th>
                         <?php if ($showCashierArchiveCol) : ?>
                             <th id="forward_header">Archive</th>
                         <?php endif; ?>
@@ -685,7 +688,6 @@ if ($showCashierArchiveCol) {
                                 }
                                 ?>
                             </td>
-                            <td data-label="amount_original" class="hidden"><?php echo $row['amount']; ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="datetime_forwarded"><?php echo $row['datetime_forwarded']; ?></td>
@@ -716,47 +718,7 @@ if ($showCashierArchiveCol) {
 
                                 <?php endif; ?>
                             </td>
-                            <td data-label="combined_remarks" class="hidden"><?php echo $row['remarks']; ?></td>
-                            <td data-label="tin_employee_no" class="hidden"><?php echo $row['tin_employee_no']; ?></td>
-                            <td data-label="office_from" class="hidden"><?php echo $row['office_from']; ?></td>
-                            <td data-label="office_to" class="hidden"><?php echo $row['office_to']; ?></td>
-                            <td data-label="sender_udc" class="hidden"><?php echo $row['sender_udc']; ?></td>
-                            <td data-label="receiver_udc" class="hidden"><?php echo $row['receiver_udc']; ?></td>
-                            <td data-label="encoded_by" class="hidden"><?php echo $row['encoded_by']; ?></td>
-                            <td data-label="encoded_from" class="hidden"><?php echo $row['encoded_from']; ?></td>
-                            <td data-label="datetime_encoded" class="hidden"><?php echo $row['datetime_encoded']; ?></td>
-                            <td data-label="forwarded_by" class="hidden"><?php echo isset($row['forwarded_by']) ? htmlspecialchars((string)$row['forwarded_by']) : ''; ?></td>
-                            <td data-label="sender_remarks_raw" class="hidden"><?php echo isset($row['sender_remarks']) ? htmlspecialchars((string)$row['sender_remarks']) : ''; ?></td>
-                            <td data-label="priority" class="hidden"><?php echo isset($row['priority']) ? htmlspecialchars((string)$row['priority']) : ''; ?></td>
-                            <td data-label="process_status" class="hidden"><?php echo $row['process_status']; ?></td>
-                            <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
-                            <td data-label="process_history" class="hidden"><?php echo isset($row['process_history']) ? htmlspecialchars($row['process_history']) : ''; ?></td>
-                            <td data-label="history">
-                                <button class="btn tertiary" name="btn-history" type="button">View</button>
-                            </td>
                             <td data-label="return"><button class="btn warning" name="btn-return" type="button">Return</button></td>
-                            <?php if (isset($row['coa_options'])) : ?>
-                                <td data-label="coa_options" class="hidden"><?php echo $row['coa_options']; ?></td>
-                            <?php else : ?>
-                                <td data-label="coa_options" class="hidden"></td>
-                            <?php endif; ?>
-                            <?php if (isset($row['coa_category'])) : ?>
-                                <td data-label="coa_category" class="hidden"><?php echo $row['coa_category']; ?></td>
-                            <?php else : ?>
-                                <td data-label="coa_category" class="hidden"></td>
-                            <?php endif; ?>
-                            <?php if (isset($row['coa_subsection'])) : ?>
-                                <td data-label="coa_subsection" class="hidden"><?php echo $row['coa_subsection']; ?></td>
-                            <?php else : ?>
-                                <td data-label="coa_subsection" class="hidden"></td>
-                            <?php endif; ?>
-                            <?php if (isset($row['charged_amount'])) : ?>
-                                <td data-label="charged_amount" class="hidden"><?php echo $row['charged_amount']; ?></td>
-                            <?php else : ?>
-                                <td data-label="charged_amount" class="hidden"></td>
-                            <?php endif; ?>
-
-
                             <?php
                             $processStatus     = $row['process_status'] ?? '';
                             $transmitStatus    = $row['transmit'] ?? '';
@@ -781,114 +743,113 @@ if ($showCashierArchiveCol) {
                             ?>
 
                             <?php if ($roleCanEditAmount) : ?>
-                                <td data-label="edit"><button class="btn tertiary pPop" id="openPopup" name="btn-edit_amount" type="button">Edit</button></td>
+                                <td data-label="edit"><button class="btn danger pPop" id="openPopup" name="btn-edit_amount" type="button">Edit</button></td>
                             <?php else : ?>
                                 <td data-label="edit"></td>
                             <?php endif; ?>
 
-                            <?php if ($roleAccounting || $roleProcessor) : ?>
-                                <?php if (!$roleCashiers) : ?>
-                                    <?php if ($processProcessed && $roleAccountantIII) : ?>
-                                        <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button></td>
-                                    <?php elseif ($processProcessed && ($transmitEmpty || $transmitDone)) : ?>
-                                        <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button></td>
-                                    <?php elseif ($processEmpty && $transmitEmpty) : ?>
-                                        <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideForwardOptions()">Forward</button></td>
-                                    <?php else : ?>
-                                        <td data-label=""></td>
-                                    <?php endif; ?>
-                                <?php endif; ?>
+                            <?php
+                            $forwardHtml = '';
+                            $optionsHtml = '';
+                            $transmitHtml = '';
+                            $archiveHtml = '';
 
-                                <?php if ($processEmpty) : ?>
-                                    <td data-label=""><button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button></td>
-                                <?php elseif ($processProcessing) : ?>
-                                    <td data-label=""><button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button></td>
-                                <?php else : ?>
-                                    <td data-label=""><button class="" id="" name="" type="button"></button></td>
-                                <?php endif; ?>
-
-                                <?php if ($processProcessed && !$roleAccountantIII) : ?>
-                                    <td data-label="">
-                                        <?php if ($transmitEmpty) : ?>
-                                            <button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>
-                                        <?php elseif ($transmitYes) : ?>
-                                            <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>
-                                        <?php endif; ?>
-                                    </td>
-                                <?php endif; ?>
-                                <?php if ($showCashierArchiveCol) : ?>
-                                    <?php if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) : ?>
-                                        <td data-label="">
-                                            <button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>
-                                        </td>
-                                    <?php else : ?>
-                                        <td data-label=""></td>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                            <?php elseif ($roleAccounting || $roleProcessor || $roleCashiers || $roleBudget || $rolePlanning || $roleOfficePenro) : ?>
-                                <?php if (!$roleCashiers) : ?>
-                                    <?php if (!$roleBudgetOfficer || !$roleCashier) : ?>
-                                        <?php if ($roleBudget && $transmitEmpty) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                        <?php elseif ($roleBudget && $transmitStatus === "Yes") : ?>
-                                            <td data-label=""><button class="" id="" name="" type="button"></button></td>
-                                        <?php elseif ($roleBudget && $transmitDone) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideBudgetOfficerChief()" type="button">Forward</button></td>
-                                        <?php elseif ($roleCashiers && $transmitDone) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideCashierOfficerChief()" type="button">Forward</button></td>
-                                        <?php elseif ($roleCashiers && $transmitEmpty) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                        <?php elseif ($roleOfficePenro && $transmitEmpty) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                        <?php elseif ($roleOfficePenro && $transmitDone) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                        <?php elseif ($rolePlanning && $transmitEmpty) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                        <?php elseif ($rolePlanning && $transmitDone) : ?>
-                                            <td data-label=""><button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hidePlanningOfficerChief()" type="button">Forward</button></td>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                                <?php if (
-                                    ($roleBudget && !$roleBudgetOfficer && $transmitEmpty) ||
-                                    ($roleOfficePenro && $transmitEmpty) ||
-                                    ($rolePlanning && !$rolePlanningChief && $transmitEmpty)
-                                ) : ?>
-                                    <td data-label="">
-                                        <button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>
-                                    </td>
-                                <?php elseif (
-                                    ($roleBudget && !$roleBudgetOfficer && $transmitYes) ||
-                                    ($roleOfficePenro && $transmitYes) ||
-                                    ($rolePlanning && !$rolePlanningChief && $transmitYes)
-                                ) : ?>
-                                    <td data-label="">
-                                        <button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>
-                                    </td>
-                                <?php endif; ?>
-                                <?php if ($showCashierArchiveCol) : ?>
-                                    <?php if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) : ?>
-                                        <td data-label="">
-                                            <button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>
-                                        </td>
-                                    <?php else : ?>
-                                        <td data-label=""></td>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                            <?php else : ?>
-                                <?php if (!$roleCashiers) : ?>
-                                    <td data-label="upload_id"><button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button></td>
-                                <?php endif; ?>
-                                <?php if ($showCashierArchiveCol) : ?>
-                                    <?php if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) : ?>
-                                        <td data-label="">
-                                            <button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>
-                                        </td>
-                                    <?php else : ?>
-                                        <td data-label=""></td>
-                                    <?php endif; ?>
-                                <?php endif; ?>
+                            if ($roleAccounting || $roleProcessor) {
+                                if (!$roleCashiers) {
+                                    if ($processProcessed && $roleAccountantIII) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                    } elseif ($processProcessed && ($transmitEmpty || $transmitDone)) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                    }
+                                }
+                                if ($processEmpty) {
+                                    $optionsHtml = '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
+                                } elseif ($processProcessing) {
+                                    $optionsHtml = '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
+                                }
+                                if ($processProcessed && !$roleAccountantIII) {
+                                    if ($transmitEmpty) {
+                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                    } elseif ($transmitYes) {
+                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                    }
+                                }
+                                if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
+                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>';
+                                }
+                            } elseif ($roleCashiers || $roleBudget || $rolePlanning || $roleOfficePenro) {
+                                if (!$roleCashiers && (!$roleBudgetOfficer || !$roleCashier)) {
+                                    if ($roleBudget && $transmitEmpty) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    } elseif ($roleBudget && $transmitDone) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideBudgetOfficerChief()" type="button">Forward</button>';
+                                    } elseif ($roleCashiers && $transmitDone) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideCashierOfficerChief()" type="button">Forward</button>';
+                                    } elseif ($roleCashiers && $transmitEmpty) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    } elseif ($roleOfficePenro && ($transmitEmpty || $transmitDone)) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    } elseif ($rolePlanning && $transmitEmpty) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    } elseif ($rolePlanning && $transmitDone) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hidePlanningOfficerChief()" type="button">Forward</button>';
+                                    }
+                                }
+                                if (
+                                    ($roleBudget && !$roleBudgetOfficer && $transmitEmpty)
+                                    || ($roleOfficePenro && $transmitEmpty)
+                                    || ($rolePlanning && !$rolePlanningChief && $transmitEmpty)
+                                ) {
+                                    $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                } elseif (
+                                    ($roleBudget && !$roleBudgetOfficer && $transmitYes)
+                                    || ($roleOfficePenro && $transmitYes)
+                                    || ($rolePlanning && !$rolePlanningChief && $transmitYes)
+                                ) {
+                                    $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                }
+                                if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
+                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>';
+                                }
+                            } elseif (!$roleCashiers) {
+                                $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                            }
+                            ?>
+                            <?php if ($showForwardCol) : ?>
+                                <td data-label="forward"><?php echo $forwardHtml; ?></td>
                             <?php endif; ?>
+                            <?php if ($showOptionsCol) : ?>
+                                <td data-label="options"><?php echo $optionsHtml; ?></td>
+                            <?php endif; ?>
+                            <?php if ($showTransmitCol) : ?>
+                                <td data-label="transmit"><?php echo $transmitHtml; ?></td>
+                            <?php endif; ?>
+                            <td data-label="history">
+                                <button class="btn tertiary" name="btn-history" type="button">View</button>
+                            </td>
+                            <?php if ($showCashierArchiveCol) : ?>
+                                <td data-label="archive"><?php echo $archiveHtml; ?></td>
+                            <?php endif; ?>
+                            <td data-label="amount_original" class="hidden"><?php echo $row['amount']; ?></td>
+                            <td data-label="combined_remarks" class="hidden"><?php echo $row['remarks']; ?></td>
+                            <td data-label="tin_employee_no" class="hidden"><?php echo $row['tin_employee_no']; ?></td>
+                            <td data-label="office_from" class="hidden"><?php echo $row['office_from']; ?></td>
+                            <td data-label="office_to" class="hidden"><?php echo $row['office_to']; ?></td>
+                            <td data-label="sender_udc" class="hidden"><?php echo $row['sender_udc']; ?></td>
+                            <td data-label="receiver_udc" class="hidden"><?php echo $row['receiver_udc']; ?></td>
+                            <td data-label="encoded_by" class="hidden"><?php echo $row['encoded_by']; ?></td>
+                            <td data-label="encoded_from" class="hidden"><?php echo $row['encoded_from']; ?></td>
+                            <td data-label="datetime_encoded" class="hidden"><?php echo $row['datetime_encoded']; ?></td>
+                            <td data-label="forwarded_by" class="hidden"><?php echo isset($row['forwarded_by']) ? htmlspecialchars((string)$row['forwarded_by']) : ''; ?></td>
+                            <td data-label="sender_remarks_raw" class="hidden"><?php echo isset($row['sender_remarks']) ? htmlspecialchars((string)$row['sender_remarks']) : ''; ?></td>
+                            <td data-label="priority" class="hidden"><?php echo isset($row['priority']) ? htmlspecialchars((string)$row['priority']) : ''; ?></td>
+                            <td data-label="process_status" class="hidden"><?php echo $row['process_status']; ?></td>
+                            <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
+                            <td data-label="process_history" class="hidden"><?php echo isset($row['process_history']) ? htmlspecialchars($row['process_history']) : ''; ?></td>
+                            <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars((string)$row['coa_options']) : ''; ?></td>
+                            <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category']) : ''; ?></td>
+                            <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection']) : ''; ?></td>
+                            <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount']) : ''; ?></td>
                         </tr>
                     <?php
                     }
@@ -1444,7 +1405,13 @@ if ($showCashierArchiveCol) {
                 var process_history = process_history_val;
                 var office_from_val = office_from;
                 if (typeof openReturnOptionsPopup === 'function') {
-                    openReturnOptionsPopup(processing_no, process_history, office_from_val);
+                    openReturnOptionsPopup(
+                        processing_no,
+                        process_history,
+                        office_from_val,
+                        String(encoded_from || '').trim(),
+                        String(encoded_by || '').trim()
+                    );
                 }
                 return;
             }
@@ -2267,6 +2234,7 @@ if ($showCashierArchiveCol) {
 
         var currentUserSection = '<?php echo htmlspecialchars($_SESSION["logged_user_section"] ?? "", ENT_QUOTES); ?>';
         var currentUserDesignations = '<?php echo htmlspecialchars($_SESSION["logged_user_designation"] ?? "", ENT_QUOTES); ?>';
+        var currentUserName = '<?php echo htmlspecialchars($_SESSION["logged_user_emp_name"] ?? "", ENT_QUOTES); ?>';
 
         var sectionMap = {
             'BUDGET': 'Budget Unit',
@@ -2290,7 +2258,91 @@ if ($showCashierArchiveCol) {
             return sectionMap[s.toUpperCase()] || s;
         }
 
-        function buildExcludedUnitsSet() {
+        function normalizePersonName(name) {
+            return String(name || '')
+                .replace(/\bencoded\s+by\b\s*:?/gi, '')
+                .replace(/[,]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function nameTokens(name) {
+            return normalizePersonName(name).split(' ').filter(function(t) {
+                return t.length > 1;
+            });
+        }
+
+        function employeeNamesMatch(a, b) {
+            var na = normalizePersonName(a);
+            var nb = normalizePersonName(b);
+            if (!na || !nb) return false;
+            if (na === nb) return true;
+            if (na.indexOf(nb) !== -1 || nb.indexOf(na) !== -1) return true;
+            var tokensA = nameTokens(a);
+            var tokensB = nameTokens(b);
+            if (tokensA.length === 0 || tokensB.length === 0) return false;
+            var shorter = tokensA.length <= tokensB.length ? tokensA : tokensB;
+            var longer = tokensA.length <= tokensB.length ? tokensB : tokensA;
+            var longerStr = ' ' + longer.join(' ') + ' ';
+            for (var i = 0; i < shorter.length; i++) {
+                if (longerStr.indexOf(' ' + shorter[i] + ' ') === -1) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function parseProcessHistoryLine(line) {
+            var user = '';
+            var action = '';
+            var section = '';
+            if (line.indexOf('|') !== -1) {
+                var pipeParts = line.split(/\s*\|\s*/);
+                user = (pipeParts[0] || '').trim();
+                action = (pipeParts[1] || '').trim();
+                section = (pipeParts[2] || '').trim();
+            } else {
+                var colonParts = line.split(/\s*:\s*/);
+                user = (colonParts[0] || '').trim();
+                if (colonParts.length >= 3) {
+                    action = (colonParts[1] || '').trim();
+                    section = (colonParts.slice(2).join(' : ')).trim();
+                } else {
+                    section = (colonParts[1] || '').trim();
+                }
+            }
+            return { user: user, action: action, section: section };
+        }
+
+        function isPersonInvolved(user, action, personName) {
+            if (!personName) return false;
+            if (employeeNamesMatch(user, personName)) return true;
+            if (employeeNamesMatch(action, personName)) return true;
+            var encodedInAction = String(action || '').match(/encoded\s+by\s*:?\s*(.+)$/i);
+            if (encodedInAction && encodedInAction[1] && employeeNamesMatch(encodedInAction[1], personName)) {
+                return true;
+            }
+            return false;
+        }
+
+        function collectSectionsForPerson(processHistory, personName) {
+            var sections = {};
+            if (!processHistory || !processHistory.trim() || !personName) return sections;
+            var normalized = String(processHistory).replace(/\\n/g, '\n');
+            var lines = normalized.split(/\r\n|\r|\n/);
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                var parsed = parseProcessHistoryLine(line);
+                if (!isPersonInvolved(parsed.user, parsed.action, personName)) continue;
+                var unit = normalizeUnitLabel(parsed.section);
+                if (unit) sections[unit] = true;
+            }
+            return sections;
+        }
+
+        function buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy) {
             var excluded = {};
             var sec = normalizeUnitLabel(currentUserSection);
             if (sec) excluded[sec] = true;
@@ -2299,22 +2351,38 @@ if ($showCashierArchiveCol) {
                 var d = normalizeUnitLabel(desigs[i]);
                 if (d) excluded[d] = true;
             }
+            var encoderUnit = normalizeUnitLabel(encodedFrom);
+            if (encoderUnit) excluded[encoderUnit] = true;
+            var encoderSections = collectSectionsForPerson(processHistory, encodedBy);
+            for (var encoderSection in encoderSections) {
+                if (Object.prototype.hasOwnProperty.call(encoderSections, encoderSection)) {
+                    excluded[encoderSection] = true;
+                }
+            }
+            var selfSections = collectSectionsForPerson(processHistory, currentUserName);
+            for (var selfSection in selfSections) {
+                if (Object.prototype.hasOwnProperty.call(selfSections, selfSection)) {
+                    excluded[selfSection] = true;
+                }
+            }
             return excluded;
         }
 
-        function parseProcessHistory(processHistory) {
+        function parseProcessHistory(processHistory, encodedBy) {
             var offices = [],
                 seen = {};
             if (!processHistory || !processHistory.trim()) return offices;
-            var lines = processHistory.split(/\r\n|\r|\n/);
+            var normalized = String(processHistory).replace(/\\n/g, '\n');
+            var lines = normalized.split(/\r\n|\r|\n/);
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i].trim();
                 if (!line) continue;
-                var parts = line.split(/\s*:\s*/);
-                var section = (parts.length >= 3) ? (parts.slice(2).join(' : ')).trim() : (parts.length === 2 ? (parts[1] || '').trim() : '');
-                if (!section) continue;
-                var raw = section.toUpperCase();
-                var mapped = sectionMap[raw] || section;
+                var parsed = parseProcessHistoryLine(line);
+                if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
+                if (isPersonInvolved(parsed.user, parsed.action, currentUserName)) continue;
+                if (!parsed.section) continue;
+                var raw = parsed.section.toUpperCase();
+                var mapped = sectionMap[raw] || parsed.section;
                 if (mapped && !seen[mapped]) {
                     seen[mapped] = true;
                     offices.push(mapped);
@@ -2323,24 +2391,34 @@ if ($showCashierArchiveCol) {
             return offices;
         }
 
-        function loadReturnOffices(processHistory, officeFrom) {
+        function isExcludedReturnOption(label, excludedUnits, encodedBy) {
+            var unit = normalizeUnitLabel(label);
+            if (!unit) return true;
+            if (excludedUnits[unit]) return true;
+            if (encodedBy && employeeNamesMatch(unit, encodedBy)) return true;
+            if (currentUserName && employeeNamesMatch(unit, currentUserName)) return true;
+            return false;
+        }
+
+        function loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy) {
             var selectEl = document.getElementById('return_office_select');
             var containerEl = document.getElementById('return_office_container');
             if (!selectEl) return;
 
-            selectEl.innerHTML = '<option value="" disabled selected>Select section/unit</option>';
+            selectEl.innerHTML = '<option value="" disabled selected>Select previous process</option>';
             if (containerEl) containerEl.style.display = 'none';
 
-            var offices = parseProcessHistory(processHistory || '');
+            var excluded = buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy);
+            var offices = parseProcessHistory(processHistory || '', encodedBy);
             if (offices.length === 0 && officeFrom) {
-                var raw = officeFrom.toUpperCase();
-                offices = [sectionMap[raw] || officeFrom];
+                var fallbackUnit = normalizeUnitLabel(officeFrom);
+                if (fallbackUnit && !isExcludedReturnOption(fallbackUnit, excluded, encodedBy)) {
+                    offices = [fallbackUnit];
+                }
             }
 
-            var excluded = buildExcludedUnitsSet();
             offices = offices.filter(function(o) {
-                var unit = normalizeUnitLabel(o);
-                return unit && !excluded[unit];
+                return !isExcludedReturnOption(o, excluded, encodedBy);
             });
 
             offices.forEach(function(office) {
@@ -2351,10 +2429,10 @@ if ($showCashierArchiveCol) {
             });
         }
 
-        function showPopup(processingNo, processHistory, officeFrom) {
+        function showPopup(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
             if (popup) popup.style.display = 'block';
             if (overlay) overlay.style.display = 'block';
-            loadReturnOffices(processHistory, officeFrom);
+            loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy);
         }
 
         function hidePopup() {
@@ -2397,7 +2475,7 @@ if ($showCashierArchiveCol) {
                 var selected = document.querySelector('input[name="return_destination_popup"]:checked');
                 if (!selected) {
                     if (typeof showNotify === 'function') {
-                        showNotify('Please select where to return the voucher (previous section/unit or encoder).', 'error', 3000);
+                        showNotify('Please select where to return the voucher (previous process or encoder).', 'error', 3000);
                     }
                     return;
                 }
@@ -2419,7 +2497,7 @@ if ($showCashierArchiveCol) {
                     var office = document.getElementById('return_office_select')?.value || '';
                     if (!office) {
                         if (typeof showNotify === 'function') {
-                            showNotify('Please select the section/unit to return to.', 'error', 3000);
+                            showNotify('Please select the previous process to return to.', 'error', 3000);
                         }
                         return;
                     }
