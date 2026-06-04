@@ -107,6 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!empty($return_destination) && $return_destination === 'encoder') {
+            // Re-insert into vouchers on return; production DBs may lack AUTO_INCREMENT on id.
+            vouchers_ensure_ors_no_column($pdo);
+            vouchers_ensure_id_auto_increment($pdo);
+
             // Route back to the encoder's unit; show the returner as encoded_from (forward-from) on re-forward.
             $encoder_destination = trim((string) $encoded_from);
             $returner_section = voucher_return_returner_encoded_from();
