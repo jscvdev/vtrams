@@ -111,12 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             vouchers_ensure_ors_no_column($pdo);
             vouchers_ensure_id_auto_increment($pdo);
 
-            // Route back to the encoder's unit; show the returner as encoded_from (forward-from) on re-forward.
+            // Route back to the encoder's unit; keep the original encoded_from.
             $encoder_destination = trim((string) $encoded_from);
-            $returner_section = voucher_return_returner_encoded_from();
-            if ($returner_section !== '') {
-                $encoded_from = $returner_section;
-            }
             $office_to = $encoder_destination;
             $penro_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
             $receiver_udc = '';
