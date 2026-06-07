@@ -2232,8 +2232,6 @@ if ($showCashierArchiveCol) {
         const cancelBtn = document.getElementById('cancel_return_options');
         const confirmBtn = document.getElementById('confirm_return_options');
 
-        var currentUserSection = '<?php echo htmlspecialchars($_SESSION["logged_user_section"] ?? "", ENT_QUOTES); ?>';
-        var currentUserDesignations = '<?php echo htmlspecialchars($_SESSION["logged_user_designation"] ?? "", ENT_QUOTES); ?>';
         var currentUserName = '<?php echo htmlspecialchars($_SESSION["logged_user_emp_name"] ?? "", ENT_QUOTES); ?>';
 
         var sectionMap = {
@@ -2326,48 +2324,6 @@ if ($showCashierArchiveCol) {
             return false;
         }
 
-        function collectSectionsForPerson(processHistory, personName) {
-            var sections = {};
-            if (!processHistory || !processHistory.trim() || !personName) return sections;
-            var normalized = String(processHistory).replace(/\\n/g, '\n');
-            var lines = normalized.split(/\r\n|\r|\n/);
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i].trim();
-                if (!line) continue;
-                var parsed = parseProcessHistoryLine(line);
-                if (!isPersonInvolved(parsed.user, parsed.action, personName)) continue;
-                var unit = normalizeUnitLabel(parsed.section);
-                if (unit) sections[unit] = true;
-            }
-            return sections;
-        }
-
-        function buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy) {
-            var excluded = {};
-            var sec = normalizeUnitLabel(currentUserSection);
-            if (sec) excluded[sec] = true;
-            var desigs = String(currentUserDesignations || '').split(',');
-            for (var i = 0; i < desigs.length; i++) {
-                var d = normalizeUnitLabel(desigs[i]);
-                if (d) excluded[d] = true;
-            }
-            var encoderUnit = normalizeUnitLabel(encodedFrom);
-            if (encoderUnit) excluded[encoderUnit] = true;
-            var encoderSections = collectSectionsForPerson(processHistory, encodedBy);
-            for (var encoderSection in encoderSections) {
-                if (Object.prototype.hasOwnProperty.call(encoderSections, encoderSection)) {
-                    excluded[encoderSection] = true;
-                }
-            }
-            var selfSections = collectSectionsForPerson(processHistory, currentUserName);
-            for (var selfSection in selfSections) {
-                if (Object.prototype.hasOwnProperty.call(selfSections, selfSection)) {
-                    excluded[selfSection] = true;
-                }
-            }
-            return excluded;
-        }
-
         function parseProcessHistory(processHistory, encodedBy) {
             var offices = [],
                 seen = {};
@@ -2391,15 +2347,6 @@ if ($showCashierArchiveCol) {
             return offices;
         }
 
-        function isExcludedReturnOption(label, excludedUnits, encodedBy) {
-            var unit = normalizeUnitLabel(label);
-            if (!unit) return true;
-            if (excludedUnits[unit]) return true;
-            if (encodedBy && employeeNamesMatch(unit, encodedBy)) return true;
-            if (currentUserName && employeeNamesMatch(unit, currentUserName)) return true;
-            return false;
-        }
-
         function loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy) {
             var selectEl = document.getElementById('return_office_select');
             var containerEl = document.getElementById('return_office_container');
@@ -2408,18 +2355,15 @@ if ($showCashierArchiveCol) {
             selectEl.innerHTML = '<option value="" disabled selected>Select previous process</option>';
             if (containerEl) containerEl.style.display = 'none';
 
-            var excluded = buildExcludedUnitsSet(encodedFrom, processHistory, encodedBy);
+            // Same unit is allowed when another employee handled that history step.
+            // parseProcessHistory skips lines where the current user or encoder was the employee.
             var offices = parseProcessHistory(processHistory || '', encodedBy);
             if (offices.length === 0 && officeFrom) {
                 var fallbackUnit = normalizeUnitLabel(officeFrom);
-                if (fallbackUnit && !isExcludedReturnOption(fallbackUnit, excluded, encodedBy)) {
+                if (fallbackUnit) {
                     offices = [fallbackUnit];
                 }
             }
-
-            offices = offices.filter(function(o) {
-                return !isExcludedReturnOption(o, excluded, encodedBy);
-            });
 
             offices.forEach(function(office) {
                 var opt = document.createElement('option');
