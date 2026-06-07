@@ -42,8 +42,12 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         $stmt->execute();
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $sectionTiming = voucher_tracking_build_section_timing_report($pdo, $rows);
         header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode($rows, JSON_UNESCAPED_UNICODE);
+        echo json_encode([
+            'rows' => $rows,
+            'section_timing' => $sectionTiming,
+        ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         header('Content-Type: application/json; charset=UTF-8');
         http_response_code(500);
@@ -296,6 +300,42 @@ if ($scriptName !== '') {
     #percentageTable tr:hover {
         background-color: #f1f1f1;
     }
+
+    #sectionSummaryTable th,
+    #sectionSummaryTable td,
+    #sectionVoucherTable th,
+    #sectionVoucherTable td {
+        border-bottom: 1px solid #ddd;
+        padding: 8px;
+    }
+
+    #sectionSummaryTable,
+    #sectionVoucherTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+
+    #sectionSummaryTable th,
+    #sectionVoucherTable th {
+        color: rgb(75 85 99 / 0.7);
+        background-color: #f9f9f9;
+    }
+
+    #sectionSummaryTable td,
+    #sectionVoucherTable td {
+        color: rgb(75 85 99 / 1);
+    }
+
+    #sectionSummaryTable tr:hover,
+    #sectionVoucherTable tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    .section-table-scroll {
+        overflow-x: auto;
+        width: 100%;
+    }
 </style>
 
 <!--=============== MAIN ===============-->
@@ -303,8 +343,13 @@ if ($scriptName !== '') {
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
     </div>
     <div class="main-content main_dashboard">
-        <h1>Voucher Analytics Dashboard</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Analytics for forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
+        <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div>
+                <h1 style="margin-bottom:6px;">Voucher Analytics Dashboard</h1>
+                <p style="color: rgb(75 85 99 / 0.9); margin:0;">Analytics for forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
+            </div>
+            <p id="dashboardRefreshStatus" style="color: rgb(75 85 99 / 0.75); font-size: 12px; margin: 0;">Loading…</p>
+        </div>
 
         <section class="filter_options">
             <div>
@@ -402,6 +447,42 @@ if ($scriptName !== '') {
             </div>
         </section>
 
+        <section class="dashboard-content new_label">
+            <div class="chart-container new_label">
+                <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Average Processing Time by Section</h3>
+                <canvas id="sectionTimeChart"></canvas>
+            </div>
+            <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px;">
+                <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Section Processing Time Summary</h3>
+                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Planning, Budget, Accounting, Office of the PENRO, and Cashiers only — from received until forwarded or returned.</p>
+                <table id="sectionSummaryTable">
+                    <thead>
+                        <tr>
+                            <th>Section</th>
+                            <th style="text-align:right;">Vouchers</th>
+                            <th style="text-align:right;">Avg Time</th>
+                            <th style="text-align:right;">Min</th>
+                            <th style="text-align:right;">Max</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="dashboard-content new_label">
+            <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px; width: 100%;">
+                <h3 style="margin-bottom: 8px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Per-Voucher Section Processing Breakdown</h3>
+                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Last 15 most recently processed vouchers (updates automatically).</p>
+                <div class="section-table-scroll">
+                    <table id="sectionVoucherTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
     </div>
 
     <!--=============== JS ===============-->
@@ -418,13 +499,18 @@ if ($scriptName !== '') {
             const dayFilter = document.getElementById('dayFilter');
             const yearDateFilter = document.getElementById('yearDateFilter');
             const applyBtn = document.getElementById('applyFiltersBtn');
+            const refreshStatusEl = document.getElementById('dashboardRefreshStatus');
+            const REFRESH_INTERVAL_MS = 15000;
+            let refreshTimer = null;
+            let fetchInFlight = false;
 
             // Chart contexts
             const ctxVoucherType = document.getElementById('voucherTypeChart').getContext('2d');
             const ctxAmount = document.getElementById('amountChart').getContext('2d');
             const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
+            const ctxSectionTime = document.getElementById('sectionTimeChart').getContext('2d');
 
-            let voucherTypeChart, amountChart, monthlyChart;
+            let voucherTypeChart, amountChart, monthlyChart, sectionTimeChart;
 
             function processData(data) {
                 const stats = {
@@ -624,6 +710,106 @@ if ($scriptName !== '') {
                 percentageTableBody.appendChild(totalRow);
             }
 
+            function updateSectionTiming(sectionTiming) {
+                const timing = sectionTiming && typeof sectionTiming === 'object' ? sectionTiming : {
+                    sections: [],
+                    summary: [],
+                    by_voucher: []
+                };
+                const summary = Array.isArray(timing.summary) ? timing.summary : [];
+                const sections = Array.isArray(timing.sections) ? timing.sections : [];
+                const byVoucher = Array.isArray(timing.by_voucher) ? timing.by_voucher : [];
+
+                if (sectionTimeChart) sectionTimeChart.destroy();
+                const sectionLabels = summary.map(row => row.section || 'Unknown');
+                const sectionAvgHours = summary.map(row => ((row.avg_seconds || 0) / 3600));
+                sectionTimeChart = new Chart(ctxSectionTime, {
+                    type: 'bar',
+                    data: {
+                        labels: sectionLabels,
+                        datasets: [{
+                            label: 'Avg Hours',
+                            data: sectionAvgHours,
+                            backgroundColor: 'rgba(255, 159, 64, 0.6)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Hours'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label(ctx) {
+                                        const row = summary[ctx.dataIndex];
+                                        return row ? `Avg: ${row.avg_label}` : '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const summaryBody = document.querySelector('#sectionSummaryTable tbody');
+                summaryBody.innerHTML = '';
+                if (summary.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = '<td colspan="5" style="text-align:center;color:#888;">No section timing data for the current filters.</td>';
+                    summaryBody.appendChild(row);
+                } else {
+                    summary.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${row.section || '-'}</td>
+                            <td style="text-align:right;">${row.count || 0}</td>
+                            <td style="text-align:right;">${row.avg_label || '—'}</td>
+                            <td style="text-align:right;">${row.min_label || '—'}</td>
+                            <td style="text-align:right;">${row.max_label || '—'}</td>`;
+                        summaryBody.appendChild(tr);
+                    });
+                }
+
+                const voucherHead = document.querySelector('#sectionVoucherTable thead');
+                const voucherBody = document.querySelector('#sectionVoucherTable tbody');
+                voucherHead.innerHTML = '';
+                voucherBody.innerHTML = '';
+
+                const headerRow = document.createElement('tr');
+                let headerHtml = '<th>Processing No.</th><th>Payee</th><th>DV No.</th>';
+                sections.forEach(section => {
+                    headerHtml += `<th style="text-align:right;">${section}</th>`;
+                });
+                headerRow.innerHTML = headerHtml;
+                voucherHead.appendChild(headerRow);
+
+                if (byVoucher.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="${3 + sections.length}" style="text-align:center;color:#888;">No per-voucher section timing data for the current filters.</td>`;
+                    voucherBody.appendChild(row);
+                    return;
+                }
+
+                byVoucher.forEach(row => {
+                    const tr = document.createElement('tr');
+                    let html = `<td>${row.processing_no || '-'}</td>
+                        <td>${row.payee || '-'}</td>
+                        <td>${row.dv_no || '-'}</td>`;
+                    const labels = row.sections_label || {};
+                    sections.forEach(section => {
+                        html += `<td style="text-align:right;">${labels[section] || '—'}</td>`;
+                    });
+                    tr.innerHTML = html;
+                    voucherBody.appendChild(tr);
+                });
+            }
+
             function parseFetchResponse(res) {
                 const ct = res.headers.get('content-type') || '';
                 if (ct.includes('application/json')) {
@@ -644,22 +830,53 @@ if ($scriptName !== '') {
                 });
             }
 
+            function setRefreshStatus(message) {
+                if (refreshStatusEl) {
+                    refreshStatusEl.textContent = message;
+                }
+            }
+
             function applyVoucherData(data) {
                 if (Array.isArray(data)) {
                     updateCharts(data);
+                    updateSectionTiming(null);
+                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
+                    return;
+                }
+                if (data && Array.isArray(data.rows)) {
+                    updateCharts(data.rows);
+                    updateSectionTiming(data.section_timing || null);
+                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
                     return;
                 }
                 if (data && typeof data.error === 'string') {
                     console.error('Voucher data API error:', data.detail || data.error);
+                    setRefreshStatus('Update failed · retrying…');
                 } else {
                     console.error('Invalid data format received:', data);
+                    setRefreshStatus('Update failed · retrying…');
                 }
                 updateCharts([]);
+                updateSectionTiming(null);
+            }
+
+            function buildFetchUrl() {
+                const params = new URLSearchParams({
+                    voucher_type: voucherTypeFilter.value,
+                    month: monthFilter.value,
+                    day: dayFilter.value,
+                    yearDate: yearDateFilter.value,
+                    _: String(Date.now())
+                });
+                const q = params.toString();
+                const joiner = FETCH_VOUCHER_DATA.includes('?') ? '&' : '?';
+                return FETCH_VOUCHER_DATA + (q ? joiner + q : '');
             }
 
             function safeFetch(url, callback) {
                 fetch(url, {
-                        credentials: 'same-origin'
+                        credentials: 'same-origin',
+                        cache: 'no-store'
                     })
                     .then(res => {
                         if (!res.ok) {
@@ -675,19 +892,42 @@ if ($scriptName !== '') {
             }
 
             function fetchFilteredData() {
-                const params = new URLSearchParams({
-                    voucher_type: voucherTypeFilter.value,
-                    month: monthFilter.value,
-                    day: dayFilter.value,
-                    yearDate: yearDateFilter.value
+                if (fetchInFlight) {
+                    return;
+                }
+                fetchInFlight = true;
+                safeFetch(buildFetchUrl(), data => {
+                    fetchInFlight = false;
+                    applyVoucherData(data);
                 });
-                const q = params.toString();
-                const joiner = FETCH_VOUCHER_DATA.includes('?') ? '&' : '?';
-                safeFetch(FETCH_VOUCHER_DATA + (q ? joiner + q : ''), applyVoucherData);
             }
 
+            function startAutoRefresh() {
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                }
+                refreshTimer = setInterval(fetchFilteredData, REFRESH_INTERVAL_MS);
+            }
+
+            function stopAutoRefresh() {
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopAutoRefresh();
+                    return;
+                }
+                fetchFilteredData();
+                startAutoRefresh();
+            });
+
             // Initial load (same endpoint as filter, all types)
-            safeFetch(FETCH_VOUCHER_DATA, applyVoucherData);
+            fetchFilteredData();
+            startAutoRefresh();
 
             applyBtn.addEventListener('click', () => {
                 fetchFilteredData();

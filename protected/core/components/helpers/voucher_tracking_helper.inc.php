@@ -590,3 +590,384 @@ function voucher_forward_receiver_udcs_for_designation(object $pdo, string $targ
         'temp_errors' => $temp_dump,
     ];
 }
+
+/** @return array<string, string> */
+function voucher_tracking_section_label_map(): array
+{
+    return [
+        'BUDGET' => 'Budget Unit',
+        'BUDGET UNIT' => 'Budget Unit',
+        'ACCOUNTING' => 'Accounting Unit',
+        'ACCOUNTING UNIT' => 'Accounting Unit',
+        'PLANNING' => 'Planning Section',
+        'PLANNING SECTION' => 'Planning Section',
+        'CASHIERS' => 'Cashiers Unit',
+        'CASHIERS UNIT' => 'Cashiers Unit',
+        'CASHIER' => 'Cashiers Unit',
+        'PENRO OFFICE' => 'Office of the PENRO',
+        'PENRO' => 'Office of the PENRO',
+        'OFFICE OF THE PENRO' => 'Office of the PENRO',
+        'ICU' => 'ICU',
+        'MSD' => 'MSD',
+        'TSD' => 'TSD',
+        'ICT' => 'ICT',
+        'RECORDS' => 'Records',
+        'ADMIN AND FINANCE' => 'Admin and Finance',
+    ];
+}
+
+function voucher_tracking_normalize_section_label(?string $section): string
+{
+    $section = trim((string) $section);
+    if ($section === '') {
+        return '';
+    }
+    $map = voucher_tracking_section_label_map();
+    $upper = strtoupper($section);
+
+    return $map[$upper] ?? $section;
+}
+
+/** @return 'receive'|'forward'|'return'|'encode'|'other' */
+function voucher_tracking_action_kind(?string $action): string
+{
+    $action = strtolower(trim((string) $action));
+    if ($action === '') {
+        return 'other';
+    }
+    if (str_contains($action, 'received by')) {
+        return 'receive';
+    }
+    if (str_contains($action, 'encoded by')) {
+        return 'encode';
+    }
+    if (str_contains($action, 'forwarded by')) {
+        return 'forward';
+    }
+    if (str_contains($action, 'returned by')) {
+        return 'return';
+    }
+
+    return 'other';
+}
+
+function voucher_tracking_format_duration_seconds(int $seconds): string
+{
+    if ($seconds <= 0) {
+        return '—';
+    }
+
+    $days = intdiv($seconds, 86400);
+    $remainder = $seconds % 86400;
+    $hours = intdiv($remainder, 3600);
+    $remainder %= 3600;
+    $minutes = intdiv($remainder, 60);
+    $secs = $remainder % 60;
+
+    $parts = [];
+    if ($days > 0) {
+        $parts[] = $days . ' day' . ($days === 1 ? '' : 's');
+    }
+    if ($hours > 0) {
+        $parts[] = $hours . ' hr' . ($hours === 1 ? '' : 's');
+    }
+    if ($minutes > 0) {
+        $parts[] = $minutes . ' min';
+    }
+    if ($parts === [] && $secs > 0) {
+        $parts[] = $secs . ' sec';
+    }
+    if ($parts === []) {
+        return '< 1 min';
+    }
+
+    return implode(' ', $parts);
+}
+
+function voucher_tracking_dashboard_recent_voucher_limit(): int
+{
+    return 15;
+}
+
+/** Sections included in voucher dashboard processing-time analytics. */
+function voucher_tracking_dashboard_sections(): array
+{
+    return [
+        'Planning Section',
+        'Budget Unit',
+        'Accounting Unit',
+        'Office of the PENRO',
+        'Cashiers Unit',
+    ];
+}
+
+function voucher_tracking_is_dashboard_section(string $section): bool
+{
+    return in_array($section, voucher_tracking_dashboard_sections(), true);
+}
+
+/**
+ * Workflow order for dashboard section columns.
+ *
+ * @return array<string, int>
+ */
+function voucher_tracking_section_sort_ranks(): array
+{
+    $ranks = [];
+    foreach (voucher_tracking_dashboard_sections() as $i => $label) {
+        $ranks[$label] = $i;
+    }
+
+    return $ranks;
+}
+
+function voucher_tracking_section_sort_key(string $section): string
+{
+    $ranks = voucher_tracking_section_sort_ranks();
+    $rank = $ranks[$section] ?? 999;
+
+    return sprintf('%03d-%s', $rank, strtolower($section));
+}
+
+/**
+ * @param list<array{action?: string, action_from?: string, datetime_action?: string}> $actions
+ * @return array<string, int> normalized section => total seconds
+ */
+function voucher_tracking_section_durations_from_actions(array $actions, ?int $openEndTs = null): array
+{
+    $open = [];
+    $totals = [];
+
+    foreach ($actions as $row) {
+        $section = voucher_tracking_normalize_section_label($row['action_from'] ?? '');
+        if ($section === '' || !voucher_tracking_is_dashboard_section($section)) {
+            continue;
+        }
+
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts === false) {
+            continue;
+        }
+
+        $kind = voucher_tracking_action_kind($row['action'] ?? '');
+        if ($kind === 'receive') {
+            $open[$section] = $ts;
+            continue;
+        }
+
+        if ($kind === 'forward' || $kind === 'return') {
+            if (!isset($open[$section])) {
+                continue;
+            }
+            $delta = max(0, $ts - $open[$section]);
+            $totals[$section] = ($totals[$section] ?? 0) + $delta;
+            unset($open[$section]);
+        }
+    }
+
+    if ($openEndTs !== null && $openEndTs > 0) {
+        foreach ($open as $section => $startTs) {
+            if (!voucher_tracking_is_dashboard_section($section)) {
+                continue;
+            }
+            $delta = max(0, $openEndTs - $startTs);
+            if ($delta > 0) {
+                $totals[$section] = ($totals[$section] ?? 0) + $delta;
+            }
+        }
+    }
+
+    return $totals;
+}
+
+/**
+ * @param list<string> $processingNos
+ * @return array<string, list<array{action: string, action_from: string, datetime_action: string}>>
+ */
+function voucher_tracking_fetch_action_logs_grouped(object $pdo, array $processingNos): array
+{
+    $processingNos = array_values(array_unique(array_filter(array_map(
+        static fn($pn): string => trim((string) $pn),
+        $processingNos
+    ))));
+    if ($processingNos === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
+    $sql = "SELECT processing_no, action, action_from, datetime_action
+            FROM voucher_action_logs
+            WHERE processing_no IN ({$placeholders})
+            ORDER BY processing_no ASC, datetime_action ASC, id ASC";
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($processingNos as $i => $pn) {
+        $stmt->bindValue($i + 1, $pn, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $grouped = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pn = trim((string) ($row['processing_no'] ?? ''));
+        if ($pn === '') {
+            continue;
+        }
+        if (!isset($grouped[$pn])) {
+            $grouped[$pn] = [];
+        }
+        $grouped[$pn][] = [
+            'action' => (string) ($row['action'] ?? ''),
+            'action_from' => (string) ($row['action_from'] ?? ''),
+            'datetime_action' => (string) ($row['datetime_action'] ?? ''),
+        ];
+    }
+
+    return $grouped;
+}
+
+/**
+ * Most recent processing activity for dashboard-unit actions on a voucher.
+ *
+ * @param list<array{action?: string, action_from?: string, datetime_action?: string}> $actions
+ */
+function voucher_tracking_voucher_last_processed_ts(array $trackingRow, array $actions): int
+{
+    $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+    if ($statusTs !== false) {
+        return $statusTs;
+    }
+
+    $max = 0;
+    foreach ($actions as $row) {
+        $section = voucher_tracking_normalize_section_label($row['action_from'] ?? '');
+        if (!voucher_tracking_is_dashboard_section($section)) {
+            continue;
+        }
+
+        $kind = voucher_tracking_action_kind($row['action'] ?? '');
+        if (!in_array($kind, ['receive', 'forward', 'return'], true)) {
+            continue;
+        }
+
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts !== false && $ts > $max) {
+            $max = $ts;
+        }
+    }
+
+    $encodedTs = strtotime((string) ($trackingRow['datetime_encoded'] ?? ''));
+    if ($encodedTs !== false && $encodedTs > $max) {
+        return $encodedTs;
+    }
+
+    return $max;
+}
+
+/**
+ * Build section timing summary and per-voucher breakdown for dashboard analytics.
+ *
+ * @param list<array<string, mixed>> $voucherRows voucher_tracking rows
+ * @return array{
+ *   sections: list<string>,
+ *   summary: list<array{section: string, count: int, avg_seconds: int, min_seconds: int, max_seconds: int, avg_label: string, min_label: string, max_label: string}>,
+ *   by_voucher: list<array{processing_no: string, payee: string, dv_no: string, sections: array<string, int>, sections_label: array<string, string>}>
+ * }
+ */
+function voucher_tracking_build_section_timing_report(object $pdo, array $voucherRows): array
+{
+    $processingNos = [];
+    $rowByPn = [];
+    foreach ($voucherRows as $row) {
+        $pn = trim((string) ($row['processing_no'] ?? ''));
+        if ($pn === '') {
+            continue;
+        }
+        $processingNos[] = $pn;
+        $rowByPn[$pn] = $row;
+    }
+
+    $logsByPn = voucher_tracking_fetch_action_logs_grouped($pdo, $processingNos);
+    $sectionBuckets = [];
+    $allSections = [];
+    $byVoucher = [];
+
+    foreach ($processingNos as $pn) {
+        $trackingRow = $rowByPn[$pn] ?? [];
+        $openEndTs = null;
+        $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+        if ($statusTs !== false) {
+            $openEndTs = $statusTs;
+        }
+
+        $durations = voucher_tracking_section_durations_from_actions($logsByPn[$pn] ?? [], $openEndTs);
+        $labels = [];
+        foreach ($durations as $section => $seconds) {
+            if ($seconds <= 0) {
+                continue;
+            }
+            $allSections[$section] = true;
+            $sectionBuckets[$section] = $sectionBuckets[$section] ?? [];
+            $sectionBuckets[$section][] = $seconds;
+            $labels[$section] = voucher_tracking_format_duration_seconds($seconds);
+        }
+
+        $byVoucher[] = [
+            'processing_no' => $pn,
+            'payee' => trim((string) ($trackingRow['payee'] ?? '')),
+            'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
+            'sections' => $durations,
+            'sections_label' => $labels,
+            'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
+                $trackingRow,
+                $logsByPn[$pn] ?? []
+            ),
+        ];
+    }
+
+    $sections = voucher_tracking_dashboard_sections();
+    foreach ($sections as $section) {
+        if (!isset($allSections[$section])) {
+            $allSections[$section] = false;
+        }
+    }
+
+    $summary = [];
+    foreach ($sections as $section) {
+        $values = $sectionBuckets[$section] ?? [];
+        if ($values === []) {
+            continue;
+        }
+        $avg = (int) round(array_sum($values) / count($values));
+        $min = min($values);
+        $max = max($values);
+        $summary[] = [
+            'section' => $section,
+            'count' => count($values),
+            'avg_seconds' => $avg,
+            'min_seconds' => $min,
+            'max_seconds' => $max,
+            'avg_label' => voucher_tracking_format_duration_seconds($avg),
+            'min_label' => voucher_tracking_format_duration_seconds($min),
+            'max_label' => voucher_tracking_format_duration_seconds($max),
+        ];
+    }
+
+    usort($byVoucher, static function (array $a, array $b): int {
+        $cmp = ($b['last_processed_ts'] ?? 0) <=> ($a['last_processed_ts'] ?? 0);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+
+        return strcmp((string) ($b['processing_no'] ?? ''), (string) ($a['processing_no'] ?? ''));
+    });
+
+    $recentLimit = voucher_tracking_dashboard_recent_voucher_limit();
+    $byVoucherRecent = array_slice($byVoucher, 0, $recentLimit);
+
+    return [
+        'sections' => $sections,
+        'summary' => $summary,
+        'by_voucher' => $byVoucherRecent,
+        'by_voucher_limit' => $recentLimit,
+    ];
+}
