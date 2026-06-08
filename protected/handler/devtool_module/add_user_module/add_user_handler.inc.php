@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     die();
                 } else {
                     //LOOP FORMATTED DESIGNATION -> IF ===/ CONTAINS SPECIFIC DESIGNATION (OIC) -> UPDATE USER ACC IF ELSE
-                    if (update_designation_limit($pdo, $udc, $formattedDesignation, $fullName) !== false) {
+                    if (update_designation_limit($pdo, $udc, $formattedDesignation, $fullName, $office) !== false) {
                         add_new_account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedDesignation, $access_level, $udc, $office, $emp_tag);
                         echo "<script>process_functionAlert('Add user success!', 'developer_edit_success')</script>";
                         die();

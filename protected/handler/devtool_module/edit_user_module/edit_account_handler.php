@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     //LOOP FORMATTED DESIGNATION -> IF ===/ CONTAINS SPECIFIC DESIGNATION (OIC) -> UPDATE USER ACC IF ELSE
                     foreach ($designation as $desig) {
                         if ($desig === "Officer-In-Charge (PENR Office)") {
-                            if (update_designation_limit_oic($pdo, $udc, $formattedDesignation, $so_no, $datetime_start, $datetime_end, $fullName) !== false) {
+                            if (update_designation_limit_oic($pdo, $udc, $formattedDesignation, $so_no, $datetime_start, $datetime_end, $fullName, $office) !== false) {
                                 update_user__account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedDesignation, $access_level, $emp_tag);
                             } else {
                                 echo "<script>process_functionAlert('Edit Failed!', 'developer_edit_failed')</script>";

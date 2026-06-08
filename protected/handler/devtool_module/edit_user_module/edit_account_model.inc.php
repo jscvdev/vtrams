@@ -48,29 +48,7 @@ function update_user_account(object $pdo, string $emp_id, string $emp_fn, string
     $statement->execute();
 }
 
-// Place this at the top of your PHP file, outside any other function or class
-if (!function_exists('remove_udc_and_office')) {
-    /**
-     * Remove a UDC and its corresponding office by index from parallel comma-separated lists.
-     */
-    function remove_udc_and_office(string $udcList, string $officeList, string $udcToRemove): array
-    {
-        $udcs = array_map('trim', explode(',', $udcList));
-        $offices = array_map('trim', explode(',', $officeList));
-        $newUdcs = [];
-        $newOffices = [];
-
-        foreach ($udcs as $index => $u) {
-            if ($u !== $udcToRemove) {
-                $newUdcs[] = $u;
-                // Replace empty office with "None"
-                $newOffices[] = ($offices[$index] ?? '') === '' ? 'None' : $offices[$index];
-            }
-        }
-
-        return [implode(',', $newUdcs), implode(',', $newOffices)];
-    }
-}
+require_once __DIR__ . '/../designation_limit_helpers.inc.php';
 
 /**
  * Update designations for a given UDC.
@@ -145,17 +123,15 @@ function update_designations(object $pdo, string $udc, string $formattedDesignat
         $existingUDCs = array_filter(array_map('trim', explode(',', $row['designated_udc'])));
         $existingOffices = array_map('trim', explode(',', $row['designated_office']));
 
-        // Normalize existing offices, replace empty with 'None'
-        foreach ($existingOffices as &$existingOffice) {
-            if ($existingOffice === '') {
-                $existingOffice = 'None';
-            }
-        }
-        unset($existingOffice);
+        $existingOffices = normalize_designated_offices($existingOffices);
 
-        if (!in_array($udc, $existingUDCs)) {
-            $existingUDCs[] = $udc;
-            $existingOffices[] = $office;
+        if (!in_array($udc, $existingUDCs, true)) {
+            [$existingUDCs, $existingOffices] = append_designated_udc_office(
+                $existingUDCs,
+                $existingOffices,
+                $udc,
+                $office
+            );
 
             $newUDCList = implode(',', $existingUDCs);
             $newOfficeList = implode(',', $existingOffices);

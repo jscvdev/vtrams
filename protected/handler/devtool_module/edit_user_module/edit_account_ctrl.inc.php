@@ -29,8 +29,8 @@ function check_if_exists_maximum(object $pdo, $formattedDesignation, string $udc
     }
 }
 
-function update_designation_limit_oic (object $pdo, string $udc, string $formattedDesignation, string $so_no, string $datetime_start, string $datetime_end, string $fullName){
-    update_designations($pdo, $udc, $formattedDesignation, $fullName);
+function update_designation_limit_oic (object $pdo, string $udc, string $formattedDesignation, string $so_no, string $datetime_start, string $datetime_end, string $fullName, string $office){
+    update_designations($pdo, $udc, $formattedDesignation, $fullName, $office);
     if (!empty($so_no) and !empty($datetime_start) and !empty($datetime_end)){
         set_curr_oic($pdo, $so_no, $datetime_start, $datetime_end, $fullName);
     }

@@ -50,11 +50,13 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
 
 function update_archived_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $totalProcessingTime) {
 
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, total_processing_time = :total_processing_time WHERE processing_no = :processing_no";
+    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, status = :status, datetime_status = :datetime_status, total_processing_time = :total_processing_time WHERE processing_no = :processing_no";
 
     $statement = $pdo->prepare($query);
 
+    $status = 'Paid';
     $statement->bindParam(":voucher_status",$action);
+    $statement->bindParam(":status",$status);
     $statement->bindParam(":datetime_status",$datetime_action);
     $statement->bindParam(":processing_no",$processing_no);
     $statement->bindParam(":total_processing_time",$totalProcessingTime);

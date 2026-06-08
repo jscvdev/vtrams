@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../designation_limit_helpers.inc.php';
+
 function check_cur_maximum (object $pdo, $formattedDesignation, string $udc){
 
     $check = false;
@@ -49,13 +51,18 @@ function add_new__account (object $pdo, string $emp_id, string $emp_fn, string $
     $statement->execute();
 }
 
-function update_designations (object $pdo, string $udc, string $formattedDesignation, string $fullName){
+function update_designations (object $pdo, string $udc, string $formattedDesignation, string $fullName, string $office){
+
+    $office = trim($office);
+    if ($office === '') {
+        $office = 'None';
+    }
 
     $x = $formattedDesignation;
     $designations = explode(',', $x); // Split the string into an array
 
     foreach ($designations as $designation) {
-        $query = "SELECT designated_udc, current_designated, max_designated FROM designation_limit WHERE designation = :formattedPosition";
+        $query = "SELECT designated_udc, designated_office, current_designated, max_designated FROM designation_limit WHERE designation = :formattedPosition";
 
         $statement = $pdo->prepare($query);
         $statement->bindParam(":formattedPosition", $designation);
@@ -102,42 +109,27 @@ function update_designations (object $pdo, string $udc, string $formattedDesigna
         $addDC = $row['current_designated'];
 
 
-        if (str_contains($row['designated_udc'], $udc))
+        if (str_contains((string) $row['designated_udc'], $udc))
         {
             // DO NOTHING
         }
         else
         {
             $newDC =  $addDC + 1;
+            $existingUDCs = array_values(array_filter(array_map('trim', explode(',', (string) $row['designated_udc']))));
+            $existingOffices = normalize_designated_offices(array_map('trim', explode(',', (string) ($row['designated_office'] ?? ''))));
+            [$existingUDCs, $existingOffices] = append_designated_udc_office($existingUDCs, $existingOffices, $udc, $office);
 
-            if (!empty($row['designated_udc'])){
-                if ($row['designated_udc'] == $udc) {
-                    $query = "UPDATE designation_limit SET designated_udc = :udc, current_designated = :current_designated WHERE designation = :designation";
-                    $statement  = $pdo->prepare($query);
-                    $statement->bindParam(":udc", $udc);
-                    $statement->bindParam(":current_designated", $newDC);
-                    $statement->bindParam(":designation", $designation);
-                    $statement->execute();
-                }
-                else {
-                    $combinedUDC = $row['designated_udc'].",".$udc;
-                    $query = "UPDATE designation_limit SET designated_udc = :udc, current_designated = :current_designated WHERE designation = :designation";
-                    $statement  = $pdo->prepare($query);
-                    $statement->bindParam(":udc", $combinedUDC);
-                    $statement->bindParam(":current_designated", $newDC);
-                    $statement->bindParam(":designation", $designation);
-                    $statement->execute();
+            $newUDCList = implode(',', $existingUDCs);
+            $newOfficeList = implode(',', $existingOffices);
 
-                }
-            }
-            else {
-                $query = "UPDATE designation_limit SET designated_udc = :udc, current_designated = :current_designated WHERE designation = :designation";
-                $statement  = $pdo->prepare($query);
-                $statement->bindParam(":udc", $udc);
-                $statement->bindParam(":current_designated", $newDC);
-                $statement->bindParam(":designation", $designation);
-                $statement->execute();
-            }
+            $query = "UPDATE designation_limit SET designated_udc = :udc, designated_office = :office, current_designated = :current_designated WHERE designation = :designation";
+            $statement  = $pdo->prepare($query);
+            $statement->bindParam(":udc", $newUDCList);
+            $statement->bindParam(":office", $newOfficeList);
+            $statement->bindParam(":current_designated", $newDC);
+            $statement->bindParam(":designation", $designation);
+            $statement->execute();
         }
     }
 }

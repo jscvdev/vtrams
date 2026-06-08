@@ -211,7 +211,7 @@ try {
             $updatestmt->execute([
                 ':ada_check_no' => $ada_check_no,
                 ':voucher_status' => $action ?? null,
-                ':status' => $remarks ?? null,
+                ':status' => 'Paid',
                 ':remarks' => $remarks ?? null,
                 ':datetime_status' => $currTime ?? null,
                 ':total_processing_time' => $turnaround_time ?? null,

@@ -29,8 +29,8 @@ function check_if_exists_maximum(object $pdo, $formattedDesignation, string $udc
     }
 }
 
-function update_designation_limit (object $pdo, string $udc, string $formattedDesignation, string $fullName){
-    update_designations($pdo, $udc, $formattedDesignation, $fullName);
+function update_designation_limit (object $pdo, string $udc, string $formattedDesignation, string $fullName, string $office){
+    update_designations($pdo, $udc, $formattedDesignation, $fullName, $office);
 }
 
 function add_new_account (object $pdo, string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $hashedPwd, string $section, string $division, string $formattedPosition, string $access_level, string $udc, string $office, string $emp_tag)
