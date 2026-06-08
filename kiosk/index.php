@@ -218,7 +218,7 @@
                 else if (lowerStatus.includes('processing')) activeIndex = 3;
                 else if (lowerStatus.includes('approval')) activeIndex = 4;
                 else if (lowerStatus.includes('preparation')) activeIndex = 5;
-                else if (lowerStatus.includes('payment')) activeIndex = 6;
+                else if (lowerStatus.includes('paid')) activeIndex = 6;
 
                 if (activeIndex >= 0) {
                     for (let i = 0; i <= activeIndex; i++) {
