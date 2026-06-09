@@ -912,6 +912,9 @@ function voucher_tracking_action_kind(?string $action): string
     if (str_contains($action, 'processed by')) {
         return 'process';
     }
+    if (str_contains($action, 'paid')) {
+        return 'process';
+    }
 
     return 'other';
 }
@@ -1052,6 +1055,71 @@ function voucher_tracking_section_sort_key(string $section): string
 }
 
 /**
+ * @param array<string, int> $totals
+ */
+function voucher_tracking_add_section_duration(array &$totals, string $section, int $startTs, int $endTs): void
+{
+    if ($startTs <= 0 || $endTs <= 0 || $endTs < $startTs) {
+        return;
+    }
+
+    $delta = $endTs - $startTs;
+    if ($delta > 0) {
+        $totals[$section] = ($totals[$section] ?? 0) + $delta;
+    }
+}
+
+/**
+ * Close the most recent pending forward when the next office/section receives the voucher.
+ *
+ * @param array<string, int> $open
+ * @param array<string, int> $pendingForward
+ * @param array<string, int> $totals
+ */
+function voucher_tracking_complete_pending_forward_on_handoff(
+    array &$open,
+    array &$pendingForward,
+    array &$totals,
+    string $receivingSection,
+    int $receiveTs
+): void {
+    $bestSection = null;
+    $bestForwardTs = -1;
+
+    foreach ($pendingForward as $fromSection => $forwardTs) {
+        if ($receivingSection !== '' && $fromSection === $receivingSection) {
+            continue;
+        }
+        if (!isset($open[$fromSection])) {
+            continue;
+        }
+        if ($receiveTs < $open[$fromSection] || $forwardTs > $receiveTs) {
+            continue;
+        }
+        if ($forwardTs > $bestForwardTs) {
+            $bestForwardTs = $forwardTs;
+            $bestSection = $fromSection;
+        }
+    }
+
+    if ($bestSection === null) {
+        return;
+    }
+
+    voucher_tracking_add_section_duration(
+        $totals,
+        $bestSection,
+        $open[$bestSection],
+        $receiveTs
+    );
+    unset($open[$bestSection], $pendingForward[$bestSection]);
+}
+
+/**
+ * Section dwell time: received at section start → successful handoff end.
+ * Non-cashier sections end when the next section/process receives, or at forward if still in transit.
+ * Cashiers Unit ends when processed/paid.
+ *
  * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
  * @param array<string, array<string, mixed>|null> $userCache
  * @return array<string, int> normalized section => total seconds
@@ -1060,49 +1128,93 @@ function voucher_tracking_section_durations_from_actions(
     array $actions,
     ?int $openEndTs = null,
     ?object $pdo = null,
-    array &$userCache = []
+    array &$userCache = [],
+    ?string $trackingStatus = null
 ): array {
+    $cashiersSection = 'Cashiers Unit';
+    $isPaid = strcasecmp(trim((string) $trackingStatus), 'Paid') === 0;
     $open = [];
+    $pendingForward = [];
     $totals = [];
 
     foreach ($actions as $row) {
         $section = voucher_tracking_dashboard_section_from_action_row($row, $pdo, $userCache);
-        if ($section === '' || !voucher_tracking_is_dashboard_section($section)) {
-            continue;
-        }
-
         $ts = strtotime((string) ($row['datetime_action'] ?? ''));
         if ($ts === false) {
             continue;
         }
 
         $kind = voucher_tracking_action_kind($row['action'] ?? '');
+
         if ($kind === 'receive') {
-            $open[$section] = $ts;
+            voucher_tracking_complete_pending_forward_on_handoff(
+                $open,
+                $pendingForward,
+                $totals,
+                $section,
+                $ts
+            );
+
+            if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
+                $open[$section] = $ts;
+                unset($pendingForward[$section]);
+            }
             continue;
         }
 
-        if (in_array($kind, ['forward', 'return', 'archive', 'process'], true)) {
+        if ($section === '' || !voucher_tracking_is_dashboard_section($section)) {
+            continue;
+        }
+
+        if ($kind === 'forward') {
             if (!isset($open[$section])) {
                 continue;
             }
-            $delta = max(0, $ts - $open[$section]);
-            $totals[$section] = ($totals[$section] ?? 0) + $delta;
-            unset($open[$section]);
+            if ($section !== $cashiersSection) {
+                $pendingForward[$section] = $ts;
+            }
+            continue;
+        }
+
+        if ($kind === 'process' && $section === $cashiersSection && isset($open[$section])) {
+            voucher_tracking_add_section_duration($totals, $section, $open[$section], $ts);
+            unset($open[$section], $pendingForward[$section]);
+            continue;
+        }
+
+        if (in_array($kind, ['return', 'archive'], true)) {
+            unset($open[$section], $pendingForward[$section]);
+        }
+    }
+
+    foreach ($pendingForward as $section => $forwardTs) {
+        if ($section === $cashiersSection || !isset($open[$section])) {
+            continue;
+        }
+        voucher_tracking_add_section_duration($totals, $section, $open[$section], $forwardTs);
+        unset($open[$section], $pendingForward[$section]);
+    }
+
+    if (isset($open[$cashiersSection])) {
+        $startTs = $open[$cashiersSection];
+        $endTs = null;
+        if ($isPaid && $openEndTs !== null && $openEndTs > $startTs) {
+            $endTs = $openEndTs;
+        }
+        if ($endTs !== null) {
+            voucher_tracking_add_section_duration($totals, $cashiersSection, $startTs, $endTs);
+            unset($open[$cashiersSection]);
         }
     }
 
     if ($open !== []) {
         $fallbackEnd = ($openEndTs !== null && $openEndTs > 0) ? $openEndTs : time();
         foreach ($open as $section => $startTs) {
-            if (!voucher_tracking_is_dashboard_section($section)) {
+            if ($section === $cashiersSection) {
                 continue;
             }
             $endTs = $fallbackEnd <= $startTs ? time() : $fallbackEnd;
-            $delta = max(0, $endTs - $startTs);
-            if ($delta > 0) {
-                $totals[$section] = ($totals[$section] ?? 0) + $delta;
-            }
+            voucher_tracking_add_section_duration($totals, $section, $startTs, $endTs);
         }
     }
 
@@ -1235,7 +1347,8 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
             $logsByPn[$pn] ?? [],
             $openEndTs,
             $pdo,
-            $userCache
+            $userCache,
+            trim((string) ($trackingRow['status'] ?? ''))
         );
         $labels = [];
         foreach ($durations as $section => $seconds) {
