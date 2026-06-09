@@ -17,17 +17,23 @@ $compact = preg_replace('/[\s\-]+/u', '', $query);
 $likeCompact = ($compact !== '') ? ('%' . $compact . '%') : $like;
 
 try {
-    $sql = "SELECT processing_no,
-                   dv_no,
-                   payee,
-                   status AS tracking_status,
-                   voucher_status
-            FROM voucher_tracking
-            WHERE processing_no LIKE :q
-               OR IFNULL(dv_no, '') LIKE :q2
-               OR payee LIKE :q3
-               OR REPLACE(REPLACE(processing_no, '-', ''), ' ', '') LIKE :q4
-            ORDER BY datetime_status DESC LIMIT 100";
+    $sql = "SELECT vt.processing_no,
+                   vt.dv_no,
+                   vt.payee,
+                   vt.status AS tracking_status,
+                   vt.voucher_status,
+                   vt.datetime_status AS datetime_action,
+                   CASE
+                       WHEN LOWER(TRIM(vt.status)) = 'paid' THEN COALESCE(va.datetime_action, vt.datetime_status)
+                       ELSE NULL
+                   END AS datetime_paid
+            FROM voucher_tracking vt
+            LEFT JOIN voucher_archives va ON va.processing_no = vt.processing_no
+            WHERE vt.processing_no LIKE :q
+               OR IFNULL(vt.dv_no, '') LIKE :q2
+               OR vt.payee LIKE :q3
+               OR REPLACE(REPLACE(vt.processing_no, '-', ''), ' ', '') LIKE :q4
+            ORDER BY vt.datetime_status DESC LIMIT 100";
 
     $stmt = $pdo->prepare($sql);
     $stmt->bindValue(':q', $like, PDO::PARAM_STR);

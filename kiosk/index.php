@@ -94,6 +94,9 @@
                         <th>Payee</th>
                         <th>Tracking Status</th>
                         <th>Action</th>
+                        <th>Last action</th>
+                        <th>Paid on</th>
+                        <th class="kiosk-col-select">Select</th>
                     </tr>
                 </thead>
                 <tbody id="results">
@@ -105,6 +108,10 @@
 
 <script>
     (function() {
+        const COL_COUNT = 8;
+        const resultsTable = document.getElementById('kiosk-results-table');
+        const resultsContainer = document.getElementById('results');
+
         function notify(message, type, ms) {
             if (typeof showNotify === 'function') {
                 showNotify(message, type || 'info', ms || 2500);
@@ -120,19 +127,134 @@
             return d.innerHTML;
         }
 
+        function formatDatetime(value) {
+            if (value == null || String(value).trim() === '') {
+                return '—';
+            }
+            const normalized = String(value).trim().replace(' ', 'T');
+            const date = new Date(normalized);
+            if (Number.isNaN(date.getTime())) {
+                return escapeHtml(String(value));
+            }
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function setProgress(status) {
+            const steps = [
+                document.querySelector('.p1'),
+                document.querySelector('.p2'),
+                document.querySelector('.p3'),
+                document.querySelector('.p4'),
+                document.querySelector('.p5'),
+                document.querySelector('.p6'),
+                document.querySelector('.p7')
+            ];
+            steps.forEach(function(step) {
+                if (step) step.classList.remove('active');
+            });
+            document.querySelectorAll('.kiosk-stepper-list li').forEach(function(li) {
+                li.classList.remove('completed');
+            });
+
+            const lowerStatus = String(status).toLowerCase();
+            let activeIndex = -1;
+
+            if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) activeIndex = 0;
+            else if (lowerStatus.includes('charging')) activeIndex = 1;
+            else if (lowerStatus.includes('verifying')) activeIndex = 2;
+            else if (lowerStatus.includes('processing')) activeIndex = 3;
+            else if (lowerStatus.includes('approval')) activeIndex = 4;
+            else if (lowerStatus.includes('preparation')) activeIndex = 5;
+            else if (lowerStatus.includes('paid')) activeIndex = 6;
+
+            if (activeIndex >= 0) {
+                for (let i = 0; i <= activeIndex; i++) {
+                    if (steps[i]) steps[i].classList.add('active');
+                    const stepItem = steps[i] ? steps[i].closest('li') : null;
+                    if (stepItem) stepItem.classList.add('completed');
+                }
+            }
+        }
+
+        function resetProgress() {
+            document.querySelectorAll('.progress').forEach(function(step) {
+                step.classList.remove('active');
+            });
+            document.querySelectorAll('.kiosk-stepper-list li').forEach(function(li) {
+                li.classList.remove('completed');
+            });
+        }
+
+        function toggleSelectColumn(show) {
+            if (resultsTable) {
+                resultsTable.classList.toggle('kiosk-results-table--multi', show);
+            }
+        }
+
+        function markSelectedRow(row) {
+            resultsContainer.querySelectorAll('tr.kiosk-row-selected').forEach(function(tr) {
+                tr.classList.remove('kiosk-row-selected');
+            });
+            if (row) row.classList.add('kiosk-row-selected');
+        }
+
+        function buildResultRow(item, showSelect) {
+            const proc = item.processing_no != null ? String(item.processing_no) : '';
+            const dv = item.dv_no != null ? String(item.dv_no) : '—';
+            const payee = item.payee != null ? String(item.payee) : '';
+            const trackingStatus = item.tracking_status != null ? String(item.tracking_status) : '—';
+            const voucherStatus = item.voucher_status != null ? String(item.voucher_status) : '—';
+            const datetimeAction = formatDatetime(item.datetime_action);
+            const datetimePaid = formatDatetime(item.datetime_paid);
+            const trackingAttr = escapeHtml(item.tracking_status != null ? String(item.tracking_status) : '');
+
+            const selectCell = showSelect
+                ? '<td data-label="Select" class="kiosk-col-select">' +
+                '<button type="button" class="btn warning btn-flex btn-nowrap btn-pad kiosk-select-btn" data-tracking-status="' + trackingAttr + '">' +
+                '<i class="ri-checkbox-circle-line" aria-hidden="true"></i><span>Select</span></button></td>'
+                : '<td data-label="Select" class="kiosk-col-select"></td>';
+
+            return '<tr data-tracking-status="' + trackingAttr + '">' +
+                '<td data-label="Processing No.">' + escapeHtml(proc) + '</td>' +
+                '<td data-label="DV No.">' + escapeHtml(dv) + '</td>' +
+                '<td data-label="Payee">' + escapeHtml(payee) + '</td>' +
+                '<td data-label="Tracking Status">' + escapeHtml(trackingStatus) + '</td>' +
+                '<td data-label="Action">' + escapeHtml(voucherStatus) + '</td>' +
+                '<td data-label="Last action">' + datetimeAction + '</td>' +
+                '<td data-label="Paid on">' + datetimePaid + '</td>' +
+                selectCell +
+                '</tr>';
+        }
+
+        resultsContainer.addEventListener('click', function(e) {
+            const btn = e.target.closest('.kiosk-select-btn');
+            if (!btn) return;
+            const row = btn.closest('tr');
+            const status = btn.getAttribute('data-tracking-status') || (row ? row.getAttribute('data-tracking-status') : '') || '';
+            setProgress(status);
+            markSelectedRow(row);
+            notify('Showing workflow progress for the selected voucher.', 'info', 2000);
+        });
+
         document.getElementById('searchForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const query = document.getElementById('filterInput').value.trim();
-            const resultsContainer = document.getElementById('results');
 
             if (query === '') {
                 resetProgress();
+                toggleSelectColumn(false);
                 notify('Enter a processing number (e.g. PN-26-01-0001) or a payee name.', 'warning', 2600);
                 resultsContainer.innerHTML = '';
                 return;
             }
 
-            resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">Searching…</td></tr>';
+            resultsContainer.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="kiosk-table-msg">Searching…</td></tr>';
 
             fetch('search.php', {
                     method: 'POST',
@@ -151,92 +273,43 @@
                     resetProgress();
 
                     if (data && data.error) {
+                        toggleSelectColumn(false);
                         notify(data.error, 'error', 3200);
-                        resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">Could not complete search.</td></tr>';
+                        resultsContainer.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="kiosk-table-msg">Could not complete search.</td></tr>';
                         return;
                     }
 
                     if (!Array.isArray(data) || data.length === 0) {
-                        resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">No matching voucher found. Try the full processing number (e.g. PN-26-01-0001) or check the payee spelling.</td></tr>';
+                        toggleSelectColumn(false);
+                        resultsContainer.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="kiosk-table-msg">No matching voucher found. Try the full processing number (e.g. PN-26-01-0001) or check the payee spelling.</td></tr>';
                         notify('No matching voucher found.', 'warning', 2500);
                         return;
                     }
 
-                    data.forEach(function(item, index) {
-                        const proc = item.processing_no != null ? String(item.processing_no) : '';
-                        const dv = item.dv_no != null ? String(item.dv_no) : '—';
-                        const payee = item.payee != null ? String(item.payee) : '';
-                        const trackingStatus = item.tracking_status != null ? String(item.tracking_status) : '—';
-                        const voucherStatus = item.voucher_status != null ? String(item.voucher_status) : '—';
-                        const row = '<tr>' +
-                            '<td data-label="Processing No.">' + escapeHtml(proc) + '</td>' +
-                            '<td data-label="DV No.">' + escapeHtml(dv) + '</td>' +
-                            '<td data-label="Payee">' + escapeHtml(payee) + '</td>' +
-                            '<td data-label="Tracking Status">' + escapeHtml(trackingStatus) + '</td>' +
-                            '<td data-label="Action">' + escapeHtml(voucherStatus) + '</td>' +
-                            '</tr>';
-                        resultsContainer.insertAdjacentHTML('beforeend', row);
+                    const multipleResults = data.length > 1;
+                    toggleSelectColumn(multipleResults);
 
-                        if (index === 0) {
-                            // Progress is driven by voucher_tracking.status (tracking_status alias from search.php).
-                            const progressStatus = item.tracking_status || '';
-                            setProgress(progressStatus);
+                    data.forEach(function(item, index) {
+                        resultsContainer.insertAdjacentHTML('beforeend', buildResultRow(item, multipleResults));
+
+                        if (!multipleResults && index === 0) {
+                            setProgress(item.tracking_status || '');
                         }
                     });
-                    notify('Found ' + data.length + ' matching voucher' + (data.length > 1 ? 's.' : '.'), 'success', 2200);
+
+                    if (multipleResults) {
+                        notify('Found ' + data.length + ' vouchers. Select one to view its workflow progress.', 'success', 2800);
+                    } else {
+                        notify('Found 1 matching voucher.', 'success', 2200);
+                    }
                 })
                 .catch(function(error) {
-                    resultsContainer.innerHTML = '<tr><td colspan="5" class="kiosk-table-msg">A network error occurred.</td></tr>';
+                    toggleSelectColumn(false);
+                    resultsContainer.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="kiosk-table-msg">A network error occurred.</td></tr>';
                     resetProgress();
                     notify('Could not reach the server. Try again in a moment.', 'error', 3200);
                     console.error('Kiosk search error:', error);
                 });
-
-            function setProgress(status) {
-                const steps = [
-                    document.querySelector('.p1'),
-                    document.querySelector('.p2'),
-                    document.querySelector('.p3'),
-                    document.querySelector('.p4'),
-                    document.querySelector('.p5'),
-                    document.querySelector('.p6'),
-                    document.querySelector('.p7')
-                ];
-                steps.forEach(function(step) {
-                    if (step) step.classList.remove('active');
-                });
-                document.querySelectorAll('.kiosk-stepper-list li').forEach(function(li) {
-                    li.classList.remove('completed');
-                });
-
-                const lowerStatus = String(status).toLowerCase();
-                let activeIndex = -1;
-
-                if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) activeIndex = 0;
-                else if (lowerStatus.includes('charging')) activeIndex = 1;
-                else if (lowerStatus.includes('verifying')) activeIndex = 2;
-                else if (lowerStatus.includes('processing')) activeIndex = 3;
-                else if (lowerStatus.includes('approval')) activeIndex = 4;
-                else if (lowerStatus.includes('preparation')) activeIndex = 5;
-                else if (lowerStatus.includes('paid')) activeIndex = 6;
-
-                if (activeIndex >= 0) {
-                    for (let i = 0; i <= activeIndex; i++) {
-                        if (steps[i]) steps[i].classList.add('active');
-                        const stepItem = steps[i] ? steps[i].closest('li') : null;
-                        if (stepItem) stepItem.classList.add('completed');
-                    }
-                }
-            }
-
-            function resetProgress() {
-                document.querySelectorAll('.progress').forEach(function(step) {
-                    step.classList.remove('active');
-                });
-                document.querySelectorAll('.kiosk-stepper-list li').forEach(function(li) {
-                    li.classList.remove('completed');
-                });
-            }
         });
     })();
 </script>

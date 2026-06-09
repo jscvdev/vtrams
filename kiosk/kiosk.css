@@ -765,3 +765,18 @@ h2 {
 .kiosk-results-card .content-wrapper {
     overflow-x: auto;
 }
+
+.kiosk-select-btn {
+    font-size: 0.72rem !important;
+    padding: 0.35rem 0.65rem !important;
+    gap: 0.3rem;
+}
+
+.kiosk-results-card tr.kiosk-row-selected {
+    background: hsla(150, 45%, 42%, 0.12);
+    box-shadow: inset 3px 0 0 hsl(150, 91%, 30%);
+}
+
+.kiosk-results-card #kiosk-results-table:not(.kiosk-results-table--multi) .kiosk-col-select {
+    display: none;
+}
