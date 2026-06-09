@@ -786,12 +786,13 @@ if ($scriptName !== '') {
                 sections.forEach(section => {
                     headerHtml += `<th style="text-align:right;">${section}</th>`;
                 });
+                headerHtml += '<th style="text-align:right;">TPT</th>';
                 headerRow.innerHTML = headerHtml;
                 voucherHead.appendChild(headerRow);
 
                 if (byVoucher.length === 0) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td colspan="${3 + sections.length}" style="text-align:center;color:#888;">No per-voucher section timing data for the current filters.</td>`;
+                    row.innerHTML = `<td colspan="${4 + sections.length}" style="text-align:center;color:#888;">No per-voucher section timing data for the current filters.</td>`;
                     voucherBody.appendChild(row);
                     return;
                 }
@@ -805,6 +806,8 @@ if ($scriptName !== '') {
                     sections.forEach(section => {
                         html += `<td style="text-align:right;">${labels[section] || '—'}</td>`;
                     });
+                    const tpt = (row.total_processing_time || '').trim();
+                    html += `<td style="text-align:right;">${tpt !== '' ? tpt : '—'}</td>`;
                     tr.innerHTML = html;
                     voucherBody.appendChild(tr);
                 });

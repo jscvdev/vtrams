@@ -1360,7 +1360,7 @@ function voucher_tracking_voucher_last_processed_ts(array $trackingRow, array $a
  * @return array{
  *   sections: list<string>,
  *   summary: list<array{section: string, count: int, avg_seconds: int, min_seconds: int, max_seconds: int, avg_label: string, min_label: string, max_label: string}>,
- *   by_voucher: list<array{processing_no: string, payee: string, dv_no: string, sections: array<string, int>, sections_label: array<string, string>}>
+ *   by_voucher: list<array{processing_no: string, payee: string, dv_no: string, total_processing_time: string, sections: array<string, int>, sections_label: array<string, string>}>
  * }
  */
 function voucher_tracking_build_section_timing_report(object $pdo, array $voucherRows): array
@@ -1413,6 +1413,7 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
             'processing_no' => $pn,
             'payee' => trim((string) ($trackingRow['payee'] ?? '')),
             'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
+            'total_processing_time' => trim((string) ($trackingRow['total_processing_time'] ?? '')),
             'sections' => $durations,
             'sections_label' => $labels,
             'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
