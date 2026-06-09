@@ -451,6 +451,9 @@ function voucher_pick_designated_udcs_for_office(string $designated_udc, string 
         }
         if (isset($udcs[$i]) && $udcs[$i] !== '') {
             $picked[] = $udcs[$i];
+        } elseif (count($udcs) === 1) {
+            // Single assignee shared across multiple listed offices (e.g. Liaison Officer per CENRO).
+            $picked[] = $udcs[0];
         }
     }
 
@@ -498,6 +501,24 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
         );
         if ($designated !== '') {
             return $designated;
+        }
+
+        $listedOffices = array_values(array_filter(
+            array_map('trim', explode(',', (string) ($limitRow['designated_office'] ?? ''))),
+            static fn(string $office): bool => $office !== '' && strcasecmp($office, 'None') !== 0
+        ));
+        foreach ($listedOffices as $listedOffice) {
+            if ($penro_office !== '' && strcasecmp($listedOffice, $penro_office) === 0) {
+                continue;
+            }
+            $designated = voucher_pick_designated_udcs_for_office(
+                (string) ($limitRow['designated_udc'] ?? ''),
+                (string) ($limitRow['designated_office'] ?? ''),
+                $listedOffice
+            );
+            if ($designated !== '') {
+                return $designated;
+            }
         }
     }
 
@@ -566,6 +587,242 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
         }
         if ($udcs !== []) {
             return implode(',', array_values(array_unique($udcs)));
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Logged-in user's office from session (trimmed).
+ */
+function voucher_logged_user_office(): string
+{
+    return trim((string) ($_SESSION['logged_user_office'] ?? ''));
+}
+
+/**
+ * Logged-in user's designations as a trimmed list.
+ *
+ * @return list<string>
+ */
+function voucher_logged_user_designations(): array
+{
+    return array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) ($_SESSION['logged_user_designation'] ?? ''))
+    ), static fn(string $value): bool => $value !== ''));
+}
+
+/**
+ * Whether the user has a specific designation (case-insensitive).
+ *
+ * @param list<string> $designations
+ */
+function voucher_user_has_designation(array $designations, string $needle): bool
+{
+    $needle = trim($needle);
+    if ($needle === '') {
+        return false;
+    }
+
+    foreach ($designations as $designation) {
+        if (strcasecmp(trim($designation), $needle) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Resolve which office should be used when routing to a designation.
+ * Prefers the logged user's office when registered, otherwise the first
+ * designation_limit office that has an assigned UDC.
+ */
+function voucher_resolve_office_for_designation_route(object $pdo, string $designation, string $logged_user_office): string
+{
+    $logged_user_office = trim($logged_user_office);
+    $designation = trim($designation);
+    if ($designation === '') {
+        return $logged_user_office;
+    }
+
+    if ($logged_user_office !== '' && voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
+        return $logged_user_office;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT designated_office, designated_udc FROM designation_limit
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))
+         LIMIT 1'
+    );
+    $stmt->bindValue(':designation', $designation, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return $logged_user_office;
+    }
+
+    $offices = array_values(array_filter(
+        array_map('trim', explode(',', (string) ($row['designated_office'] ?? ''))),
+        static fn(string $office): bool => $office !== '' && strcasecmp($office, 'None') !== 0
+    ));
+    $udcs = array_map('trim', explode(',', (string) ($row['designated_udc'] ?? '')));
+
+    foreach ($offices as $i => $office) {
+        if (trim((string) ($udcs[$i] ?? '')) !== '') {
+            return $office;
+        }
+    }
+
+    if ($offices !== []) {
+        return $offices[0];
+    }
+
+    return $logged_user_office;
+}
+
+/**
+ * Resolve ICU receiver for Liaison Officer forwards.
+ *
+ * @return array{receiver_udc: string, forwarded_to: string, office_to: string, temp_errors: array<string, string>}
+ */
+function voucher_forward_liaison_icu_receiver(object $pdo, string $logged_user_office): array
+{
+    $targetTo = 'ICU';
+    $officeTo = voucher_resolve_office_for_designation_route($pdo, $targetTo, $logged_user_office);
+    $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $targetTo, $officeTo);
+
+    return [
+        'receiver_udc' => $resolved['receiver_udc'],
+        'forwarded_to' => $resolved['forwarded_to'],
+        'office_to' => $officeTo,
+        'temp_errors' => $resolved['temp_errors'],
+    ];
+}
+
+/**
+ * Whether an office value appears in a designated_office CSV list.
+ */
+function voucher_designation_limit_office_matches(string $designated_office, string $office): bool
+{
+    $office = trim($office);
+    if ($office === '') {
+        return false;
+    }
+
+    foreach (array_map('trim', explode(',', $designated_office)) as $listedOffice) {
+        if ($listedOffice !== '' && strcasecmp($listedOffice, $office) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Whether a designation_limit row lists the given office in designated_office.
+ */
+function voucher_designation_limit_office_registered(object $pdo, string $office, string $designation): bool
+{
+    $office = trim($office);
+    $designation = trim($designation);
+    if ($office === '' || $designation === '') {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT designated_office FROM designation_limit
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))
+         LIMIT 1'
+    );
+    $stmt->bindValue(':designation', $designation, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return false;
+    }
+
+    return voucher_designation_limit_office_matches((string) ($row['designated_office'] ?? ''), $office);
+}
+
+/**
+ * Resolve receiver_udc when the destination designation supports the logged user's office.
+ *
+ * @return array{receiver_udc: string, temp_errors: array<string, string>}
+ */
+function voucher_resolve_receiver_for_designation_at_office(object $pdo, string $designation, string $logged_user_office): array
+{
+    $designation = trim($designation);
+    $logged_user_office = trim($logged_user_office);
+    if ($designation === '' || $logged_user_office === '') {
+        return ['receiver_udc' => '', 'temp_errors' => []];
+    }
+
+    if (!voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
+        return ['receiver_udc' => '', 'temp_errors' => []];
+    }
+
+    return voucher_forward_receiver_udcs_for_designation($pdo, $designation, $logged_user_office);
+}
+
+/**
+ * Look up a payee within a specific office.
+ *
+ * @return array{found: bool, udc: string}
+ */
+function voucher_lookup_payee_at_office(object $pdo, string $payee, string $office): array
+{
+    $payee = trim($payee);
+    $office = trim($office);
+    if ($payee === '' || $office === '') {
+        return ['found' => false, 'udc' => ''];
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT udc FROM user_group
+         WHERE office = :office
+           AND TRIM(CONCAT(COALESCE(emp_fn,''), ' ', COALESCE(emp_mi,''), ' ', COALESCE(emp_ln,''))) = :payee
+         LIMIT 1"
+    );
+    $stmt->bindValue(':office', $office, PDO::PARAM_STR);
+    $stmt->bindValue(':payee', $payee, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['found' => false, 'udc' => ''];
+    }
+
+    return [
+        'found' => true,
+        'udc' => trim((string) ($row['udc'] ?? '')),
+    ];
+}
+
+/**
+ * Look up a payee's UDC within a specific office.
+ */
+function voucher_lookup_payee_udc_at_office(object $pdo, string $payee, string $office): string
+{
+    return voucher_lookup_payee_at_office($pdo, $payee, $office)['udc'];
+}
+
+/**
+ * Default forward target for encoders based on designation_limit office registration.
+ * PENRO encoders → Planning Section; CENRO/other offices → Liaison Officer when registered.
+ */
+function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office): string
+{
+    $logged_user_office = trim($logged_user_office);
+    if ($logged_user_office === '') {
+        return '';
+    }
+
+    $targets = ['Planning Section', 'Liaison Officer'];
+    foreach ($targets as $designation) {
+        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
+            return $designation;
         }
     }
 

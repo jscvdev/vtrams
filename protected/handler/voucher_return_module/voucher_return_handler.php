@@ -96,11 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         voucher_apply_exact_amount($amount);
 
-        if (isset($_SESSION['logged_user_office'])) {
-            $office_from = $_SESSION['logged_user_office'];
-        } else {
-            $office_from = '';
-        }
+        $logged_user_office = voucher_logged_user_office();
+        $office_from = $logged_user_office;
 
         if (empty($remarks)) {
             $remarks = "";
@@ -114,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Route back to the encoder's unit; keep the original encoded_from.
             $encoder_destination = trim((string) $encoded_from);
             $office_to = $encoder_destination;
-            $penro_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+            $penro_office = $logged_user_office;
             $receiver_udc = '';
             if (!empty($encoded_by)) {
                 $enc_stmt = $pdo->prepare(
@@ -138,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? $return_target_section
                     : (($document_to ?? '') !== '' ? $document_to : '')
             ));
-            $penro_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+            $penro_office = $logged_user_office;
             if ($penro_office !== '') {
                 $office_to = $penro_office;
             }
@@ -236,28 +233,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         die();
                     } else {
                         // DATABASE STATEMENTS VIA MODE/CTRL
-                        $target = explode(",", $_SESSION['logged_user_designation']);
-                        if (in_array("Accounting Unit", $target)) {
-                            $query2 = "SELECT * FROM user_group";
-                            $statement2 = $pdo->prepare($query2);
-                            $statement2->execute();
-
-
-                            if ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
-                                while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-                                    $formattedResultName = explode(" ", $row2['emp_fn'] . " " . $row2['emp_mi'] . " " . $row2['emp_ln']);
-                                    $formattedResultName2  = implode(" ", $formattedResultName);
-                                    $full_name = $formattedResultName2;
-
-                                    if ($full_name === $payee) {
-                                        if (!empty($row2['udc'])) {
-                                            $sender_udc = $row2['udc'];
-                                        } else {
-                                            $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                            $sender_udc = "failed";
-                                        }
-                                    }
-                                }
+                        $target = array_map('trim', explode(',', (string) ($_SESSION['logged_user_designation'] ?? '')));
+                        if (in_array('Accounting Unit', $target, true) && $logged_user_office !== '' && trim((string) $payee) !== '') {
+                            $payeeLookup = voucher_lookup_payee_at_office($pdo, (string) $payee, $logged_user_office);
+                            if ($payeeLookup['udc'] !== '') {
+                                $sender_udc = $payeeLookup['udc'];
+                            } elseif ($payeeLookup['found']) {
+                                $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
+                                $sender_udc = 'failed';
                             }
                         }
 

@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'archiving.model.inc.php';
     require_once 'archiving.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -81,20 +82,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $forwarded_by = htmlspecialchars($_SESSION['logged_user_emp_name']); // FORWARDED BY -> CURRENT LOGGED USER
         $archived_from = htmlspecialchars($_SESSION['logged_user_section']); // ARCHIVED BY -> CURRENT LOGGED USER
         $forwarded_from = $_SESSION['logged_user_designation'];
-        $office_from = $_SESSION['logged_user_office'];
+        $logged_user_office = voucher_logged_user_office();
+        $office_from = $logged_user_office;
 
-        $action_by_from = $_SESSION['logged_user_office'];
+        $action_by_from = $logged_user_office;
 
         try {
             $temp_dump = [];
 
             // MULTIPLE FILE UPLOAD SUPPORTED 27/04/2024
             try {
-                $query2 = "SELECT * FROM designation_limit";
-                $statement2 = $pdo->prepare($query2);
-                $statement2->execute();
-
                 if (isset($_REQUEST['archive_document'])) {
+                    $receiver_udc = '';
                     $forwarded_to =  "Records Unit";
                     $action = "Archived by: " . $_SESSION['logged_user_emp_name'];
 
@@ -116,16 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
-                    if ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
-                        while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-                            if ($row2['designation'] === $forwarded_to) {
-                                if (!empty($row2['designated_udc'])) {
-                                    $receiver_udc = $row2['designated_udc'];
-                                } else {
-                                    $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                }
-                            }
-                        }
+                    $resolved = voucher_resolve_receiver_for_designation_at_office(
+                        $pdo,
+                        $forwarded_to,
+                        $logged_user_office
+                    );
+                    $receiver_udc = $resolved['receiver_udc'];
+                    if ($resolved['temp_errors']) {
+                        $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                     }
 
                     function calculateTurnaroundTime_Archiving($startTimestamp, $endTimestamp)

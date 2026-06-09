@@ -39,6 +39,32 @@ if (!function_exists('designation_office_already_listed')) {
     }
 }
 
+if (!function_exists('dedupe_designated_offices')) {
+    /**
+     * Remove duplicate office entries while preserving first-seen order.
+     */
+    function dedupe_designated_offices(array $offices): array
+    {
+        $seen = [];
+        $deduped = [];
+
+        foreach ($offices as $office) {
+            $normalized = trim((string) $office);
+            if ($normalized === '') {
+                continue;
+            }
+            $key = strtolower($normalized);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $normalized;
+        }
+
+        return $deduped;
+    }
+}
+
 if (!function_exists('append_designated_udc_office')) {
     /**
      * Append a UDC to designated_udc without duplicating offices in designated_office.
@@ -47,7 +73,7 @@ if (!function_exists('append_designated_udc_office')) {
     {
         $udc = trim($udc);
         if ($udc === '' || in_array($udc, $existingUDCs, true)) {
-            return [$existingUDCs, $existingOffices];
+            return [$existingUDCs, dedupe_designated_offices($existingOffices)];
         }
 
         $existingUDCs[] = $udc;
@@ -55,7 +81,7 @@ if (!function_exists('append_designated_udc_office')) {
             $existingOffices[] = $office;
         }
 
-        return [$existingUDCs, $existingOffices];
+        return [$existingUDCs, dedupe_designated_offices($existingOffices)];
     }
 }
 
@@ -72,6 +98,6 @@ if (!function_exists('normalize_designated_offices')) {
         }
         unset($office);
 
-        return $offices;
+        return dedupe_designated_offices($offices);
     }
 }

@@ -70,11 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         voucher_apply_exact_amount($amount);
 
-        if (isset($_SESSION['logged_user_office'])) {
-            $office_from = $_SESSION['logged_user_office'];
-        } else {
-            $office_from = '';
-        }
+        $office_from = voucher_logged_user_office();
 
         $dv_no = "";
         $ors_no = "TBD";
@@ -102,18 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($combined_remarks)) {
             $combined_remarks = "";
         }
-        $target = explode(",", $_SESSION['logged_user_designation']);
+        $target = voucher_logged_user_designations();
 
         try {
             $temp_dump = [];
             try {
                 if (isset($_REQUEST['forward_voucher'])) {
-                    $query2 = "SELECT * FROM designation_limit";
-                    $statement2 = $pdo->prepare($query2);
-                    $statement2->execute();
-
-                    $office_from = $_SESSION['logged_user_office'];
-                    $office_to = $_SESSION['logged_user_office'];
+                    $logged_user_office = voucher_logged_user_office();
+                    $office_from = $logged_user_office;
+                    $office_to = $logged_user_office;
                     $forwarded_by = $_SESSION['logged_user_emp_name'];
                     $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
 
@@ -139,20 +132,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                    } elseif ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
-                        if ($office_from === "DENR-PENRO EASTERN SAMAR") {
-                            $target_to = "Planning Section";
-                        } else {
-                            $target_to = "ICU";
-                        }
-                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to);
+                    } elseif (voucher_user_has_designation($target, 'Liaison Officer')) {
+                        $resolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
+                        $target_to = 'ICU';
+                        $office_to = $resolved['office_to'];
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                    } elseif (in_array("Liaison Officer", $target)) {
-                        $target_to = "ICU";
+                    } elseif (
+                        ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $logged_user_office)) !== ''
+                    ) {
+                        $target_to = $encoderForwardTarget;
+                        $office_to = $logged_user_office;
                         $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];

@@ -179,9 +179,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
-                    $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $document_to, $office_to);
-                    if ($receiver_udc === '') {
-                        $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
+                    $logged_user_office = voucher_logged_user_office();
+                    if (voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
+                        $document_to = 'ICU';
+                        $liaisonResolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
+                        $receiver_udc = $liaisonResolved['receiver_udc'];
+                        $office_to = $liaisonResolved['office_to'] !== ''
+                            ? $liaisonResolved['office_to']
+                            : $logged_user_office;
+                        if ($liaisonResolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $liaisonResolved['temp_errors']);
+                        }
+                    } else {
+                        $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $document_to, $office_to);
+                        if ($receiver_udc === '') {
+                            $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
+                        }
                     }
 
                     $variables_to_check = [

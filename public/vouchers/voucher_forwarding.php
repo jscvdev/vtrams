@@ -121,7 +121,11 @@ function session_contains_phrase($phrase)
     return false;
 }
 
-$target = explode(",", $_SESSION['logged_user_designation']);
+$target = array_values(array_filter(array_map(
+    'trim',
+    explode(',', (string) ($_SESSION['logged_user_designation'] ?? ''))
+)));
+$isLiaisonOfficer = in_array('Liaison Officer', $target, true);
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $showForwardCol = !$hideForwardForCashiersUnit;
@@ -383,9 +387,12 @@ if ($showCashierArchiveCol) {
                             </div>
                             <div class='label-input__container input-dynamic'>
                                 <label for=''>Forward To</label>
-                                <select name='document_to' class='form-custom-input' id="document_to" required>
+                                <select name='document_to' class='form-custom-input' id="document_to" required<?= $isLiaisonOfficer ? ' data-liaison-only="1"' : '' ?>>
+                                    <?php if ($isLiaisonOfficer) : ?>
+                                        <option value='ICU' selected>ICU</option>
+                                    <?php else : ?>
                                     <option value="" disabled selected>Please Select</option>
-                                    <?php if (in_array("ICU", $target)) : ?>
+                                    <?php if (in_array("ICU", $target, true)) : ?>
                                         <option value='Accounting Unit'>Accounting Unit</option>
                                         <option value='Accountant III' class="processed">Chief Accountant</option>
                                     <?php elseif (in_array("Planning Section", $target)) : ?>
@@ -435,6 +442,7 @@ if ($showCashierArchiveCol) {
                                         <option value='Accounting Unit'>Accounting Unit</option>
                                         <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
                                         <option value='Cashiers Unit'>Cashiers Unit</option>
+                                    <?php endif ?>
                                     <?php endif ?>
                                 </select>
                             </div>
@@ -661,7 +669,7 @@ if ($showCashierArchiveCol) {
                         <?php endif; ?>
                         <th>History</th>
                         <?php if ($showCashierArchiveCol) : ?>
-                            <th id="forward_header">Archive</th>
+                            <th id="forward_header">Pay</th>
                         <?php endif; ?>
                     </tr>
                 </thead>
@@ -775,7 +783,7 @@ if ($showCashierArchiveCol) {
                                     }
                                 }
                                 if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
-                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>';
+                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-pay" type="button">Pay</button>';
                                 }
                             } elseif ($roleCashiers || $roleBudget || $rolePlanning || $roleOfficePenro) {
                                 if (!$roleCashiers && (!$roleBudgetOfficer || !$roleCashier)) {
@@ -809,7 +817,7 @@ if ($showCashierArchiveCol) {
                                     $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
                                 }
                                 if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
-                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-archive" type="button">Archive</button>';
+                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-pay" type="button">Pay</button>';
                                 }
                             } elseif (!$roleCashiers) {
                                 $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
@@ -828,7 +836,7 @@ if ($showCashierArchiveCol) {
                                 <button class="btn tertiary" name="btn-history" type="button">View</button>
                             </td>
                             <?php if ($showCashierArchiveCol) : ?>
-                                <td data-label="archive"><?php echo $archiveHtml; ?></td>
+                                <td data-label="pay"><?php echo $archiveHtml; ?></td>
                             <?php endif; ?>
                             <td data-label="amount_original" class="hidden"><?php echo $row['amount']; ?></td>
                             <td data-label="combined_remarks" class="hidden"><?php echo $row['remarks']; ?></td>
@@ -1055,8 +1063,9 @@ if ($showCashierArchiveCol) {
 <script>
     const selectElements2 = document.querySelectorAll(".form-custom-input"); // Get all form elements
     const target2 = "<?php echo $_SESSION['logged_user_designation']; ?>";
+    const isLiaisonOfficer = <?php echo $isLiaisonOfficer ? 'true' : 'false'; ?>;
 
-    const targetArray2 = target2.split(','); // Convert to an array
+    const targetArray2 = target2.split(',').map(function(item) { return item.trim(); }).filter(Boolean);
 
     selectElements2.forEach(selectElement => {
         if (selectElement.options && selectElement.options.length) {
@@ -1421,7 +1430,13 @@ if ($showCashierArchiveCol) {
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_receiving_module/voucher_receiving_handler.php');
                 document.querySelector(".btn-dynamic").textContent = "Forward";
                 document.getElementById("form_title").textContent = "Forward Voucher";
-                document.getElementById("document_to").required = true;
+                var docToForward = document.getElementById("document_to");
+                if (docToForward) {
+                    docToForward.required = true;
+                    if (isLiaisonOfficer) {
+                        docToForward.value = 'ICU';
+                    }
+                }
                 document.querySelector(".btn-dynamic").setAttribute("name", "forward_voucher");
                 document.querySelector(".btn-dynamic").classList.remove("warning");
                 document.querySelector(".btn-dynamic").classList.remove("success");
@@ -1470,11 +1485,11 @@ if ($showCashierArchiveCol) {
                 });
             }
 
-            if (name === "btn-archive") {
+            if (name === "btn-pay") {
 
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_archiving_module/voucher_archiving_handler.php');
-                document.querySelector(".btn-dynamic").textContent = "Archive";
-                document.getElementById("form_title").textContent = "Archive Voucher";
+                document.querySelector(".btn-dynamic").textContent = "Pay";
+                document.getElementById("form_title").textContent = "Pay Voucher";
                 document.getElementById("document_to").required = false;
                 var docToEl = document.getElementById("document_to");
                 if (docToEl) {
@@ -1589,7 +1604,7 @@ if ($showCashierArchiveCol) {
 
 <!-- History / Remarks Modal -->
 <style>
-    /* Process Document: root-level second stack above Archive Voucher (#popupForm z-index 9999) */
+    /* Process Document: root-level second stack above Pay Voucher (#popupForm z-index 9999) */
     .overlay.overlay-archive-process {
         display: none;
         position: fixed;

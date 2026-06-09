@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_archiving.model.inc.php';
     require_once 'voucher_archiving.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     /** @var PDO $pdo */
 
@@ -66,11 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $forwarded_by  = $_SESSION['logged_user_emp_name']; // FORWARDED BY -> CURRENT LOGGED USER
 
-        if (isset($_SESSION['logged_user_office'])) {
-            $office_to = $_SESSION['logged_user_office'];
-        } else {
-            $office_to = '';
-        }
+        $office_to = voucher_logged_user_office();
 
         $receiver_udc = "";
 
@@ -80,10 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // MULTIPLE FILE UPLOAD SUPPORTED 27/04/2024
             try {
                 if (isset($_REQUEST['archive_voucher'])) {
-                    $query2 = "SELECT * FROM designation_limit";
-                    $statement2 = $pdo->prepare($query2);
-                    $statement2->execute();
-
+                    $logged_user_office = voucher_logged_user_office();
                     $forwarded_to =  "Budget Unit";
                     $action = "Archived by: " . $_SESSION['logged_user_emp_name'];
 
@@ -103,17 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
-                    if ($_SESSION['logged_user_office'] === "DENR-PENRO EASTERN SAMAR") {
-                        while ($row2 = $statement2->fetch(PDO::FETCH_ASSOC)) {
-                            if ($row2['designation'] === $forwarded_to) {
-                                if (!empty($row2['designated_udc'])) {
-                                    $forwarded_to = $forwarded_to;
-                                    $receiver_udc = $row2['designated_udc'];
-                                } else {
-                                    $temp_dump['unassigned_udc'] = "No user is assigned to accept";
-                                }
-                            }
-                        }
+                    $resolved = voucher_resolve_receiver_for_designation_at_office(
+                        $pdo,
+                        $forwarded_to,
+                        $logged_user_office
+                    );
+                    $receiver_udc = $resolved['receiver_udc'];
+                    if ($resolved['temp_errors']) {
+                        $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                     }
 
                     date_default_timezone_set('Asia/Singapore'); // Set timezone to GMT+8
