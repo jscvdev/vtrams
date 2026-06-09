@@ -19,6 +19,7 @@ try {
 
     $action = "Processed by: " . $_SESSION['logged_user_emp_name'];
     $action_by  = $_SESSION['logged_user_emp_name'];
+    $action_from = trim((string) ($_SESSION['logged_user_section'] ?? ''));
 
     $remarks = "Payment Processed";
 
@@ -53,11 +54,11 @@ try {
     $delstmt = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
     $logstmt = $pdo->prepare('INSERT INTO voucher_action_logs (
         processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, amount, voucher_type, voucher_date,
-        action, action_by, datetime_action, office_from, office_to, encoded_by, remarks
+        action, action_by, action_from, datetime_action, office_from, office_to, encoded_by, remarks
     ) 
         VALUES (
         :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :amount, :voucher_type, :voucher_date,
-        :action, :action_by, :datetime_action, :office_from, :office_to, :encoded_by, :remarks)');
+        :action, :action_by, :action_from, :datetime_action, :office_from, :office_to, :encoded_by, :remarks)');
     $updatestmt = $pdo->prepare('UPDATE voucher_tracking SET ada_check_no = :ada_check_no, voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, status = :status, total_processing_time = :total_processing_time WHERE processing_no = :processing_no');
 
 
@@ -201,6 +202,7 @@ try {
                 ':voucher_date' => $row['voucher_date'] ?? null,
                 ':action' => $action ?? null,
                 ':action_by' => $action_by ?? null,
+                ':action_from' => $action_from ?? null,
                 ':datetime_action' => $currTime ?? null,
                 ':office_to' => $row['office_to'] ?? null,
                 ':office_from' => $row['office_from'] ?? null,
