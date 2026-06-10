@@ -71,16 +71,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($scope === 'ada' && $action === 'add') {
                     $value = normalize_opt_value((string)($_POST['option_value'] ?? ''));
                     $sort = (int)($_POST['sort_order'] ?? 0);
+                    $isDefault = isset($_POST['is_default']) ? 1 : 0;
                     if ($value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Value is required.'];
                     } else {
                         $pdo->beginTransaction();
-                        $stmt = $pdo->prepare("INSERT INTO ada_signatory_options (option_type, office, option_value, sort_order, is_active) VALUES (:t, :office, :v, 0, 1)");
-                        $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value]);
-                        sort_order_place_at_position($pdo, 'ada_signatory_options', (int) $pdo->lastInsertId(), $sort, [
+                        $stmt = $pdo->prepare("
+                            INSERT INTO ada_signatory_options (option_type, office, option_value, sort_order, is_active, is_default)
+                            VALUES (:t, :office, :v, 0, 1, :d)
+                        ");
+                        $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value, ':d' => $isDefault]);
+                        $newId = (int) $pdo->lastInsertId();
+                        sort_order_place_at_position($pdo, 'ada_signatory_options', $newId, $sort, [
                             'option_type' => $type,
                             'office' => $formOffice,
                         ]);
+                        if ($isDefault === 1) {
+                            utilities_ada_signatory_set_default($pdo, $newId, $type, $formOffice);
+                        }
                         $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Added successfully.'];
                     }
@@ -89,8 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $value = normalize_opt_value((string)($_POST['option_value'] ?? ''));
                     $sort = (int)($_POST['sort_order'] ?? 0);
                     $active = isset($_POST['is_active']) ? 1 : 0;
+                    $isDefault = isset($_POST['is_default']) ? 1 : 0;
                     if ($id <= 0 || $value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                    } elseif ($active === 0 && $isDefault === 1) {
+                        $flash = ['type' => 'error', 'msg' => 'The default option must stay active.'];
                     } else {
                         $pdo->beginTransaction();
                         sort_order_handle_update($pdo, 'ada_signatory_options', $id, $sort, [
@@ -99,10 +110,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ]);
                         $stmt = $pdo->prepare("
                             UPDATE ada_signatory_options
-                            SET option_value = :v, sort_order = :s, is_active = :a
+                            SET option_value = :v, sort_order = :s, is_active = :a, is_default = :d
                             WHERE id = :id AND option_type = :t AND office = :office
                         ");
-                        $stmt->execute([':v' => $value, ':s' => $sort, ':a' => $active, ':id' => $id, ':t' => $type, ':office' => $formOffice]);
+                        $stmt->execute([':v' => $value, ':s' => $sort, ':a' => $active, ':d' => $isDefault, ':id' => $id, ':t' => $type, ':office' => $formOffice]);
+                        if ($isDefault === 1) {
+                            utilities_ada_signatory_set_default($pdo, $id, $type, $formOffice);
+                        }
                         $pdo->commit();
                         $flash = ['type' => 'success', 'msg' => 'Updated successfully.'];
                     }
@@ -111,9 +125,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($id <= 0) {
                         $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
                     } else {
-                        $stmt = $pdo->prepare("DELETE FROM ada_signatory_options WHERE id = :id AND option_type = :t AND office = :office");
-                        $stmt->execute([':id' => $id, ':t' => $type, ':office' => $formOffice]);
-                        $flash = ['type' => 'success', 'msg' => 'Deleted successfully.'];
+                        $check = $pdo->prepare('SELECT is_default FROM ada_signatory_options WHERE id = :id AND option_type = :t AND office = :office LIMIT 1');
+                        $check->execute([':id' => $id, ':t' => $type, ':office' => $formOffice]);
+                        $row = $check->fetch(PDO::FETCH_ASSOC);
+                        if (!$row) {
+                            $flash = ['type' => 'error', 'msg' => 'Option not found.'];
+                        } elseif ((int)($row['is_default'] ?? 0) === 1) {
+                            $flash = ['type' => 'error', 'msg' => 'Cannot delete the default option. Set another option as default first.'];
+                        } else {
+                            $stmt = $pdo->prepare("DELETE FROM ada_signatory_options WHERE id = :id AND option_type = :t AND office = :office");
+                            $stmt->execute([':id' => $id, ':t' => $type, ':office' => $formOffice]);
+                            $flash = ['type' => 'success', 'msg' => 'Deleted successfully.'];
+                        }
                     }
                 } elseif ($scope === 'emp_tag' && $action === 'emp_tag_add') {
                     $value = utilities_emp_tag_normalize_value((string)($_POST['tag_value'] ?? ''));
@@ -299,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function fetch_opts(PDO $pdo, string $type, string $office): array
 {
     $stmt = $pdo->prepare("
-        SELECT id, option_type, option_value, is_active, sort_order
+        SELECT id, option_type, option_value, is_active, is_default, sort_order
         FROM ada_signatory_options
         WHERE option_type = :t
           AND office = :office
@@ -312,6 +335,7 @@ function fetch_opts(PDO $pdo, string $type, string $office): array
 $opts_certified = fetch_opts($pdo, ADA_OPT_CERTIFIED, $selected_office);
 $opts_approved = fetch_opts($pdo, ADA_OPT_APPROVED, $selected_office);
 $opts_signatory = fetch_opts($pdo, ADA_OPT_SIGNATORY, $selected_office);
+$ada_option_defaults = utilities_fetch_ada_option_defaults($pdo, $selected_office);
 
 // DV signatories (single row per key)
 $dv_keys = [
@@ -908,6 +932,78 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
         width: min(240px, 100%);
     }
 
+    .util-ada-add {
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    .util-ada-add .field {
+        min-width: 0;
+    }
+
+    .util-ada-add .field:first-child {
+        flex: 1;
+    }
+
+    .util-ada-add .util-ada-sort-field {
+        flex: 0 0 64px;
+        max-width: 64px;
+    }
+
+    .util-ada-add .chk {
+        flex-shrink: 0;
+        white-space: nowrap;
+        margin-bottom: 0;
+        align-self: flex-end;
+        padding-bottom: 0.4rem;
+    }
+
+    .util-ada-table .util-ada-value {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .util-ada-table .util-ada-sort {
+        width: 56px;
+        box-sizing: border-box;
+    }
+
+    .util-ada-table th,
+    .util-ada-table td {
+        padding: 0.5rem 0.375rem;
+        vertical-align: middle;
+    }
+
+    .utl-page .util-ada-table .util-ada-sort {
+        width: 56px;
+        max-width: 56px;
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+    }
+
+    .util-ada-table .util-ada-chk {
+        white-space: nowrap;
+        font-size: 0.75rem;
+        margin: 0;
+    }
+
+    .util-ada-table .util-row-actions {
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        gap: 0.375rem;
+    }
+
+    .util-ada-table .btn.success,
+    .util-ada-table .btn.danger {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.6875rem;
+    }
+
+    .util-ada-update-form {
+        display: none;
+    }
+
     @media (max-width: 1050px) {
         .util-grid {
             grid-template-columns: 1fr;
@@ -973,6 +1069,7 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
             <?php endif; ?>
 
             <p class="util-section-title">Dropdown options for LDDAP-ADA process</p>
+            <p class="util-dv-desc">Mark one option per dropdown as default. Defaults are pre-selected when processing vouchers for this office.</p>
             <div class="util-grid">
                 <?php
                 $sections = [
@@ -981,13 +1078,19 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
                     ADA_OPT_SIGNATORY => $opts_signatory,
                 ];
                 foreach ($sections as $type => $rows):
+                    $sectionDefault = $ada_option_defaults[$type] ?? '';
                 ?>
                     <div class="util-card">
                         <div class="util-card__head">
-                            <h3><?= htmlspecialchars(ada_opt_label($type)) ?></h3>
+                            <h3>
+                                <?= htmlspecialchars(ada_opt_label($type)) ?>
+                                <?php if ($sectionDefault !== ''): ?>
+                                    <span style="font-size:0.85rem; font-weight:500; color:var(--util-muted);">— Default: <?= htmlspecialchars($sectionDefault, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                            </h3>
                         </div>
                         <div class="util-card__body">
-                            <form method="post" class="util-add">
+                            <form method="post" class="util-add util-ada-add">
                                 <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                                 <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="action" value="add">
@@ -996,57 +1099,79 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
                                     <label>Value</label>
                                     <input class="form-custom-input" type="text" name="option_value" placeholder="e.g., JUAN D. DELA CRUZ" required>
                                 </div>
-                                <div class="field" style="max-width:110px;">
+                                <div class="field util-ada-sort-field">
                                     <label>Sort</label>
                                     <input class="form-custom-input" type="number" name="sort_order" value="0">
                                 </div>
+                                <label class="chk">
+                                    <input type="checkbox" name="is_default">
+                                    <span>Default</span>
+                                </label>
                                 <div class="field utl-add-btn-field">
                                     <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
                                     <button class="btn primary utl-btn-add" type="submit" title="Add entry" aria-label="Add entry">+</button>
                                 </div>
                             </form>
 
-                            <table class="util-table">
+                            <table class="util-table util-ada-table">
                                 <thead>
                                     <tr>
                                         <th>Value</th>
-                                        <th style="width:70px;">Sort</th>
-                                        <th style="width:90px;">Active</th>
-                                        <th style="width:110px; text-align:right;">Actions</th>
+                                        <th style="width:56px;">Sort</th>
+                                        <th style="width:58px;">Active</th>
+                                        <th style="width:62px;">Default</th>
+                                        <th style="width:96px; text-align:right;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (!$rows): ?>
                                         <tr>
-                                            <td colspan="4" class="util-empty">No entries yet. Add one above.</td>
+                                            <td colspan="5" class="util-empty">No entries yet. Add one above.</td>
                                         </tr>
                                     <?php endif; ?>
-                                    <?php foreach ($rows as $r): ?>
+                                    <?php foreach ($rows as $r):
+                                        $rowId = (int) $r['id'];
+                                        $updateFormId = 'ada-opt-update-' . preg_replace('/[^a-z0-9_-]/i', '-', $type) . '-' . $rowId;
+                                    ?>
                                         <tr>
-                                            <td colspan="4">
-                                                <div class="util-inline">
-                                                    <form method="post" class="util-inline" style="flex:1; min-width:0;">
-                                                        <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                                                        <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
-                                                        <input type="hidden" name="action" value="update">
-                                                        <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
-                                                        <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                                        <input class="form-custom-input" type="text" name="option_value" value="<?= htmlspecialchars($r['option_value']) ?>" required>
-                                                        <input class="form-custom-input" type="number" name="sort_order" value="<?= (int)$r['sort_order'] ?>">
-                                                        <label class="chk">
-                                                            <input type="checkbox" name="is_active" <?= ((int)$r['is_active'] === 1) ? 'checked' : '' ?>>
-                                                            <span>Active</span>
-                                                        </label>
-                                                        <button class="btn success" type="submit">Save</button>
-                                                    </form>
-                                                    <form method="post" onsubmit="return confirm('Delete this entry?');" class="util-row-actions">
+                                            <td>
+                                                <form method="post" id="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="util-ada-update-form">
+                                                    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                    <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <input type="hidden" name="action" value="update">
+                                                    <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
+                                                    <input type="hidden" name="id" value="<?= $rowId ?>">
+                                                </form>
+                                                <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-value" type="text" name="option_value" value="<?= htmlspecialchars($r['option_value']) ?>" required>
+                                            </td>
+                                            <td>
+                                                <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-sort" type="number" name="sort_order" value="<?= (int)$r['sort_order'] ?>">
+                                            </td>
+                                            <td>
+                                                <label class="chk util-ada-chk">
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" type="checkbox" name="is_active" <?= ((int)$r['is_active'] === 1) ? 'checked' : '' ?>>
+                                                    <span>Active</span>
+                                                </label>
+                                            </td>
+                                            <td>
+                                                <label class="chk util-ada-chk">
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" type="checkbox" name="is_default" <?= ((int)($r['is_default'] ?? 0) === 1) ? 'checked' : '' ?>>
+                                                    <span>Default</span>
+                                                </label>
+                                            </td>
+                                            <td>
+                                                <div class="util-row-actions">
+                                                    <button form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="btn success" type="submit">Save</button>
+                                                    <?php if ((int)($r['is_default'] ?? 0) !== 1): ?>
+                                                    <form method="post" onsubmit="return confirm('Delete this entry?');">
                                                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                                                         <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                                         <input type="hidden" name="action" value="delete">
                                                         <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
-                                                        <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                                        <input type="hidden" name="id" value="<?= $rowId ?>">
                                                         <button class="btn danger" type="submit">Delete</button>
                                                     </form>
+                                                    <?php endif; ?>
                                                 </div>
                                             </td>
                                         </tr>

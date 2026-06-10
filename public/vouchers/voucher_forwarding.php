@@ -142,13 +142,17 @@ $showTransmitCol = (
 );
 
 $ada_options = [];
+$ada_option_defaults = [];
 if ($showCashierArchiveCol) {
     try {
         require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
         utilities_signatory_ensure_schema($pdo);
-        $ada_options = utilities_fetch_ada_options($pdo, utilities_signatory_default_office());
+        $adaBundle = utilities_fetch_ada_signatory_bundle($pdo, utilities_signatory_default_office());
+        $ada_options = $adaBundle['options'];
+        $ada_option_defaults = $adaBundle['defaults'];
     } catch (Throwable $e) {
         $ada_options = [];
+        $ada_option_defaults = [];
     }
 }
 ?>
@@ -1911,6 +1915,32 @@ if ($showCashierArchiveCol) {
 <?php if ($showCashierArchiveCol) : ?>
     <script>
         (function() {
+            var fwdAdaSignatoryDefaults = <?= json_encode(
+                $ada_option_defaults,
+                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+            ) ?>;
+
+            function fwdApplyAdaSignatoryDefaults() {
+                var form = document.getElementById('myForm_ArchiveProcessing');
+                if (!form) return;
+
+                ['certified_correct', 'approved_by', 'agency_authorized_signatory'].forEach(function(name) {
+                    var select = form.querySelector('select[name="' + name + '"]');
+                    if (!select) return;
+
+                    var defaultValue = fwdAdaSignatoryDefaults[name] || '';
+                    var hasDefault = defaultValue !== '' && Array.from(select.options).some(function(option) {
+                        return option.value === defaultValue;
+                    });
+
+                    if (hasDefault) {
+                        select.value = defaultValue;
+                    } else {
+                        select.selectedIndex = 0;
+                    }
+                });
+            }
+
             function fwdCollectForwardingVoucherRow() {
                 var f = document.getElementById('myForm_Forwarding');
                 if (!f) return {};
@@ -2115,6 +2145,8 @@ if ($showCashierArchiveCol) {
             }
 
             function openArchiveProcessDocumentFromModal() {
+                fwdApplyAdaSignatoryDefaults();
+
                 var adaDate = document.getElementById('fwd_ada_date');
                 if (adaDate) {
                     adaDate.value = new Date().toISOString().split('T')[0];
@@ -2147,6 +2179,8 @@ if ($showCashierArchiveCol) {
                         openArchiveProcessDocumentFromModal();
                     });
                 }
+
+                fwdApplyAdaSignatoryDefaults();
 
                 var adaDate = document.getElementById('fwd_ada_date');
                 if (adaDate && !adaDate.value) {
@@ -2208,17 +2242,22 @@ if ($showCashierArchiveCol) {
                             <div class="label-input__container">
                                 <label for="">Certified Correct:</label>
                                 <select name="certified_correct" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['certified_correct'] ?? [];
+                                    $defaultVal = $ada_option_defaults['certified_correct'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                         <?php
                                     else :
                                         foreach ($list as $v) :
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -2228,17 +2267,22 @@ if ($showCashierArchiveCol) {
                             <div class="label-input__container">
                                 <label for="">Approved By:</label>
                                 <select name="approved_by" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['approved_by'] ?? [];
+                                    $defaultVal = $ada_option_defaults['approved_by'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                         <?php
                                     else :
                                         foreach ($list as $v) :
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -2248,17 +2292,22 @@ if ($showCashierArchiveCol) {
                             <div class="label-input__container">
                                 <label for="">Agency Authorized Signatory:</label>
                                 <select name="agency_authorized_signatory" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['agency_authorized_signatory'] ?? [];
+                                    $defaultVal = $ada_option_defaults['agency_authorized_signatory'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                         <?php
                                     else :
                                         foreach ($list as $v) :
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;

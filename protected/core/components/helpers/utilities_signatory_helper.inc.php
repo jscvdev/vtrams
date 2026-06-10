@@ -227,6 +227,7 @@ function utilities_signatory_ensure_schema(PDO $pdo): void
             office VARCHAR(255) NOT NULL DEFAULT '',
             option_value VARCHAR(255) NOT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
+            is_default TINYINT(1) NOT NULL DEFAULT 0,
             sort_order INT NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -252,6 +253,9 @@ function utilities_signatory_ensure_schema(PDO $pdo): void
 
     if (!utilities_table_has_column($pdo, 'ada_signatory_options', 'office')) {
         $pdo->exec("ALTER TABLE ada_signatory_options ADD COLUMN office VARCHAR(255) NOT NULL DEFAULT '' AFTER option_type");
+    }
+    if (!utilities_table_has_column($pdo, 'ada_signatory_options', 'is_default')) {
+        $pdo->exec("ALTER TABLE ada_signatory_options ADD COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active");
     }
     if (!utilities_table_has_column($pdo, 'voucher_signatories', 'office')) {
         $pdo->exec("ALTER TABLE voucher_signatories ADD COLUMN office VARCHAR(255) NOT NULL DEFAULT '' AFTER signatory_key");
@@ -304,6 +308,105 @@ function utilities_fetch_ada_options(PDO $pdo, string $office): array
     }
 
     return $options;
+}
+
+/** @return array<string, string> option_type => default option_value */
+function utilities_fetch_ada_option_defaults(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $stmt = $pdo->prepare("
+        SELECT option_type, option_value
+        FROM ada_signatory_options
+        WHERE is_active = 1
+          AND is_default = 1
+          AND office = :office
+          AND option_type IN ('certified_correct', 'approved_by', 'agency_authorized_signatory')
+        ORDER BY option_type ASC, sort_order ASC, id ASC
+    ");
+    $stmt->execute([':office' => $office]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $defaults = [];
+    foreach ($rows as $row) {
+        $type = (string) ($row['option_type'] ?? '');
+        $value = trim((string) ($row['option_value'] ?? ''));
+        if ($type !== '' && $value !== '' && !isset($defaults[$type])) {
+            $defaults[$type] = $value;
+        }
+    }
+
+    return $defaults;
+}
+
+/**
+ * Resolve ADA signatory options/defaults for an office, falling back to PENRO then legacy blank office.
+ *
+ * @return array{office: string, options: array<string, list<string>>, defaults: array<string, string>}
+ */
+function utilities_fetch_ada_signatory_bundle(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $candidates = [];
+
+    if ($office !== '') {
+        $candidates[] = $office;
+    }
+
+    $penro = utilities_signatory_penro_office();
+    $storedPenro = utilities_signatory_match_office_in_signatories($pdo, $penro) ?? $penro;
+    if ($storedPenro !== '' && !utilities_signatory_offices_match($storedPenro, $office)) {
+        $candidates[] = $storedPenro;
+    }
+
+    if (!in_array('', $candidates, true)) {
+        $candidates[] = '';
+    }
+
+    $unique = [];
+    foreach ($candidates as $candidate) {
+        $normalized = utilities_signatory_normalize_office((string) $candidate);
+        $exists = false;
+        foreach ($unique as $existing) {
+            if (utilities_signatory_offices_match($normalized, $existing)) {
+                $exists = true;
+                break;
+            }
+        }
+        if (!$exists) {
+            $unique[] = $normalized;
+        }
+    }
+
+    foreach ($unique as $candidateOffice) {
+        $options = utilities_fetch_ada_options($pdo, $candidateOffice);
+        if ($options !== []) {
+            return [
+                'office' => $candidateOffice,
+                'options' => $options,
+                'defaults' => utilities_fetch_ada_option_defaults($pdo, $candidateOffice),
+            ];
+        }
+    }
+
+    return [
+        'office' => $office,
+        'options' => [],
+        'defaults' => [],
+    ];
+}
+
+function utilities_ada_signatory_set_default(PDO $pdo, int $id, string $optionType, string $office): void
+{
+    $optionType = trim($optionType);
+    $office = utilities_signatory_normalize_office($office);
+    $stmt = $pdo->prepare("
+        UPDATE ada_signatory_options
+        SET is_default = 0
+        WHERE option_type = :t AND office = :office
+    ");
+    $stmt->execute([':t' => $optionType, ':office' => $office]);
+    $stmt = $pdo->prepare('UPDATE ada_signatory_options SET is_default = 1 WHERE id = :id');
+    $stmt->execute([':id' => $id]);
 }
 
 function utilities_fetch_dv_signatories(PDO $pdo, string $office): array

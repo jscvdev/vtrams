@@ -20,10 +20,13 @@ check_voucher_remove_errors();
 
 // Load LDDAP-ADA signatory dropdown options from Utilities table (no hardcoded fallback)
 $ada_options = [];
+$ada_option_defaults = [];
 try {
     require_once __DIR__ . '/../protected/core/components/helpers/utilities_signatory_helper.inc.php';
     utilities_signatory_ensure_schema($pdo);
-    $ada_options = utilities_fetch_ada_options($pdo, utilities_signatory_default_office());
+    $adaOffice = utilities_signatory_default_office();
+    $ada_options = utilities_fetch_ada_options($pdo, $adaOffice);
+    $ada_option_defaults = utilities_fetch_ada_option_defaults($pdo, $adaOffice);
 } catch (Throwable $e) {
     // Ignore and show empty dropdowns; options are managed in Utilities (System Admin).
 }
@@ -213,17 +216,22 @@ $target = explode(",", $_SESSION['logged_user_designation']);
                             <div class="label-input__container">
                                 <label for="">Certified Correct:</label>
                                 <select name="certified_correct" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['certified_correct'] ?? [];
+                                    $defaultVal = $ada_option_defaults['certified_correct'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                     <?php
                                     else :
                                         foreach ($list as $v):
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                     ?>
-                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -233,17 +241,22 @@ $target = explode(",", $_SESSION['logged_user_designation']);
                             <div class="label-input__container">
                                 <label for="">Approved By:</label>
                                 <select name="approved_by" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['approved_by'] ?? [];
+                                    $defaultVal = $ada_option_defaults['approved_by'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                     <?php
                                     else :
                                         foreach ($list as $v):
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                     ?>
-                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -253,17 +266,22 @@ $target = explode(",", $_SESSION['logged_user_designation']);
                             <div class="label-input__container">
                                 <label for="">Agency Authorized Signatory:</label>
                                 <select name="agency_authorized_signatory" class="form-custom-input" required>
-                                    <option value="" disabled selected>Please Select:</option>
                                     <?php
                                     $list = $ada_options['agency_authorized_signatory'] ?? [];
+                                    $defaultVal = $ada_option_defaults['agency_authorized_signatory'] ?? '';
+                                    $hasDefault = $defaultVal !== '' && in_array($defaultVal, $list, true);
+                                    ?>
+                                    <option value="" disabled <?= $hasDefault ? '' : 'selected' ?>>Please Select:</option>
+                                    <?php
                                     if (!$list) :
                                     ?>
                                         <option value="" disabled>(No options configured — ask System Admin)</option>
                                     <?php
                                     else :
                                         foreach ($list as $v):
+                                            $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                     ?>
-                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                        <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
