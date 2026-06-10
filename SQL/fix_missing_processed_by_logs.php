@@ -335,6 +335,13 @@ try {
         WHERE processing_no = :processing_no
     ");
 
+    $trackingCheck = $pdo->prepare("
+        SELECT process_history
+        FROM voucher_tracking
+        WHERE processing_no = :processing_no
+        LIMIT 1
+    ");
+
     foreach ($archives as $archive) {
         $processingNo = trim((string) ($archive['processing_no'] ?? ''));
         if ($processingNo === '') {
@@ -351,6 +358,7 @@ try {
 
         $finalHistoryLines = $historyLines;
         $historyChanged = false;
+        $insertedForVoucher = 0;
 
         foreach ($processedLines as $processedLine) {
             $actionBy = $processedLine['name'];
@@ -416,6 +424,7 @@ try {
             }
 
             $insertedLogs++;
+            $insertedForVoucher++;
         }
 
         $targetHistory = $historyChanged
@@ -426,12 +435,6 @@ try {
             continue;
         }
 
-        $trackingCheck = $pdo->prepare("
-            SELECT process_history
-            FROM voucher_tracking
-            WHERE processing_no = :processing_no
-            LIMIT 1
-        ");
         $trackingCheck->bindValue(':processing_no', $processingNo, PDO::PARAM_STR);
         $trackingCheck->execute();
         $currentTrackingHistory = $trackingCheck->fetchColumn();
@@ -440,16 +443,16 @@ try {
             continue;
         }
 
-        $needsTrackingUpdate = trim((string) $currentTrackingHistory) !== $targetHistory
+        $current = trim((string) $currentTrackingHistory);
+        $needsTrackingUpdate = $current !== $targetHistory
             && (
-                stripos((string) $currentTrackingHistory, 'Processed By') === false
+                $insertedForVoucher > 0
                 || $historyChanged
-                || $insertedLogs > 0
+                || (
+                    stripos($targetHistory, 'Processed By') !== false
+                    && stripos($current, 'Processed By') === false
+                )
             );
-
-        if (!$needsTrackingUpdate && stripos($targetHistory, 'Processed By') !== false) {
-            $needsTrackingUpdate = stripos((string) $currentTrackingHistory, 'Processed By') === false;
-        }
 
         if ($needsTrackingUpdate) {
             out("  {$processingNo}: sync process_history on voucher_tracking");
