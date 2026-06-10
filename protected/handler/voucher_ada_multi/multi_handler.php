@@ -131,6 +131,17 @@ try {
                 :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history
             )');
             $delstmt = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
+            $trackingStmt = $pdo->prepare(
+                'UPDATE voucher_tracking SET
+                    ada_check_no = :ada_check_no,
+                    ada_check_date = :ada_check_date,
+                    voucher_status = :voucher_status,
+                    status = :status,
+                    datetime_status = :datetime_status,
+                    remarks = :remarks,
+                    total_processing_time = :total_processing_time
+                 WHERE processing_no = :processing_no'
+            );
 
             foreach ($tableData as $row) {
                 if (isset($row['amount'])) {
@@ -147,6 +158,7 @@ try {
 
                 $process_history = normalize_process_history($row['process_history'] ?? null);
                 $ada_check_no = $row['ada_check_no'] ?? ($row['check_no'] ?? ($row['ada_no'] ?? null));
+                $ada_check_date = trim((string) ($row['ada_check_date'] ?? ''));
                 $office_from = trim((string) ($row['office_from'] ?? ''));
 
                 $stmt->execute([
@@ -164,7 +176,7 @@ try {
                     ':approved_by' => $row['approved_by'] ?? null,
                     ':agency_authorized_signatory' => $row['agency_authorized_signatory'] ?? null,
                     ':voucher_date' => $row['voucher_date'] ?? null,
-                    ':ada_check_date' => $row['ada_check_date'] ?? null,
+                    ':ada_check_date' => $ada_check_date !== '' ? $ada_check_date : null,
                     ':office_to' => $row['office_to'] ?? null,
                     ':office_from' => $row['office_from'] ?? null,
                     ':encoded_by' => $row['encoded_by'] ?? null,
@@ -175,6 +187,24 @@ try {
                     ':action_by' => $action_by,
                     ':process_history' => $process_history,
                 ]);
+
+                $turnaround_time = calculateTurnaroundTime_Archiving(
+                    (string) ($row['datetime_encoded'] ?? ''),
+                    $currTime
+                );
+                $trackingStmt->execute([
+                    ':ada_check_no' => trim((string) ($ada_check_no ?? '')),
+                    ':ada_check_date' => $ada_check_date,
+                    ':voucher_status' => $action,
+                    ':status' => 'Paid',
+                    ':datetime_status' => $currTime,
+                    ':remarks' => $remarks,
+                    ':total_processing_time' => $turnaround_time,
+                    ':processing_no' => $processingNo,
+                ]);
+                if ($trackingStmt->rowCount() === 0) {
+                    throw new RuntimeException("voucher_tracking update failed for processing_no={$processingNo}");
+                }
 
                 voucher_log_user_action(
                     $pdo,
@@ -197,21 +227,6 @@ try {
                     (string) ($row['office_to'] ?? ''),
                     (string) ($row['encoded_by'] ?? ''),
                     (string) ($row['remarks'] ?? '')
-                );
-
-                $turnaround_time = calculateTurnaroundTime_Archiving(
-                    (string) ($row['datetime_encoded'] ?? ''),
-                    $currTime
-                );
-                update_archived_voucher(
-                    $pdo,
-                    $processingNo,
-                    $action,
-                    $currTime,
-                    $turnaround_time,
-                    (string) ($ada_check_no ?? ''),
-                    (string) ($row['ada_check_date'] ?? ''),
-                    $remarks
                 );
 
                 $delstmt->execute([':processing_no' => $processingNo]);
