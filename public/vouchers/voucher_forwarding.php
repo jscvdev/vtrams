@@ -1608,7 +1608,7 @@ if ($showCashierArchiveCol) {
 
 <!-- History / Remarks Modal -->
 <style>
-    /* Process Document: root-level second stack above Pay Voucher (#popupForm z-index 9999) */
+    /* Process Voucher: root-level second stack above Pay Voucher (#popupForm z-index 9999) */
     .overlay.overlay-archive-process {
         display: none;
         position: fixed;
@@ -1920,6 +1920,13 @@ if ($showCashierArchiveCol) {
                 JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
             ) ?>;
 
+            function fwdSyncPayVoucherAdaCheckNo() {
+                var payAdaCheckNo = document.getElementById('ada_check_no');
+                var processAdaCheckNo = document.getElementById('fwd_ada_check_no');
+                if (!payAdaCheckNo || !processAdaCheckNo) return;
+                processAdaCheckNo.value = String(payAdaCheckNo.value || '').trim();
+            }
+
             function fwdApplyAdaSignatoryDefaults() {
                 var form = document.getElementById('myForm_ArchiveProcessing');
                 if (!form) return;
@@ -2145,6 +2152,7 @@ if ($showCashierArchiveCol) {
             }
 
             function openArchiveProcessDocumentFromModal() {
+                fwdSyncPayVoucherAdaCheckNo();
                 fwdApplyAdaSignatoryDefaults();
 
                 var adaDate = document.getElementById('fwd_ada_date');
@@ -2227,12 +2235,12 @@ if ($showCashierArchiveCol) {
             });
         })();
     </script>
-    <!-- Process Document: end-of-body so it is not inside #main / #popupForm; second layer uses #overlayArchiveProcess + higher z-index -->
+    <!-- Process Voucher: end-of-body so it is not inside #main / #popupForm; second layer uses #overlayArchiveProcess + higher z-index -->
     <div class="overlay overlay-archive-process" id="overlayArchiveProcess" style="display: none;" aria-hidden="true"></div>
     <div class="popup-form fwd-process-document-modal" id="archiveAdaForm" style="display: none;">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
-                <p id="archive_process_form_title">Process Document</p>
+                <p id="archive_process_form_title">Process Voucher</p>
                 <i class="ri-close-fill close-icon" id="close_archive_ada_header" role="button" tabindex="0" aria-label="Close"></i>
             </div>
             <form class="f-container fwdArchiveTargetForm" id="myForm_ArchiveProcessing" action="#" method="post" onsubmit="return false;">
