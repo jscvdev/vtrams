@@ -216,21 +216,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // DATABASE STATEMENTS VIA MODE/CTRL
-                        if (check_if_voucher_forwarded_exists($pdo, $processing_no)) {
-                            voucher_forward_pending($pdo, $processing_no);
-                            
-                            // Get confirmed checklist JSON from POST (store raw JSON)
-                            $coa_options = isset($_POST['selected_coa_options_forward']) ? trim((string)$_POST['selected_coa_options_forward']) : null;
-                            // COA picker was removed; keep DB columns populated for compatibility
-                            $coa_category = isset($_POST['coa_category_forward']) && trim((string)$_POST['coa_category_forward']) !== ''
-                                ? trim((string)$_POST['coa_category_forward'])
-                                : $voucher_type;
-                            $coa_subsection = isset($_POST['coa_subsection_forward']) && trim((string)$_POST['coa_subsection_forward']) !== ''
-                                ? trim((string)$_POST['coa_subsection_forward'])
-                                : $voucher_type;
-                            
-                            voucher_move_to_incoming(
+                        if (!check_if_voucher_forwarded_exists($pdo, $processing_no)) {
+                            handler_emit_notify('Voucher not found for forwarding.', 'error', 5000);
+                            echo "<script>process_functionAlert('Forward failed!', '$redirect_code')</script>";
+                            $_SESSION['token'] = generateToken();
+                            die();
+                        }
+
+                        // Get confirmed checklist JSON from POST (store raw JSON)
+                        $coa_options = isset($_POST['selected_coa_options_forward']) ? trim((string)$_POST['selected_coa_options_forward']) : null;
+                        $coa_category = isset($_POST['coa_category_forward']) && trim((string)$_POST['coa_category_forward']) !== ''
+                            ? trim((string)$_POST['coa_category_forward'])
+                            : $voucher_type;
+                        $coa_subsection = isset($_POST['coa_subsection_forward']) && trim((string)$_POST['coa_subsection_forward']) !== ''
+                            ? trim((string)$_POST['coa_subsection_forward'])
+                            : $voucher_type;
+
+                        handler_execute_writes(
+                            $pdo,
+                            function (PDO $pdo) use (
+                                $processing_no,
+                                $ors_no,
+                                $ada_check_no,
+                                $dv_no,
+                                $payee,
+                                $address,
+                                $particulars,
+                                $tin_employee_no,
+                                $amount,
+                                $voucher_type,
+                                $voucher_date,
+                                $datetime_action,
+                                $sender_udc,
+                                $receiver_udc,
+                                $office_from,
+                                $office_to,
+                                $encoded_by,
+                                $encoded_from,
+                                $datetime_encoded,
+                                $forwarded_by,
+                                $process_status,
+                                $combined_remarks,
+                                $coa_options,
+                                $coa_category,
+                                $coa_subsection,
+                                $action,
+                                $action_by,
+                                $action_from,
+                                $remarks
+                            ) {
+                                voucher_forward_pending($pdo, $processing_no);
+
+                                voucher_move_to_incoming(
                                 $pdo,
                                 $processing_no,
                                 $ors_no,
@@ -289,42 +326,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // active_status=yes: included in dashboard and voucher status (returned also included via <> no)
                             update_returned_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $combined_remarks);
                             voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
-                            voucher_log_user_action(
-                                $pdo,
+                                voucher_log_user_action(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $voucher_type,
+                                    $voucher_date,
+                                    $action,
+                                    $action_by,
+                                    $action_from,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $remarks
+                                );
+
+                                return true;
+                            },
+                            'Forward success!',
+                            'Forward failed!',
+                            $redirect_code,
+                            function () use (
                                 $processing_no,
-                                $ors_no,
-                                $ada_check_no,
                                 $dv_no,
                                 $payee,
-                                $address,
-                                $particulars,
-                                $tin_employee_no,
-                                $amount,
-                                $voucher_type,
-                                $voucher_date,
-                                $action,
-                                $action_by,
-                                $action_from,
-                                $datetime_action,
                                 $office_from,
                                 $office_to,
-                                $encoded_by,
-                                $remarks
-                            );
-                            // Log to audit_logs
-                            $destination = !empty($forwarded_to) ? $forwarded_to : (!empty($target_to) ? $target_to : $office_to);
-                            AuditHelper::logActivity('forwarding', "Forwarded voucher: {$processing_no} to {$destination}", [
-                                'processing_no' => $processing_no,
-                                'dv_no' => $dv_no,
-                                'payee' => $payee,
-                                'office_from' => $office_from,
-                                'office_to' => $office_to,
-                                'document_to' => $destination
-                            ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
-                            echo "<script>process_functionAlert('Forward success!', '$redirect_code')</script>";
-                            $_SESSION['token'] = generateToken();
-                            die();
-                        }
+                                $forwarded_to,
+                                $target_to
+                            ) {
+                                $destination = !empty($forwarded_to) ? $forwarded_to : (!empty($target_to) ? $target_to : $office_to);
+                                AuditHelper::logActivity('forwarding', "Forwarded voucher: {$processing_no} to {$destination}", [
+                                    'processing_no' => $processing_no,
+                                    'dv_no' => $dv_no,
+                                    'payee' => $payee,
+                                    'office_from' => $office_from,
+                                    'office_to' => $office_to,
+                                    'document_to' => $destination
+                                ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+                            }
+                        );
                     }
                 } else {
                     // Determine redirect code

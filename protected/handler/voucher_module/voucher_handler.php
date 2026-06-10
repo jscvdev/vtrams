@@ -123,51 +123,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // DATABASE STATEMENTS VIA MODE/CTRL
-                        insert_voucher_no($pdo, $processing_no);
-                        move_to_pending_voucher_no($pdo, $processing_no, $dv_no, $ada_check_no, $payee, $address, $tin_employee_no, $voucher_date, $amount, $voucher_type, $particulars, $datetime_action, $action_from, $encoded_by, $ors_no, $office_from);
-                        // COA options are NULL when creating voucher (only added when forwarding)
-                        voucher_document_tracking_logging($pdo, $processing_no, $ors_no, $ada_check_no, $dv_no, $payee, $address, $particulars, $amount, $voucher_type, $voucher_date, $datetime_action, $action, $datetime_action, $encoded_by, $office_to, $office_from, $combined_remarks, null, null, null);
-                        voucher_log_user_action(
+                        handler_execute_writes(
                             $pdo,
-                            $processing_no,
-                            $ors_no,
-                            $ada_check_no,
-                            $dv_no,
-                            $payee,
-                            $address,
-                            $particulars,
-                            $tin_employee_no,
-                            $amount,
-                            $voucher_type,
-                            $voucher_date,
-                            $action,
-                            $action_by,
-                            $action_from,
-                            $datetime_action,
-                            $office_from,
-                            $office_to,
-                            $encoded_by,
-                            $remarks
-                        );
-                        // Log to audit_logs
-                        try {
-                            $logResult = AuditHelper::logActivity('encoding', "Encoded voucher: {$processing_no}", [
-                                'processing_no' => $processing_no,
-                                'dv_no' => $dv_no,
-                                'payee' => $payee,
-                                'amount' => $amount,
-                                'voucher_type' => $voucher_type
-                            ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
-                            if (!$logResult) {
-                                error_log("Failed to log encoding activity for processing_no: {$processing_no}");
+                            function (PDO $pdo) use (
+                                $processing_no,
+                                $dv_no,
+                                $ada_check_no,
+                                $payee,
+                                $address,
+                                $tin_employee_no,
+                                $voucher_date,
+                                $amount,
+                                $voucher_type,
+                                $particulars,
+                                $datetime_action,
+                                $action_from,
+                                $encoded_by,
+                                $ors_no,
+                                $office_from,
+                                $office_to,
+                                $combined_remarks,
+                                $action,
+                                $action_by,
+                                $remarks
+                            ) {
+                                insert_voucher_no($pdo, $processing_no);
+                                move_to_pending_voucher_no($pdo, $processing_no, $dv_no, $ada_check_no, $payee, $address, $tin_employee_no, $voucher_date, $amount, $voucher_type, $particulars, $datetime_action, $action_from, $encoded_by, $ors_no, $office_from);
+                                voucher_document_tracking_logging($pdo, $processing_no, $ors_no, $ada_check_no, $dv_no, $payee, $address, $particulars, $amount, $voucher_type, $voucher_date, $datetime_action, $action, $datetime_action, $encoded_by, $office_to, $office_from, $combined_remarks, null, null, null);
+                                voucher_log_user_action(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $voucher_type,
+                                    $voucher_date,
+                                    $action,
+                                    $action_by,
+                                    $action_from,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $remarks
+                                );
+
+                                if (!check_if_voucher_exists($pdo, $processing_no)) {
+                                    throw new RuntimeException("Encode verification failed for processing_no={$processing_no}");
+                                }
+
+                                return true;
+                            },
+                            'Encode success!',
+                            'Encode failed!',
+                            $redirect_code,
+                            function () use ($processing_no, $dv_no, $payee, $amount, $voucher_type) {
+                                try {
+                                    $logResult = AuditHelper::logActivity('encoding', "Encoded voucher: {$processing_no}", [
+                                        'processing_no' => $processing_no,
+                                        'dv_no' => $dv_no,
+                                        'payee' => $payee,
+                                        'amount' => $amount,
+                                        'voucher_type' => $voucher_type
+                                    ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+                                    if (!$logResult) {
+                                        error_log("Failed to log encoding activity for processing_no: {$processing_no}");
+                                    }
+                                } catch (Exception $e) {
+                                    error_log('Audit logging exception for encoding: ' . $e->getMessage());
+                                }
                             }
-                        } catch (Exception $e) {
-                            error_log("Audit logging exception for encoding: " . $e->getMessage());
-                        }
-                        echo "<script>process_functionAlert('Encode success!', '$redirect_code')</script>";
-                        $_SESSION['token'] = generateToken();
-                        die();
+                        );
                     }
                 } else {
                     // Determine redirect code

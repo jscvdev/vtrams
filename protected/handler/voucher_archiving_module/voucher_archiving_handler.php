@@ -195,12 +195,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // DATABASE STATEMENTS VIA MODE/CTRL
-                        // Only remove from `voucher_receiving` when the archive save is confirmed successful.
-                        $pdo->beginTransaction();
-                        try {
-                            voucher_archive_data(
-                                $pdo,
+                        handler_execute_writes(
+                            $pdo,
+                            function (PDO $pdo) use (
                                 $processing_no,
                                 $ors_no,
                                 $ada_check_no,
@@ -218,66 +215,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $office_from,
                                 $office_to,
                                 $encoded_by,
-                                $receiver_udc
-                            );
-
-                            update_forwarded_archived_voucher(
-                                $pdo,
-                                $processing_no,
-                                $action,
-                                $datetime_action,
-                                $totalProcessingTime
-                            );
-
-                            voucher_log_user_action(
-                                $pdo,
-                                $processing_no,
-                                $ors_no,
-                                $ada_check_no,
-                                $dv_no,
-                                $payee,
-                                $address,
-                                $particulars,
-                                $tin_employee_no,
-                                $amount,
-                                $priority,
-                                $voucher_date,
-                                $action,
-                                $action_by,
+                                $receiver_udc,
+                                $totalProcessingTime,
                                 $archived_by_from,
-                                $datetime_action,
-                                $office_from,
-                                $office_to,
-                                $encoded_by,
                                 $remarks
-                            );
+                            ) {
+                                voucher_archive_data(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $tin_employee_no,
+                                    $particulars,
+                                    $amount,
+                                    $voucher_date,
+                                    $priority,
+                                    $action,
+                                    $action_by,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $receiver_udc
+                                );
 
-                            $saveOk = check_if_voucher_archived_exists($pdo, $processing_no);
-                            if (!$saveOk) {
-                                throw new RuntimeException("Archive save failed for processing_no={$processing_no}");
-                            }
+                                update_forwarded_archived_voucher(
+                                    $pdo,
+                                    $processing_no,
+                                    $action,
+                                    $datetime_action,
+                                    $totalProcessingTime
+                                );
 
-                            remove_from_voucher_receiving($pdo, $processing_no);
+                                voucher_log_user_action(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $priority,
+                                    $voucher_date,
+                                    $action,
+                                    $action_by,
+                                    $archived_by_from,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $remarks
+                                );
 
-                            // Verify it was actually removed before committing.
-                            $checkStmt = $pdo->prepare('SELECT COUNT(*) FROM voucher_receiving WHERE processing_no = :processing_no');
-                            $checkStmt->bindParam(':processing_no', $processing_no);
-                            $checkStmt->execute();
-                            $stillExists = (int)$checkStmt->fetchColumn();
-                            if ($stillExists > 0) {
-                                throw new RuntimeException("voucher_receiving still exists for processing_no={$processing_no}");
-                            }
+                                if (!check_if_voucher_archived_exists($pdo, $processing_no)) {
+                                    throw new RuntimeException("Archive save failed for processing_no={$processing_no}");
+                                }
 
-                            $pdo->commit();
-                            echo "<script>process_functionAlert('Archive success!', 'voucher_archive_redirect')</script>";
-                            $_SESSION['token'] = generateToken();
-                            die();
-                        } catch (Throwable $e) {
-                            $pdo->rollBack();
-                            echo "<script>process_functionAlert('Archive Error!', 'voucher_archive_redirect')</script>";
-                            $_SESSION['token'] = generateToken();
-                            die();
-                        }
+                                remove_from_voucher_receiving($pdo, $processing_no);
+
+                                $checkStmt = $pdo->prepare('SELECT COUNT(*) FROM voucher_receiving WHERE processing_no = :processing_no');
+                                $checkStmt->bindParam(':processing_no', $processing_no);
+                                $checkStmt->execute();
+                                if ((int) $checkStmt->fetchColumn() > 0) {
+                                    throw new RuntimeException("voucher_receiving still exists for processing_no={$processing_no}");
+                                }
+
+                                return true;
+                            },
+                            'Archive success!',
+                            'Archive Error!',
+                            'voucher_archive_redirect'
+                        );
                     }
                 } else {
                     echo "<script>process_functionAlert('Archive Error: Wrong Module Used!', 'voucher_archive_redirect')</script>";

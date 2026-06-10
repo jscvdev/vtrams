@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../core/components/security/config_session.inc.php';
 require_once __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/redirects/redirect_config.inc.php';
 require_once __DIR__ . '/../../core/components/security/access_control.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
 
 if (!AccessControl::hasRole('System Admin')) {
     $_SESSION['designation_error'] = 'Access denied. System Administrator role required.';
@@ -31,18 +32,17 @@ if ($id <= 0 || $designation === '') {
     exit;
 }
 
-try {
-    $pdo->beginTransaction();
+$tx = db_transaction($pdo, function (PDO $pdo) use ($id, $designation, $designated_udc, $designated_office, $current_designated, $max_designated, $visibility) {
     $has_extra = false;
     try {
-        $pdo->query("SELECT designated_office, visibility FROM designation_limit LIMIT 1");
+        $pdo->query('SELECT designated_office, visibility FROM designation_limit LIMIT 1');
         $has_extra = true;
     } catch (PDOException $e) {
         // Columns may not exist
     }
 
     if ($has_extra) {
-        $stmt = $pdo->prepare("UPDATE designation_limit SET designation = :designation, designated_udc = :designated_udc, designated_office = :designated_office, current_designated = :current_designated, max_designated = :max_designated, visibility = :visibility WHERE id = :id");
+        $stmt = $pdo->prepare('UPDATE designation_limit SET designation = :designation, designated_udc = :designated_udc, designated_office = :designated_office, current_designated = :current_designated, max_designated = :max_designated, visibility = :visibility WHERE id = :id');
         $stmt->execute([
             ':designation' => $designation,
             ':designated_udc' => $designated_udc,
@@ -50,25 +50,31 @@ try {
             ':current_designated' => $current_designated,
             ':max_designated' => $max_designated,
             ':visibility' => $visibility,
-            ':id' => $id
+            ':id' => $id,
         ]);
     } else {
-        $stmt = $pdo->prepare("UPDATE designation_limit SET designation = :designation, designated_udc = :designated_udc, current_designated = :current_designated, max_designated = :max_designated WHERE id = :id");
+        $stmt = $pdo->prepare('UPDATE designation_limit SET designation = :designation, designated_udc = :designated_udc, current_designated = :current_designated, max_designated = :max_designated WHERE id = :id');
         $stmt->execute([
             ':designation' => $designation,
             ':designated_udc' => $designated_udc,
             ':current_designated' => $current_designated,
             ':max_designated' => $max_designated,
-            ':id' => $id
+            ':id' => $id,
         ]);
     }
-    $pdo->commit();
-    $_SESSION['designation_success'] = 'Designation updated successfully.';
-} catch (PDOException $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    $_SESSION['designation_error'] = 'Failed to update designation: ' . $e->getMessage();
+
+    return true;
+}, handler_is_dry_run());
+
+if ($tx['ok']) {
+    $_SESSION['designation_success'] = ($tx['dry_run'] ?? false)
+        ? 'Dry-run OK (rolled back). Designation would be updated.'
+        : 'Designation updated successfully.';
+} else {
+    $_SESSION['designation_error'] = handler_format_transaction_error(
+        'Failed to update designation.',
+        $tx['error'] ?? null
+    );
 }
 redirect_to('designations');
 exit;

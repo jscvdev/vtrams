@@ -9,6 +9,13 @@ require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
  */
 function dv_entries_try_exec(object $pdo, string $sql): void
 {
+    if ($pdo->inTransaction() && sql_is_implicit_commit_statement($sql)) {
+        throw new TransactionImplicitCommitException(
+            'DDL cannot run inside a transaction (MySQL implicit commit). '
+            . 'Call vouchers_bootstrap_schema() before handler_execute_writes(). SQL: ' . $sql
+        );
+    }
+
     try {
         $pdo->exec($sql);
     } catch (Throwable) {
@@ -21,6 +28,10 @@ function dv_entries_try_exec(object $pdo, string $sql): void
  */
 function dv_entries_migrate_legacy_shape(object $pdo): void
 {
+    if ($pdo->inTransaction()) {
+        return;
+    }
+
     $pk = $pdo->query("SHOW KEYS FROM dv_entries WHERE Key_name = 'PRIMARY'")->fetch(PDO::FETCH_ASSOC);
     if ($pk === false) {
         dv_entries_try_exec($pdo, 'ALTER TABLE dv_entries ADD PRIMARY KEY (id)');
@@ -58,6 +69,11 @@ function dv_entries_migrate_legacy_shape(object $pdo): void
  */
 function ensure_dv_entries_table(object $pdo): void
 {
+    static $done = false;
+    if ($done || $pdo->inTransaction()) {
+        return;
+    }
+
     $dbName = $pdo->query('SELECT DATABASE()')->fetchColumn();
     if (!is_string($dbName) || $dbName === '') {
         return;
@@ -102,10 +118,33 @@ function ensure_dv_entries_table(object $pdo): void
             // Concurrent first-time create or rare DDL race; migrate will no-op on a fresh catalog table.
         }
 
+        $done = true;
+
         return;
     }
 
     dv_entries_migrate_legacy_shape($pdo);
+    $done = true;
+}
+
+/**
+ * Run legacy DDL once per request before any handler transaction (MySQL implicit-commit safe).
+ */
+function vouchers_bootstrap_schema(object $pdo): void
+{
+    static $bootstrapped = false;
+    if ($bootstrapped) {
+        return;
+    }
+    if ($pdo->inTransaction()) {
+        throw new RuntimeException('vouchers_bootstrap_schema() must run before beginTransaction().');
+    }
+
+    $bootstrapped = true;
+    ensure_dv_entries_table($pdo);
+    vouchers_amount_ensure_string_column($pdo);
+    vouchers_ensure_id_auto_increment($pdo);
+    vouchers_ensure_ors_no_column($pdo);
 }
 
 /**
@@ -189,7 +228,7 @@ function insert_dv_entry(
 function vouchers_amount_ensure_string_column(object $pdo): void
 {
     static $done = false;
-    if ($done) {
+    if ($done || $pdo->inTransaction()) {
         return;
     }
     $done = true;
@@ -215,7 +254,7 @@ function vouchers_amount_ensure_string_column(object $pdo): void
 function vouchers_ensure_ors_no_column(object $pdo): void
 {
     static $done = false;
-    if ($done) {
+    if ($done || $pdo->inTransaction()) {
         return;
     }
     $done = true;
@@ -227,7 +266,7 @@ function vouchers_ensure_ors_no_column(object $pdo): void
 function vouchers_ensure_id_auto_increment(object $pdo): void
 {
     static $done = false;
-    if ($done) {
+    if ($done || $pdo->inTransaction()) {
         return;
     }
     $done = true;

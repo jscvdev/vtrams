@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../core/components/security/config_session.inc.php';
 require_once __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/redirects/redirect_config.inc.php';
 require_once __DIR__ . '/../../core/components/security/access_control.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
 
 if (!AccessControl::hasRole('System Admin')) {
     $_SESSION['designation_error'] = 'Access denied. System Administrator role required.';
@@ -36,42 +37,47 @@ if ($max_designated <= 0) {
     exit;
 }
 
-try {
-    $pdo->beginTransaction();
+$tx = db_transaction($pdo, function (PDO $pdo) use ($designation, $designated_udc, $designated_office, $current_designated, $max_designated, $visibility) {
     $has_extra = false;
     try {
-        $pdo->query("SELECT designated_office, visibility FROM designation_limit LIMIT 1");
+        $pdo->query('SELECT designated_office, visibility FROM designation_limit LIMIT 1');
         $has_extra = true;
     } catch (PDOException $e) {
         // Columns may not exist
     }
 
     if ($has_extra) {
-        $stmt = $pdo->prepare("INSERT INTO designation_limit (designation, designated_udc, designated_office, current_designated, max_designated, visibility) VALUES (:designation, :designated_udc, :designated_office, :current_designated, :max_designated, :visibility)");
+        $stmt = $pdo->prepare('INSERT INTO designation_limit (designation, designated_udc, designated_office, current_designated, max_designated, visibility) VALUES (:designation, :designated_udc, :designated_office, :current_designated, :max_designated, :visibility)');
         $stmt->execute([
             ':designation' => $designation,
             ':designated_udc' => $designated_udc,
             ':designated_office' => $designated_office,
             ':current_designated' => $current_designated,
             ':max_designated' => $max_designated,
-            ':visibility' => $visibility
+            ':visibility' => $visibility,
         ]);
     } else {
-        $stmt = $pdo->prepare("INSERT INTO designation_limit (designation, designated_udc, current_designated, max_designated) VALUES (:designation, :designated_udc, :current_designated, :max_designated)");
+        $stmt = $pdo->prepare('INSERT INTO designation_limit (designation, designated_udc, current_designated, max_designated) VALUES (:designation, :designated_udc, :current_designated, :max_designated)');
         $stmt->execute([
             ':designation' => $designation,
             ':designated_udc' => $designated_udc,
             ':current_designated' => $current_designated,
-            ':max_designated' => $max_designated
+            ':max_designated' => $max_designated,
         ]);
     }
-    $pdo->commit();
-    $_SESSION['designation_success'] = 'Designation added successfully.';
-} catch (PDOException $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    $_SESSION['designation_error'] = 'Failed to add designation: ' . $e->getMessage();
+
+    return true;
+}, handler_is_dry_run());
+
+if ($tx['ok']) {
+    $_SESSION['designation_success'] = ($tx['dry_run'] ?? false)
+        ? 'Dry-run OK (rolled back). Designation would be added.'
+        : 'Designation added successfully.';
+} else {
+    $_SESSION['designation_error'] = handler_format_transaction_error(
+        'Failed to add designation.',
+        $tx['error'] ?? null
+    );
 }
 redirect_to('designations');
 exit;

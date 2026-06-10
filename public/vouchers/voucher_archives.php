@@ -521,11 +521,8 @@ $c2 = 0;
                                 }
                                 ?>
                             </td>
-                            <?php if (isset($row['charged_amount'])) : ?>
-                                <td data-label="charged_amount" class="hidden"><?php echo $row['charged_amount']; ?></td>
-                            <?php else : ?>
-                                <td data-label="charged_amount" class="hidden"></td>
-                            <?php endif; ?>
+                            <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string)($row['amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="datetime_action"><?php echo $row['datetime_action']; ?></td>
@@ -835,7 +832,12 @@ $c2 = 0;
             var payee = row.querySelector('[data-label="payee"]').textContent;
             var address = row.querySelector('[data-label="address"]').textContent;
             var particulars = row.querySelector('[data-label="particulars"]').textContent;
-            var amount = row.querySelector('[data-label="amount"]').textContent;
+            var amountOriginalCell = row.querySelector('[data-label="amount_original"]');
+            var amountOriginal = amountOriginalCell ? amountOriginalCell.textContent.trim() : '';
+            var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
+            var charged_amount = charged_amount_cell ? charged_amount_cell.textContent.trim() : '';
+            var amount = (charged_amount !== '') ? charged_amount : amountOriginal;
+            amount = String(amount).replace(/,/g, '');
             var voucher_date = row.querySelector('[data-label="voucher_date"]').textContent;
             var passed_priority = row.querySelector('[data-label="priority"]').textContent;
             var office_to = row.querySelector('[data-label="office_to"]').textContent;
@@ -847,8 +849,6 @@ $c2 = 0;
             var particulars = row.querySelector('[data-label="particulars"]').textContent;
             var agency_authorized_signatory = row.querySelector('[data-label="agency_authorized_signatory"]').textContent;
             var tin_employee_no = row.querySelector('[data-label="tin_employee_no"]').textContent;
-            var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
-            var charged_amount = charged_amount_cell ? charged_amount_cell.textContent : '';
 
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;
@@ -879,20 +879,24 @@ $c2 = 0;
             if (chargedContainer) chargedContainer.style.display = 'none';
 
             // If this voucher already has a charged_amount saved, show Original + Charged fields
-            if (charged_amount && charged_amount.trim() !== '' && charged_amount.trim() !== '0') {
+            if (charged_amount !== '') {
                 if (originalContainer) originalContainer.style.display = 'flex';
                 if (chargedContainer) chargedContainer.style.display = 'flex';
 
                 const originalStringInput = document.getElementById('original_string_amount');
                 const chargedStringInput = document.getElementById('charged_string_amount');
 
-                // In voucher_archives, amount is the current (charged) value,
-                // and charged_amount is the original amount.
-                if (originalStringInput) originalStringInput.value = charged_amount;
-                if (chargedStringInput) chargedStringInput.value = amount;
+                if (originalStringInput) originalStringInput.value = amountOriginal;
+                if (chargedStringInput) chargedStringInput.value = charged_amount;
             }
 
             document.querySelectorAll('.hidden_input').forEach(function(input) {
+                if (
+                    input.classList.contains('original_charged_container') ||
+                    input.classList.contains('charged_amount_container')
+                ) {
+                    return;
+                }
                 input.style.display = 'none';
             });
 

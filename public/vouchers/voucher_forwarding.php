@@ -1977,14 +1977,67 @@ if ($showCashierArchiveCol) {
                             body: JSON.stringify(combinedData)
                         })
                         .then(function(response) {
-                            return response.text();
+                            return response.text().then(function(text) {
+                                return { ok: response.ok, text: text };
+                            });
                         })
-                        .then(function(result) {
-                            console.log('Save:', result);
-                            window.location.href = 'voucher_forwarding.php';
+                        .then(function(payload) {
+                            var result = (payload.text || '').trim();
+                            var parsed = null;
+                            try {
+                                parsed = JSON.parse(result);
+                            } catch (e) {
+                                var start = result.indexOf('{');
+                                var end = result.lastIndexOf('}');
+                                if (start >= 0 && end > start) {
+                                    try {
+                                        parsed = JSON.parse(result.slice(start, end + 1));
+                                    } catch (e2) {
+                                        parsed = null;
+                                    }
+                                }
+                            }
+
+                            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                if (parsed.ok === true) {
+                                    if (typeof showNotify === 'function') {
+                                        showNotify(parsed.message || 'Data saved successfully!', parsed.notify_type || 'success', 2500);
+                                    }
+                                    window.location.href = 'voucher_forwarding.php';
+                                    return;
+                                }
+                                if (parsed.ok === false) {
+                                    if (typeof showNotify === 'function') {
+                                        showNotify(parsed.error || 'ADA save failed.', parsed.notify_type || 'error', 6000);
+                                    }
+                                    return;
+                                }
+                            }
+
+                            if (result === 'Data saved successfully!' || result.indexOf('Data saved successfully!') !== -1) {
+                                if (typeof showNotify === 'function') {
+                                    showNotify('Data saved successfully!', 'success', 2500);
+                                }
+                                window.location.href = 'voucher_forwarding.php';
+                                return;
+                            }
+
+                            if (!payload.ok) {
+                                if (typeof showNotify === 'function') {
+                                    showNotify(result || 'ADA save failed.', 'error', 6000);
+                                }
+                                return;
+                            }
+
+                            if (typeof showNotify === 'function') {
+                                showNotify('Unexpected save response. Please refresh and verify the voucher status.', 'warning', 5000);
+                            }
                         })
                         .catch(function(error) {
                             console.error('Error:', error);
+                            if (typeof showNotify === 'function') {
+                                showNotify('ADA save failed. ' + (error && error.message ? error.message : ''), 'error', 6000);
+                            }
                         });
                 });
             }

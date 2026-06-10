@@ -526,8 +526,9 @@ if ($scriptName !== '') {
                     const voucherType = row.voucher_type || 'Unknown';
                     stats.voucherType[voucherType] = (stats.voucherType[voucherType] || 0) + 1;
 
-                    // Amount by voucher type
-                    const amount = parseFloat(normalizeAmountInput(row.amount || '')) || 0;
+                    // Amount by voucher type (prefer charged_amount when set on voucher_tracking)
+                    const amountSource = isNonZeroAmount(row.charged_amount) ? row.charged_amount : (row.amount || '');
+                    const amount = parseFloat(normalizeAmountInput(amountSource)) || 0;
                     stats.amountByType[voucherType] = (stats.amountByType[voucherType] || 0) + amount;
 
                     // Monthly distribution
@@ -786,7 +787,7 @@ if ($scriptName !== '') {
                 sections.forEach(section => {
                     headerHtml += `<th style="text-align:right;">${section}</th>`;
                 });
-                headerHtml += '<th style="text-align:right;">TPT</th>';
+                headerHtml += '<th style="text-align:right;">Total Processing Time</th>';
                 headerRow.innerHTML = headerHtml;
                 voucherHead.appendChild(headerRow);
 

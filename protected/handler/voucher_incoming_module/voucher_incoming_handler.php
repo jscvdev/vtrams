@@ -173,21 +173,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // DATABASE STATEMENTS VIA MODE/CTRL
-                        // Get COA options, category, and subsection from POST, or fetch from database if not provided
                         $coa_options = null;
                         $coa_category = null;
                         $coa_subsection = null;
-                        
+
                         if (isset($_POST['selected_coa_options']) && !empty($_POST['selected_coa_options'])) {
                             $coa_options = $_POST['selected_coa_options'];
                             $coa_category = isset($_POST['coa_category']) ? $_POST['coa_category'] : null;
                             $coa_subsection = isset($_POST['coa_subsection']) ? $_POST['coa_subsection'] : null;
                         } else {
-                            // Fetch existing COA data from voucher_incoming table
-                            $fetch_coa_query = "SELECT coa_options, coa_category, coa_subsection FROM voucher_incoming WHERE processing_no = :processing_no";
+                            $fetch_coa_query = 'SELECT coa_options, coa_category, coa_subsection FROM voucher_incoming WHERE processing_no = :processing_no';
                             $fetch_coa_stmt = $pdo->prepare($fetch_coa_query);
-                            $fetch_coa_stmt->bindParam(":processing_no", $processing_no);
+                            $fetch_coa_stmt->bindParam(':processing_no', $processing_no);
                             $fetch_coa_stmt->execute();
                             $coa_row = $fetch_coa_stmt->fetch(PDO::FETCH_ASSOC);
                             if ($coa_row) {
@@ -202,8 +199,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
                         }
-                        
-                        voucher_move_to_receiving(
+
+                        handler_execute_writes(
+                            $pdo,
+                            function (PDO $pdo) use (
+                                $processing_no,
+                                $dv_no,
+                                $ors_no,
+                                $ada_check_no,
+                                $payee,
+                                $address,
+                                $particulars,
+                                $tin_employee_no,
+                                $amount,
+                                $voucher_type,
+                                $voucher_date,
+                                $datetime_action,
+                                $sender_udc,
+                                $receiver_udc,
+                                $office_from,
+                                $office_to,
+                                $encoded_by,
+                                $encoded_from,
+                                $datetime_encoded,
+                                $forwarded_by,
+                                $process_status,
+                                $combined_remarks,
+                                $sender_remarks,
+                                $action,
+                                $status,
+                                $action_by,
+                                $action_from,
+                                $remarks,
+                                $coa_options,
+                                $coa_category,
+                                $coa_subsection
+                            ) {
+                                voucher_move_to_receiving(
                             $pdo,
                             $processing_no,
                             $dv_no,
@@ -234,43 +266,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $coa_subsection
                         );
                         update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
-                        voucher_log_user_action(
-                            $pdo,
-                            $processing_no,
-                            $ors_no,
-                            $ada_check_no,
-                            $dv_no,
-                            $payee,
-                            $address,
-                            $particulars,
-                            $tin_employee_no,
-                            $amount,
-                            $voucher_type,
-                            $voucher_date,
-                            $action,
-                            $action_by,
-                            $action_from,
-                            $datetime_action,
-                            $office_from,
-                            $office_to,
-                            $encoded_by,
-                            $remarks
+                                voucher_log_user_action(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $voucher_type,
+                                    $voucher_date,
+                                    $action,
+                                    $action_by,
+                                    $action_from,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $remarks
+                                );
+                                remove_from_voucher_incoming($pdo, $processing_no);
+                                remove_from_voucher_sent($pdo, $processing_no);
+
+                                return true;
+                            },
+                            'Receive success!',
+                            'Receive failed!',
+                            'voucher_incoming_redirect',
+                            function () use ($processing_no, $dv_no, $payee, $office_from, $office_to, $forwarded_by) {
+                                $forwardedBy = !empty($forwarded_by) ? $forwarded_by : 'Unknown';
+                                AuditHelper::logActivity('receiving', "Received voucher: {$processing_no} forwarded by {$forwardedBy}", [
+                                    'processing_no' => $processing_no,
+                                    'dv_no' => $dv_no,
+                                    'payee' => $payee,
+                                    'office_from' => $office_from,
+                                    'office_to' => $office_to,
+                                    'forwarded_by' => $forwarded_by
+                                ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+                            }
                         );
-                        // Log to audit_logs
-                        $forwardedBy = !empty($forwarded_by) ? $forwarded_by : 'Unknown';
-                        AuditHelper::logActivity('receiving', "Received voucher: {$processing_no} forwarded by {$forwardedBy}", [
-                            'processing_no' => $processing_no,
-                            'dv_no' => $dv_no,
-                            'payee' => $payee,
-                            'office_from' => $office_from,
-                            'office_to' => $office_to,
-                            'forwarded_by' => $forwarded_by
-                        ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
-                        remove_from_voucher_incoming($pdo, $processing_no);
-                        remove_from_voucher_sent($pdo, $processing_no);
-                        echo "<script>process_functionAlert('Receive success!', 'voucher_incoming_redirect')</script>";
-                        $_SESSION['token'] = generateToken();
-                        die();
                     }
                 } else {
                     echo "<script>process_functionAlert('Forward Error: Wrong module used!', 'voucher_incoming_redirect')</script>";

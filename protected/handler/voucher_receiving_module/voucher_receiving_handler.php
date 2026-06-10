@@ -281,8 +281,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $coa_subsection = $post_sub_forward;
                         }
 
-                        // 2) Move to incoming and sent (so we can still read any original/charged amounts)
-                        voucher_receiving_move_to_incoming(
+                        handler_execute_writes(
+                            $pdo,
+                            function (PDO $pdo) use (
+                                $processing_no,
+                                $dv_no,
+                                $ors_no,
+                                $ada_check_no,
+                                $payee,
+                                $address,
+                                $particulars,
+                                $tin_employee_no,
+                                $amount,
+                                $voucher_type,
+                                $voucher_date,
+                                $datetime_action,
+                                $sender_udc,
+                                $receiver_udc,
+                                $office_from,
+                                $office_to,
+                                $encoded_by,
+                                $encoded_from,
+                                $datetime_encoded,
+                                $forwarded_by,
+                                $process_status,
+                                $combined_remarks,
+                                $remarks,
+                                $coa_options,
+                                $coa_category,
+                                $coa_subsection,
+                                $action,
+                                $action_by,
+                                $action_from
+                            ) {
+                                voucher_receiving_move_to_incoming(
                             $pdo,
                             $processing_no,
                             $dv_no,
@@ -343,41 +375,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // 2) Then delete from receiving
                         voucher_forward_receiving($pdo, $processing_no);
                         update_forwarded_received_voucher($pdo, $processing_no, $dv_no, $ors_no, $ada_check_no, $action, $datetime_action, $combined_remarks);
-                        voucher_log_user_action(
-                            $pdo,
-                            $processing_no,
-                            $ors_no,
-                            $ada_check_no,
-                            $dv_no,
-                            $payee,
-                            $address,
-                            $particulars,
-                            $tin_employee_no,
-                            $amount,
-                            $voucher_type,
-                            $voucher_date,
-                            $action,
-                            $action_by,
-                            $action_from,
-                            $datetime_action,
-                            $office_from,
-                            $office_to,
-                            $encoded_by,
-                            $remarks
+                                voucher_log_user_action(
+                                    $pdo,
+                                    $processing_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $dv_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $voucher_type,
+                                    $voucher_date,
+                                    $action,
+                                    $action_by,
+                                    $action_from,
+                                    $datetime_action,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $remarks
+                                );
+
+                                return true;
+                            },
+                            'Forward success!',
+                            'Forward failed!',
+                            'voucher_receiving_redirect',
+                            function () use ($processing_no, $dv_no, $payee, $office_from, $office_to, $document_to) {
+                                $destination = !empty($document_to) ? $document_to : $office_to;
+                                AuditHelper::logActivity('forwarding', "Forwarded voucher: {$processing_no} to {$destination}", [
+                                    'processing_no' => $processing_no,
+                                    'dv_no' => $dv_no,
+                                    'payee' => $payee,
+                                    'office_from' => $office_from,
+                                    'office_to' => $office_to,
+                                    'document_to' => $document_to
+                                ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
+                            }
                         );
-                        // Log to audit_logs
-                        $destination = !empty($document_to) ? $document_to : $office_to;
-                        AuditHelper::logActivity('forwarding', "Forwarded voucher: {$processing_no} to {$destination}", [
-                            'processing_no' => $processing_no,
-                            'dv_no' => $dv_no,
-                            'payee' => $payee,
-                            'office_from' => $office_from,
-                            'office_to' => $office_to,
-                            'document_to' => $document_to
-                        ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
-                        echo "<script>process_functionAlert('Forward success!', 'voucher_receiving_redirect')</script>";
-                        $_SESSION['token'] = generateToken();
-                        die();;
                     }
                 } elseif (isset($_REQUEST['transmit_voucher'])) {
                     date_default_timezone_set('Asia/Singapore'); // Set timezone to GMT+8

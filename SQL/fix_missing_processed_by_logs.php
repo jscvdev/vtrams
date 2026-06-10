@@ -20,6 +20,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/handler_transaction_helper.inc.php';
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     die("Error: Database connection not available. Check protected/dbconnection.inc.php\n");
@@ -29,6 +30,9 @@ $isCli = PHP_SAPI === 'cli';
 $apply = $isCli
     ? in_array('--apply', $argv ?? [], true)
     : isset($_GET['apply']) && (string) $_GET['apply'] === '1';
+$dryRun = $isCli
+    ? in_array('--dry-run', $argv ?? [], true)
+    : isset($_GET['dry_run']) && (string) $_GET['dry_run'] === '1';
 
 function out(string $message): void
 {
@@ -211,10 +215,6 @@ $updatedProcessingTime = 0;
 $skipped = 0;
 
 try {
-    if ($apply) {
-        $pdo->beginTransaction();
-    }
-
     $archiveStmt = $pdo->query("
         SELECT
             processing_no,
@@ -320,6 +320,19 @@ try {
         WHERE processing_no = :processing_no
     ");
 
+    $work = function (PDO $pdo) use (
+        &$insertedLogs,
+        &$updatedTracking,
+        &$updatedArchives,
+        &$updatedProcessingTime,
+        &$skipped,
+        $archives,
+        $insertStmt,
+        $trackingStmt,
+        $archiveHistoryStmt,
+        $trackingCheck,
+        $apply
+    ) {
     foreach ($archives as $archive) {
         $processingNo = trim((string) ($archive['processing_no'] ?? ''));
         $action = trim((string) ($archive['action'] ?? ''));
@@ -453,20 +466,26 @@ try {
             }
         }
     }
+    };
 
-    if ($apply) {
-        $pdo->commit();
-        out(str_repeat('-', 72));
-        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), skipped {$skipped}.");
-    } else {
-        out(str_repeat('-', 72));
+    $tx = db_transaction($pdo, $work, !$apply || $dryRun);
+
+    if (!$tx['ok']) {
+        out('Migration failed: ' . ($tx['error']?->getMessage() ?? 'Unknown error'));
+        if (!$isCli) {
+            echo '</pre>';
+        }
+        exit(1);
+    }
+
+    out(str_repeat('-', 72));
+    if (!$apply || $dryRun) {
         out("Preview complete. Would insert {$insertedLogs} log(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), skipped {$skipped}.");
-        out('Re-run with --apply (CLI) or ?apply=1 (browser) to save.');
+        out('Re-run with --apply (CLI) or ?apply=1 (browser) to save. Use --dry-run to execute then roll back.');
+    } else {
+        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), skipped {$skipped}.");
     }
 } catch (Throwable $e) {
-    if ($apply && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
     out('Migration failed: ' . $e->getMessage());
     if (!$isCli) {
         echo '</pre>';
