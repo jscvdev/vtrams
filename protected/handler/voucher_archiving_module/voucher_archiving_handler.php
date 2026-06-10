@@ -247,7 +247,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $processing_no,
                                     $action,
                                     $datetime_action,
-                                    $totalProcessingTime
+                                    $totalProcessingTime,
+                                    $ada_check_no,
+                                    date('Y-m-d')
                                 );
 
                                 voucher_log_user_action(

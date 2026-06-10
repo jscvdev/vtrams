@@ -131,7 +131,6 @@ try {
                 :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history
             )');
             $delstmt = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
-            $updatestmt = $pdo->prepare('UPDATE voucher_tracking SET ada_check_no = :ada_check_no, voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, status = :status, total_processing_time = :total_processing_time WHERE processing_no = :processing_no');
 
             foreach ($tableData as $row) {
                 if (isset($row['amount'])) {
@@ -204,15 +203,16 @@ try {
                     (string) ($row['datetime_encoded'] ?? ''),
                     $currTime
                 );
-                $updatestmt->execute([
-                    ':ada_check_no' => $ada_check_no,
-                    ':voucher_status' => $action,
-                    ':status' => 'Paid',
-                    ':remarks' => $remarks,
-                    ':datetime_status' => $currTime,
-                    ':total_processing_time' => $turnaround_time,
-                    ':processing_no' => $processingNo,
-                ]);
+                update_archived_voucher(
+                    $pdo,
+                    $processingNo,
+                    $action,
+                    $currTime,
+                    $turnaround_time,
+                    (string) ($ada_check_no ?? ''),
+                    (string) ($row['ada_check_date'] ?? ''),
+                    $remarks
+                );
 
                 $delstmt->execute([':processing_no' => $processingNo]);
                 archiving_delete_from_voucher_receiving($pdo, $processingNo);

@@ -1999,6 +1999,7 @@ if ($showCashierArchiveCol) {
             }
 
             function fwdArchiveSendSaveData() {
+                fwdSyncPayVoucherAdaCheckNo();
                 var tableData = [Object.assign({}, fwdCollectForwardingVoucherRow(), fwdCollectArchiveProcessFormData())];
                 var combinedData = {
                     data: tableData
@@ -2082,6 +2083,7 @@ if ($showCashierArchiveCol) {
             }
 
             function fwdArchiveSendPrintData() {
+                fwdSyncPayVoucherAdaCheckNo();
                 var tableData = [Object.assign({}, fwdCollectForwardingVoucherRow(), fwdCollectArchiveProcessFormData())];
                 var combinedData = {
                     data: tableData

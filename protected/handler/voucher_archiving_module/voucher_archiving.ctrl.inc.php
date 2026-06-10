@@ -40,7 +40,24 @@ function voucher_archive_data(object $pdo, string $processing_no, string $ors_no
         $priority, $action, $action_by, $datetime_action, $office_from, $office_to, $encoded_by, $receiver_udc);
 }
 
-function update_forwarded_archived_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $totalProcessingTime)
-{
-    return update_archived_voucher($pdo, $processing_no, $action, $datetime_action, $totalProcessingTime);
+function update_forwarded_archived_voucher(
+    object $pdo,
+    string $processing_no,
+    string $action,
+    string $datetime_action,
+    string $totalProcessingTime,
+    string $ada_check_no = '',
+    string $ada_check_date = '',
+    string $remarks = ''
+) {
+    return update_archived_voucher(
+        $pdo,
+        $processing_no,
+        $action,
+        $datetime_action,
+        $totalProcessingTime,
+        $ada_check_no,
+        $ada_check_date,
+        $remarks
+    );
 }

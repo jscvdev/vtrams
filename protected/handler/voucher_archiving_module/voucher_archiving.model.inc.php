@@ -48,18 +48,35 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
     return $statement->rowCount() > 0;
 }
 
-function update_archived_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $totalProcessingTime) {
-
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, status = :status, datetime_status = :datetime_status, total_processing_time = :total_processing_time WHERE processing_no = :processing_no";
+function update_archived_voucher(
+    object $pdo,
+    string $processing_no,
+    string $action,
+    string $datetime_action,
+    string $totalProcessingTime,
+    string $ada_check_no = '',
+    string $ada_check_date = '',
+    string $remarks = ''
+) {
+    $status = 'Paid';
+    $query = 'UPDATE voucher_tracking SET ada_check_no = :ada_check_no, ada_check_date = :ada_check_date, voucher_status = :voucher_status, status = :status, datetime_status = :datetime_status, total_processing_time = :total_processing_time';
+    if ($remarks !== '') {
+        $query .= ', remarks = :remarks';
+    }
+    $query .= ' WHERE processing_no = :processing_no';
 
     $statement = $pdo->prepare($query);
 
-    $status = 'Paid';
-    $statement->bindParam(":voucher_status",$action);
-    $statement->bindParam(":status",$status);
-    $statement->bindParam(":datetime_status",$datetime_action);
-    $statement->bindParam(":processing_no",$processing_no);
-    $statement->bindParam(":total_processing_time",$totalProcessingTime);
+    $statement->bindValue(':ada_check_no', $ada_check_no, PDO::PARAM_STR);
+    $statement->bindValue(':ada_check_date', $ada_check_date, PDO::PARAM_STR);
+    $statement->bindParam(':voucher_status', $action);
+    $statement->bindParam(':status', $status);
+    $statement->bindParam(':datetime_status', $datetime_action);
+    $statement->bindParam(':processing_no', $processing_no);
+    $statement->bindParam(':total_processing_time', $totalProcessingTime);
+    if ($remarks !== '') {
+        $statement->bindParam(':remarks', $remarks);
+    }
 
     $statement->execute();
 
