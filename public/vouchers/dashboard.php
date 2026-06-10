@@ -66,6 +66,8 @@ $can_view_dashboard = (
         || in_array("Accounting Unit", $target)
         || in_array("Processor", $target)
         || in_array("Accountant III", $target)
+        || in_array("Conservation & Development Section", $target)
+        || in_array("CDS", $target)
     ))
 );
 if (!$can_view_dashboard) {
@@ -73,8 +75,24 @@ if (!$can_view_dashboard) {
     die();
 }
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 AuditHelper::logPageView('Dashboard');
 require_once __DIR__ . '/checklist_config.php';
+$dashboard_timing_section_labels = array_map(
+    static fn(string $section): string => match ($section) {
+        'Planning Section' => 'Planning',
+        'Conservation & Development Section' => 'CDS',
+        'Budget Unit' => 'Budget',
+        'Accounting Unit' => 'Accounting',
+        'Cashiers Unit' => 'Cashiers',
+        default => $section,
+    },
+    voucher_tracking_dashboard_sections()
+);
+$dashboard_section_timing_blurb = count($dashboard_timing_section_labels) > 1
+    ? implode(', ', array_slice($dashboard_timing_section_labels, 0, -1))
+        . ', and ' . $dashboard_timing_section_labels[array_key_last($dashboard_timing_section_labels)]
+    : (string) ($dashboard_timing_section_labels[0] ?? '');
 $dashboard_voucher_types = checklist_types_with_labels();
 // Root-relative URL so fetch works regardless of /public vs /vtrams/public path depth
 $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -454,7 +472,7 @@ if ($scriptName !== '') {
             </div>
             <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px;">
                 <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Section Processing Time Summary</h3>
-                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Planning, Budget, Accounting, Office of the PENRO, and Cashiers only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers.</p>
+                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers.</p>
                 <table id="sectionSummaryTable">
                     <thead>
                         <tr>

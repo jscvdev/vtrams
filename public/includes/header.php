@@ -213,6 +213,8 @@ $header_text = $pageTitleHelper->getHeaderText();
                             || in_array("Accounting Unit", $target)
                             || in_array("Accountant III", $target)
                             || in_array("Processor", $target)
+                            || in_array("Conservation & Development Section", $target)
+                            || in_array("CDS", $target)
                         );
                         $can_view_designations = ($_SESSION["acl"] >= 8);
                         $can_view_performance = true;

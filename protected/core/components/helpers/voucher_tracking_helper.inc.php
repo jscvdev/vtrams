@@ -1276,6 +1276,7 @@ function voucher_tracking_dashboard_sections(): array
 {
     return [
         'Planning Section',
+        'Conservation & Development Section',
         'Budget Unit',
         'Accounting Unit',
         'Office of the PENRO',
