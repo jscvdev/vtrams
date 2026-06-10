@@ -37,8 +37,8 @@ function voucher_pending_to_incoming(object $pdo, string $processing_no, string 
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);
-    $statement->bindParam(":sender_udc",$sender_udc);
-    $statement->bindParam(":receiver_udc",$receiver_udc);
+    $statement->bindValue(":sender_udc", $sender_udc, PDO::PARAM_STR);
+    $statement->bindValue(":receiver_udc", $receiver_udc, PDO::PARAM_STR);
     $statement->bindParam(":office_from",$office_from);
     $statement->bindParam(":office_to",$office_to);
     $statement->bindParam(":encoded_by",$encoded_by);
@@ -79,8 +79,8 @@ function voucher_pending_to_sent(object $pdo, string $processing_no, string $ors
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);
-    $statement->bindParam(":sender_udc",$sender_udc);
-    $statement->bindParam(":receiver_udc",$receiver_udc);
+    $statement->bindValue(":sender_udc", $sender_udc, PDO::PARAM_STR);
+    $statement->bindValue(":receiver_udc", $receiver_udc, PDO::PARAM_STR);
     $statement->bindParam(":office_from",$office_from);
     $statement->bindParam(":office_to",$office_to);
     $statement->bindParam(":encoded_by",$encoded_by);

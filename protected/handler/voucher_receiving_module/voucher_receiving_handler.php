@@ -191,10 +191,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $temp_dump = array_merge($temp_dump, $liaisonResolved['temp_errors']);
                         }
                     } else {
-                        $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $document_to, $office_to);
+                        $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $document_to, $office_to, $sender_udc);
                         if ($receiver_udc === '') {
                             $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
                         }
+                    }
+
+                    if (
+                        $sender_udc !== ''
+                        && $receiver_udc !== ''
+                        && voucher_udcs_excluding($receiver_udc, $sender_udc) === ''
+                    ) {
+                        $temp_dump['self_send'] = 'Cannot forward this document to yourself';
                     }
 
                     $variables_to_check = [

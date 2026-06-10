@@ -121,11 +121,17 @@ try {
             $pdo,
             (string) ($row['tracking_voucher_status'] ?? ''),
             (string) ($row['encoded_from'] ?? ''),
-            (string) ($_SESSION['logged_user_section'] ?? '')
+            (string) ($_SESSION['logged_user_section'] ?? ''),
+            $encodedBy
         );
         $row['returned_by_name'] = $returnTarget['returned_by'];
         $row['forward_return_designation'] = $returnTarget['designation'];
         $row['forward_return_label'] = $returnTarget['label'];
+        $row['needs_return_forward_target'] = voucher_tracking_needs_return_forward(
+            ['active_status' => $row['active_status'], 'voucher_status' => $row['tracking_voucher_status']],
+            (string) ($row['tracking_voucher_status'] ?? ''),
+            $encodedBy
+        );
         $row['amount'] = trim((string) ($row['amount'] ?? ''));
         $row['emp_tag'] = dv_resolve_emp_tag_for_payee(
             $empTagLookup,

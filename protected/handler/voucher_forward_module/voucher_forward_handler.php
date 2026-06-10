@@ -70,6 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         voucher_apply_exact_amount($amount);
 
+        $voucher_type = voucher_resolve_forward_voucher_type(
+            $pdo,
+            trim((string) ($processing_no ?? '')),
+            (string) ($voucher_type ?? ''),
+            $_POST
+        );
+
         $office_from = voucher_logged_user_office();
 
         $dv_no = "";
@@ -83,13 +90,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $receiver_udc = "";
         $tracking_row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no ?? '');
         $tracking_voucher_status = $tracking_row['voucher_status'] ?? null;
+        $loggedEncoderName = (string) ($_SESSION['logged_user_emp_name'] ?? '');
+        $needsReturnForward = voucher_tracking_needs_return_forward($tracking_row, $tracking_voucher_status, $loggedEncoderName);
         $forward_return_designation = isset($forward_return_designation) ? trim((string) $forward_return_designation) : '';
-        if ($forward_return_designation === '') {
+        if ($needsReturnForward && $forward_return_designation === '') {
             $returnForward = voucher_tracking_resolve_return_forward_target(
                 $pdo,
                 $tracking_voucher_status,
                 $encoded_from ?? '',
-                (string) ($_SESSION['logged_user_section'] ?? '')
+                (string) ($_SESSION['logged_user_section'] ?? ''),
+                $loggedEncoderName
             );
             if ($returnForward['designation'] !== '') {
                 $forward_return_designation = $returnForward['designation'];
@@ -109,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $office_to = $logged_user_office;
                     $forwarded_by = $_SESSION['logged_user_emp_name'];
                     $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
+                    $sender_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
 
                     //REMARKS
                     if (!empty($remarks)) {
@@ -119,13 +130,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $forwarded_to = '';
-                    if ($forward_return_designation !== '' || voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
+                    if ($needsReturnForward) {
                         // Re-forward returned voucher to whoever returned it (from voucher_tracking).
                         $resolved = voucher_forward_receiver_for_return_target(
                             $pdo,
                             $tracking_voucher_status,
                             $forward_return_designation,
-                            $office_to
+                            $office_to,
+                            $sender_udc
                         );
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
@@ -142,11 +154,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
                     } elseif (
-                        ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $logged_user_office)) !== ''
+                        ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $logged_user_office, $voucher_type ?? '')) !== ''
                     ) {
                         $target_to = $encoderForwardTarget;
-                        $office_to = $logged_user_office;
-                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to);
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $logged_user_office);
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
                         if ($resolved['temp_errors']) {
@@ -161,7 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $action = "Forwarded by: " . $_SESSION['logged_user_emp_name'];
                     $action_by  = $_SESSION['logged_user_emp_name'];
-                    $sender_udc = $_SESSION['logged_user_udc'];
+
+                    if (
+                        $sender_udc !== ''
+                        && $receiver_udc !== ''
+                        && voucher_udcs_excluding($receiver_udc, $sender_udc) === ''
+                    ) {
+                        $temp_dump['self_send'] = 'Cannot forward this document to yourself';
+                    }
 
                     $variables_to_check = [
                         'processing_no' => $processing_no,

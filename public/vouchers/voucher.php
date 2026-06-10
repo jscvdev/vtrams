@@ -441,7 +441,7 @@ function session_contains_phrase($phrase)
                             </div>
                             <div class='label-input__container'>
                                 <label for=''>Voucher Type</label>
-                                <select class='encoded_type form-custom-input' name='encoded_type' id='encoded_type' required>
+                                <select class='encoded_type form-custom-input' name='encoded_type' id='encoded_type' data-field-name='encoded_type' required>
                                     <option value="" disabled selected>Please Select:</option>
                                     <?php foreach ($voucher_types_for_select as $type_value => $type_label): ?>
                                         <option value="<?= htmlspecialchars($type_value, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($type_label, ENT_QUOTES, 'UTF-8') ?></option>
@@ -906,6 +906,13 @@ function session_contains_phrase($phrase)
 
         function voucherRowNeedsReturnForwardTarget(row) {
             if (!row) return false;
+            if (row.needs_return_forward_target === false) return false;
+            if (row.needs_return_forward_target === true) return true;
+            var returnedBy = String(row.returned_by_name || '').trim();
+            var loggedName = String(window.__loggedUserEmpName || '').trim();
+            if (returnedBy && loggedName && returnedBy.localeCompare(loggedName, undefined, { sensitivity: 'accent' }) === 0) {
+                return false;
+            }
             if (String(row.active_status || '') === 'returned') return true;
             if (/^Returned\s+by:/i.test(String(row.tracking_voucher_status || ''))) return true;
             if (String(row.forward_return_designation || '').trim() !== '') return true;
@@ -999,8 +1006,15 @@ function session_contains_phrase($phrase)
                 if (document.getElementById('form_title')) document.getElementById('form_title').textContent = 'Forward Voucher';
                 if (document.getElementById('string_amount')) document.getElementById('string_amount').readOnly = true;
                 document.querySelectorAll('.processing_no, .encoded_payee, .encoded_address, .encoded_tin_employee_no, .encoded_particulars, .encoded_amount, .encoded_voucher_date').forEach(function(input) { input.setAttribute('readonly', true); });
-                if (encodedTypeSelect) encodedTypeSelect.setAttribute('disabled', true);
+                if (encodedTypeSelect) {
+                    if (!encodedTypeSelect.getAttribute('data-field-name')) {
+                        encodedTypeSelect.setAttribute('data-field-name', encodedTypeSelect.getAttribute('name') || 'encoded_type');
+                    }
+                    encodedTypeSelect.removeAttribute('name');
+                    encodedTypeSelect.setAttribute('disabled', true);
+                }
                 if (encodedTypeHidden) encodedTypeHidden.value = voucher_type;
+                if (hiddenVoucherType) hiddenVoucherType.value = voucher_type;
                 if (document.querySelector('.btn-dynamic')) {
                     document.querySelector('.btn-dynamic').setAttribute('name', 'forward_voucher');
                     document.querySelector('.btn-dynamic').classList.add('primary');
@@ -1037,7 +1051,11 @@ function session_contains_phrase($phrase)
                 document.querySelectorAll('.encoded_dv_no, .encoded_payee, .encoded_address, .encoded_tin_employee_no, .encoded_particulars, .encoded_amount, .encoded_voucher_date').forEach(function(input) { input.removeAttribute('readonly'); });
                 var processingNoInput = document.querySelector('.processing_no');
                 if (processingNoInput) processingNoInput.setAttribute('readonly', true);
-                if (encodedTypeSelect) encodedTypeSelect.removeAttribute('disabled');
+                if (encodedTypeSelect) {
+                    encodedTypeSelect.removeAttribute('disabled');
+                    var encodedTypeFieldName = encodedTypeSelect.getAttribute('data-field-name') || 'encoded_type';
+                    encodedTypeSelect.setAttribute('name', encodedTypeFieldName);
+                }
                 if (encodedTypeSelect && encodedTypeHidden) {
                     encodedTypeSelect.onchange = function() { encodedTypeHidden.value = this.value; };
                 }
@@ -1341,10 +1359,22 @@ function session_contains_phrase($phrase)
     function syncVoucherType() {
         var encodedTypeSelect = document.getElementById('encoded_type');
         var encodedTypeHidden = document.getElementById('encoded_type_hidden');
+        var voucherTypeHidden = document.getElementById('voucher_type');
+        var typeValue = '';
 
-        // Always sync the select value to the hidden field before submission
-        if (encodedTypeSelect && encodedTypeHidden) {
-            encodedTypeHidden.value = encodedTypeSelect.value;
+        if (encodedTypeHidden && String(encodedTypeHidden.value || '').trim() !== '') {
+            typeValue = String(encodedTypeHidden.value).trim();
+        } else if (encodedTypeSelect && String(encodedTypeSelect.value || '').trim() !== '') {
+            typeValue = String(encodedTypeSelect.value).trim();
+        } else if (voucherTypeHidden && String(voucherTypeHidden.value || '').trim() !== '') {
+            typeValue = String(voucherTypeHidden.value).trim();
+        }
+
+        if (encodedTypeHidden) {
+            encodedTypeHidden.value = typeValue;
+        }
+        if (voucherTypeHidden) {
+            voucherTypeHidden.value = typeValue;
         }
 
         var stringAmount = document.getElementById('string_amount');
@@ -1825,6 +1855,9 @@ function session_contains_phrase($phrase)
                     e.preventDefault();
                     if (typeof showNotify === 'function') showNotify('Please click CONFIRM and select the required checklist items before forwarding.', 'error', 3500);
                     return false;
+                }
+                if (typeof syncVoucherType === 'function') {
+                    syncVoucherType();
                 }
                 return true;
             });

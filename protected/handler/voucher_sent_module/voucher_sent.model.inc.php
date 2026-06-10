@@ -65,8 +65,8 @@ string $receiver_udc, string $encoded_by, string $encoded_from, string $datetime
     $statement->bindParam(":datetime_forwarded",$datetime_action);
     $statement->bindParam(":office_from",$office_from);
     $statement->bindParam(":office_to",$office_to);
-    $statement->bindParam(":receiver_udc",$sender_udc);
-    $statement->bindParam(":sender_udc",$receiver_udc);
+    $statement->bindParam(":sender_udc",$sender_udc);
+    $statement->bindParam(":receiver_udc",$receiver_udc);
     $statement->bindParam(":encoded_by",$encoded_by);
     $statement->bindParam(":encoded_from",$encoded_from);
     $statement->bindParam(":datetime_encoded",$datetime_encoded);

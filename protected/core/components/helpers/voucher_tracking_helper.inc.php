@@ -237,6 +237,21 @@ function voucher_tracking_parse_returned_by(?string $voucher_status): string
     return '';
 }
 
+/** True when the logged-in user returned their own voucher (e.g. encoder recall from Sent). */
+function voucher_tracking_is_self_return(?string $tracking_voucher_status, ?string $logged_user_name = null): bool
+{
+    $returnedBy = voucher_tracking_parse_returned_by($tracking_voucher_status);
+    if ($returnedBy === '') {
+        return false;
+    }
+    $logged = trim((string) ($logged_user_name ?? ($_SESSION['logged_user_emp_name'] ?? '')));
+    if ($logged === '') {
+        return false;
+    }
+
+    return strcasecmp($returnedBy, $logged) === 0;
+}
+
 /** e.g. "Forwarded by: Jane Doe" → "Forwarded" */
 function voucher_tracking_action_label(?string $voucher_status): string
 {
@@ -380,9 +395,14 @@ function voucher_tracking_resolve_return_forward_target(
     object $pdo,
     ?string $tracking_voucher_status,
     ?string $encoded_from,
-    ?string $encoder_section = null
+    ?string $encoder_section = null,
+    ?string $logged_user_name = null
 ): array {
     if (voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
+        if (voucher_tracking_is_self_return($tracking_voucher_status, $logged_user_name)) {
+            return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+        }
+
         return voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
     }
 
@@ -403,16 +423,20 @@ function voucher_forward_receiver_for_return_target(
     object $pdo,
     ?string $tracking_voucher_status,
     string $forward_designation,
-    string $office_to
+    string $office_to,
+    string $exclude_udc = ''
 ): array {
     $returnTarget = voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
     $returnedByUdc = trim((string) ($returnTarget['udc'] ?? ''));
     if ($returnedByUdc !== '') {
-        return [
-            'receiver_udc' => $returnedByUdc,
-            'forwarded_to' => $returnTarget['label'] !== '' ? $returnTarget['label'] : $returnTarget['returned_by'],
-            'temp_errors' => [],
-        ];
+        $validatedUdc = voucher_filter_udcs_by_user_group_office($pdo, $returnedByUdc, $office_to);
+        if ($validatedUdc !== '') {
+            return [
+                'receiver_udc' => $validatedUdc,
+                'forwarded_to' => $returnTarget['label'] !== '' ? $returnTarget['label'] : $returnTarget['returned_by'],
+                'temp_errors' => [],
+            ];
+        }
     }
     $designation = trim($forward_designation);
     if ($designation === '') {
@@ -425,7 +449,33 @@ function voucher_forward_receiver_for_return_target(
             'temp_errors' => ['unassigned_udc' => 'No user is assigned to accept'],
         ];
     }
-    return voucher_forward_receiver_udcs_for_designation($pdo, $designation, $office_to);
+    return voucher_forward_receiver_udcs_for_designation($pdo, $designation, $office_to, $exclude_udc);
+}
+
+/**
+ * Remove one or more UDCs from a comma-separated receiver list.
+ */
+function voucher_udcs_excluding(string $udc_list, string $exclude_udc): string
+{
+    $exclude = array_values(array_filter(array_map('trim', explode(',', $exclude_udc)), static fn(string $v): bool => $v !== ''));
+    if ($exclude === []) {
+        return trim($udc_list);
+    }
+
+    $parts = array_values(array_filter(array_map('trim', explode(',', $udc_list)), static function (string $udc) use ($exclude): bool {
+        if ($udc === '') {
+            return false;
+        }
+        foreach ($exclude as $blocked) {
+            if (strcasecmp($udc, $blocked) === 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }));
+
+    return implode(',', array_unique($parts));
 }
 
 /**
@@ -465,16 +515,103 @@ function voucher_pick_designated_udcs_for_office(string $designated_udc, string 
 }
 
 /**
+ * Keep UDCs that exist in user_group for the given office (cross-check after designation_limit).
+ */
+function voucher_filter_udcs_by_user_group_office(object $pdo, string $udc_list, string $office): string
+{
+    $office = trim($office);
+    $udcs = array_values(array_filter(array_map('trim', explode(',', $udc_list)), static fn(string $v): bool => $v !== ''));
+    if ($udcs === []) {
+        return '';
+    }
+
+    $sql = "SELECT udc FROM user_group WHERE udc = :udc AND TRIM(udc) <> ''";
+    if ($office !== '') {
+        $sql .= ' AND office = :office';
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = $pdo->prepare($sql);
+    $validated = [];
+    foreach ($udcs as $udc) {
+        $stmt->bindValue(':udc', $udc, PDO::PARAM_STR);
+        if ($office !== '') {
+            $stmt->bindValue(':office', $office, PDO::PARAM_STR);
+        }
+        $stmt->execute();
+        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+            $validated[] = $udc;
+        }
+    }
+
+    return implode(',', array_values(array_unique($validated)));
+}
+
+/**
+ * Pick designated_udc for a designation/office pair, validated in user_group.
+ */
+function voucher_designation_limit_receiver_udcs_for_office(
+    object $pdo,
+    string $designation,
+    string $office
+): string {
+    $designation = trim($designation);
+    $office = trim($office);
+    if ($designation === '') {
+        return '';
+    }
+
+    $limitStmt = $pdo->prepare(
+        'SELECT designated_udc, designated_office FROM designation_limit
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation)) LIMIT 1'
+    );
+    $limitStmt->bindValue(':designation', $designation, PDO::PARAM_STR);
+    $limitStmt->execute();
+    $limitRow = $limitStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$limitRow) {
+        return '';
+    }
+
+    $designated_udc = (string) ($limitRow['designated_udc'] ?? '');
+    $designated_office = (string) ($limitRow['designated_office'] ?? '');
+
+    $picked = voucher_pick_designated_udcs_for_office($designated_udc, $designated_office, $office);
+    // Extra UDCs beyond the designated_office CSV (e.g. 5 UDCs, 3 offices) resolve via user_group.office.
+    $officeMatched = voucher_filter_udcs_by_user_group_office($pdo, $designated_udc, $office);
+
+    $merged = [];
+    foreach (array_merge(
+        array_filter(array_map('trim', explode(',', $picked))),
+        array_filter(array_map('trim', explode(',', $officeMatched)))
+    ) as $udc) {
+        if ($udc !== '') {
+            $merged[$udc] = $udc;
+        }
+    }
+
+    return implode(',', array_values($merged));
+}
+
+/**
  * Resolve receiver_udc for a forward/return target (designation, section label, or UDC).
  * Uses designation_limit (same as voucher_receiving forward) then user_group fallbacks.
  */
-function voucher_resolve_receiver_udc_for_destination(object $pdo, string $destination, string $penro_office): string
-{
+function voucher_resolve_receiver_udc_for_destination(
+    object $pdo,
+    string $destination,
+    string $penro_office,
+    string $exclude_udc = ''
+): string {
     $destination = trim($destination);
     $penro_office = trim($penro_office);
+    $exclude_udc = trim($exclude_udc);
     if ($destination === '') {
         return '';
     }
+
+    $finalize = static function (string $resolved) use ($exclude_udc): string {
+        return voucher_udcs_excluding($resolved, $exclude_udc);
+    };
 
     $candidates = [$destination];
     $mapped = voucher_tracking_forward_target_from_section($pdo, $destination);
@@ -488,19 +625,21 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
     );
 
     foreach ($candidates as $candidate) {
+        if ($penro_office !== '') {
+            $designated = voucher_designation_limit_receiver_udcs_for_office($pdo, $candidate, $penro_office);
+            if ($designated !== '') {
+                $resolved = $finalize($designated);
+                if ($resolved !== '') {
+                    return $resolved;
+                }
+            }
+        }
+
         $limitStmt->bindValue(':designation', $candidate, PDO::PARAM_STR);
         $limitStmt->execute();
         $limitRow = $limitStmt->fetch(PDO::FETCH_ASSOC);
         if (!$limitRow) {
             continue;
-        }
-        $designated = voucher_pick_designated_udcs_for_office(
-            (string) ($limitRow['designated_udc'] ?? ''),
-            (string) ($limitRow['designated_office'] ?? ''),
-            $penro_office
-        );
-        if ($designated !== '') {
-            return $designated;
         }
 
         $listedOffices = array_values(array_filter(
@@ -511,13 +650,12 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
             if ($penro_office !== '' && strcasecmp($listedOffice, $penro_office) === 0) {
                 continue;
             }
-            $designated = voucher_pick_designated_udcs_for_office(
-                (string) ($limitRow['designated_udc'] ?? ''),
-                (string) ($limitRow['designated_office'] ?? ''),
-                $listedOffice
-            );
+            $designated = voucher_designation_limit_receiver_udcs_for_office($pdo, $candidate, $listedOffice);
             if ($designated !== '') {
-                return $designated;
+                $resolved = $finalize($designated);
+                if ($resolved !== '') {
+                    return $resolved;
+                }
             }
         }
     }
@@ -533,7 +671,10 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
         $udcStmt->execute();
         $udcRow = $udcStmt->fetch(PDO::FETCH_ASSOC);
         if ($udcRow && trim((string) ($udcRow['udc'] ?? '')) !== '') {
-            return trim((string) $udcRow['udc']);
+            $resolved = $finalize(trim((string) $udcRow['udc']));
+            if ($resolved !== '') {
+                return $resolved;
+            }
         }
 
         $groupStmt = $pdo->prepare(
@@ -559,7 +700,10 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
                 }
             }
             if ($udcs !== []) {
-                return implode(',', array_values(array_unique($udcs)));
+                $resolved = $finalize(implode(',', array_values(array_unique($udcs))));
+                if ($resolved !== '') {
+                    return $resolved;
+                }
             }
         }
     }
@@ -586,7 +730,10 @@ function voucher_resolve_receiver_udc_for_destination(object $pdo, string $desti
             }
         }
         if ($udcs !== []) {
-            return implode(',', array_values(array_unique($udcs)));
+            $resolved = $finalize(implode(',', array_values(array_unique($udcs))));
+            if ($resolved !== '') {
+                return $resolved;
+            }
         }
     }
 
@@ -808,14 +955,117 @@ function voucher_lookup_payee_udc_at_office(object $pdo, string $payee, string $
     return voucher_lookup_payee_at_office($pdo, $payee, $office)['udc'];
 }
 
+function voucher_type_is_engp(string $voucher_type): bool
+{
+    $voucher_type = trim($voucher_type);
+    if ($voucher_type === '') {
+        return false;
+    }
+
+    // Matches eNGP, e-NGP, e-NGP Retention, e-NGP Seedling Production & MP, etc.
+    if (preg_match('/e-?\s*ngp/i', $voucher_type)) {
+        return true;
+    }
+
+    $collapsed = strtolower(preg_replace('/[^a-z0-9]+/i', '', $voucher_type) ?? '');
+
+    return str_starts_with($collapsed, 'engp');
+}
+
+/** Whether encoder forward should use the return/re-forward routing path. */
+function voucher_tracking_needs_return_forward(
+    ?array $tracking_row,
+    ?string $tracking_voucher_status = null,
+    ?string $logged_user_name = null
+): bool {
+    $status = $tracking_voucher_status;
+    if ($status === null && $tracking_row !== null) {
+        $status = (string) ($tracking_row['voucher_status'] ?? '');
+    }
+
+    if (voucher_tracking_is_self_return($status, $logged_user_name)) {
+        return false;
+    }
+
+    $active = voucher_tracking_normalize_active_status((string) ($tracking_row['active_status'] ?? ''));
+    if ($active === 'returned') {
+        return true;
+    }
+
+    return voucher_tracking_parse_returned_by($status) !== '';
+}
+
+/**
+ * Stored voucher_type for a processing number (pending encode / tracking).
+ */
+function voucher_fetch_stored_voucher_type(object $pdo, string $processing_no): string
+{
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return '';
+    }
+
+    foreach (['vouchers', 'voucher_tracking'] as $table) {
+        $stmt = $pdo->prepare("SELECT voucher_type FROM {$table} WHERE processing_no = :processing_no LIMIT 1");
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stored = trim((string) ($row['voucher_type'] ?? ''));
+        if ($stored !== '') {
+            return $stored;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Resolve voucher type for encoder forward (POST fields, then stored record).
+ */
+function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no, string $postedType, array $post = []): string
+{
+    $postedType = trim($postedType);
+    if ($postedType !== '') {
+        return $postedType;
+    }
+
+    foreach (['voucher_type', 'encoded_type'] as $field) {
+        if (!isset($post[$field])) {
+            continue;
+        }
+        $value = $post[$field];
+        if (is_array($value)) {
+            $value = end($value);
+        }
+        $value = trim((string) $value);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return voucher_fetch_stored_voucher_type($pdo, $processing_no);
+}
+
 /**
  * Default forward target for encoders based on designation_limit office registration.
- * PENRO encoders → Planning Section; CENRO/other offices → Liaison Officer when registered.
+ * eNGP vouchers → Conservation & Development Section when registered for the office.
+ * Other PENRO vouchers → Planning Section; CENRO/other offices → Liaison Officer when registered.
  */
-function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office): string
+function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office, string $voucher_type = ''): string
 {
     $logged_user_office = trim($logged_user_office);
     if ($logged_user_office === '') {
+        return '';
+    }
+
+    if (voucher_type_is_engp($voucher_type)) {
+        $engpTargets = ['Conservation & Development Section', 'Liaison Officer'];
+        foreach ($engpTargets as $designation) {
+            if (voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
+                return $designation;
+            }
+        }
+
         return '';
     }
 
@@ -832,10 +1082,14 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
 /**
  * @return array{receiver_udc: string, forwarded_to: string, temp_errors: array<string, string>}
  */
-function voucher_forward_receiver_udcs_for_designation(object $pdo, string $target_to, string $office_to): array
-{
+function voucher_forward_receiver_udcs_for_designation(
+    object $pdo,
+    string $target_to,
+    string $office_to,
+    string $exclude_udc = ''
+): array {
     $forwarded_to = trim($target_to);
-    $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $target_to, $office_to);
+    $receiver_udc = voucher_resolve_receiver_udc_for_destination($pdo, $target_to, $office_to, $exclude_udc);
     $temp_dump = [];
     if ($receiver_udc === '') {
         $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
@@ -860,6 +1114,9 @@ function voucher_tracking_section_label_map(): array
         'ACCOUNTANT III' => 'Accounting Unit',
         'PLANNING' => 'Planning Section',
         'PLANNING SECTION' => 'Planning Section',
+        'CONSERVATION & DEVELOPMENT' => 'Conservation & Development Section',
+        'CONSERVATION & DEVELOPMENT SECTION' => 'Conservation & Development Section',
+        'CDS' => 'Conservation & Development Section',
         'CASHIERS' => 'Cashiers Unit',
         'CASHIERS UNIT' => 'Cashiers Unit',
         'CASHIER' => 'Cashiers Unit',

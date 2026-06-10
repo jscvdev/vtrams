@@ -143,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sender_udc = $_SESSION['logged_user_udc'] ?? $sender_udc;
             $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination_designation, $penro_office);
             if ($receiver_udc === '' && $previous_sender_udc !== '') {
-                $receiver_udc = $previous_sender_udc;
+                $receiver_udc = voucher_filter_udcs_by_user_group_office($pdo, $previous_sender_udc, $penro_office);
             }
         }
 

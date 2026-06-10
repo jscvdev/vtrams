@@ -404,6 +404,8 @@ if ($showCashierArchiveCol) {
                                         <?php if (!in_array("Planning Section Chief", $target)) : ?>
                                             <option value='Planning Section Chief' class="Planning_Officer">Planning Section Chief</option>
                                         <?php endif ?>
+                                    <?php elseif (in_array("Conservation & Development Section", $target)) : ?>
+                                        <option value='Accounting Unit'>Accounting Unit</option>
                                     <?php elseif (in_array("Budget Unit", $target)) : ?>
                                         <option value='ICU'>ICU</option>
                                         <?php if (!in_array("Budget Officer", $target)) : ?>
@@ -2366,6 +2368,9 @@ if ($showCashierArchiveCol) {
             'ACCOUNTING UNIT': 'Accounting Unit',
             'PLANNING': 'Planning Section',
             'PLANNING SECTION': 'Planning Section',
+            'CONSERVATION & DEVELOPMENT': 'Conservation & Development Section',
+            'CONSERVATION & DEVELOPMENT SECTION': 'Conservation & Development Section',
+            'CDS': 'Conservation & Development Section',
             'CASHIERS': 'Cashiers Unit',
             'CASHIERS UNIT': 'Cashiers Unit',
             'PENRO': 'Office of the PENRO',
