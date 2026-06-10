@@ -110,41 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     date_default_timezone_set('Asia/Singapore'); // Set timezone to GMT+8
                     $currTime = $date = date('Y-m-d H:i:s', time()); // Format the current time
 
-                    function calculateTotalProcessingTime_Archiving($startTimestamp, $endTimestamp)
-                    {
-                        // Convert datetime strings to Unix timestamps
-                        $startTime = strtotime($startTimestamp);
-                        $endTime = strtotime($endTimestamp);
-
-                        // Calculate the difference in seconds
-                        $durationSeconds = $endTime - $startTime;
-
-                        // Calculate days, hours, minutes, and seconds
-                        $days = floor($durationSeconds / (24 * 3600));
-                        $remainder = $durationSeconds % (24 * 3600);
-                        $hours = floor($remainder / 3600);
-                        $remainder = $remainder % 3600;
-                        $minutes = floor($remainder / 60);
-                        $seconds = $remainder % 60;
-
-                        // Prepare the output string
-                        $output = '';
-                        if ($days > 0) {
-                            $output .= "$days day" . ($days > 1 ? 's ' : ' ');
-                        }
-                        if ($hours > 0) {
-                            $output .= "$hours hour" . ($hours > 1 ? 's ' : ' ');
-                        }
-                        if ($minutes > 0) {
-                            $output .= "$minutes minute" . ($minutes > 1 ? 's ' : ' ');
-                        }
-                        if ($seconds > 0) {
-                            $output .= "$seconds second" . ($seconds > 1 ? 's ' : ' ');
-                        }
-
-                        return trim($output);
-                    }
-
                     $datetime_action = $currTime;
                     $archived_by_from = $_SESSION['logged_user_section'];
                     $action_by  = $_SESSION['logged_user_emp_name'];
@@ -181,7 +146,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $temp_dump['empty_data'] .= implode(', ', $empty_value_strings);
                     }
 
-                    $totalProcessingTime = calculateTotalProcessingTime_Archiving($datetime_encoded, $currTime);
+                    $totalProcessingTime = voucher_tracking_calculate_total_processing_time(
+                        $pdo,
+                        $processing_no,
+                        $currTime,
+                        '',
+                        $datetime_encoded
+                    );
 
                     //CHECK IF DOCUMENT IS ALREADY RECEIVED
                     if (check_if_voucher_archived_exists($pdo, $processing_no)) {

@@ -11,6 +11,7 @@ require_once '../action_module/voucher_action.model.inc.php';
 require_once '../action_module/voucher_action.ctrl.inc.php';
 require_once '../../core/components/helpers/amount_helper.inc.php';
 require_once '../voucher_archiving_module/voucher_archiving.model.inc.php';
+require_once '../../core/components/helpers/voucher_tracking_helper.inc.php';
 
 try {
     $input = file_get_contents('php://input');
@@ -36,39 +37,6 @@ try {
         $value = preg_replace('/\\\\n/', "\n", $value);
 
         return trim($value);
-    }
-
-    function calculateTurnaroundTime_Archiving($startTimestamp, $endTimestamp)
-    {
-        $startTime = strtotime($startTimestamp);
-        $endTime = strtotime($endTimestamp);
-        if ($startTime === false || $endTime === false || $endTime < $startTime) {
-            return 'TBD';
-        }
-
-        $durationSeconds = $endTime - $startTime;
-        $days = (int) floor($durationSeconds / (24 * 3600));
-        $remainder = $durationSeconds % (24 * 3600);
-        $hours = (int) floor($remainder / 3600);
-        $remainder %= 3600;
-        $minutes = (int) floor($remainder / 60);
-        $seconds = (int) ($remainder % 60);
-
-        $parts = [];
-        if ($days > 0) {
-            $parts[] = $days . ' day' . ($days > 1 ? 's' : '');
-        }
-        if ($hours > 0) {
-            $parts[] = $hours . ' hour' . ($hours > 1 ? 's' : '');
-        }
-        if ($minutes > 0) {
-            $parts[] = $minutes . ' minute' . ($minutes > 1 ? 's' : '');
-        }
-        if ($seconds > 0) {
-            $parts[] = $seconds . ' second' . ($seconds > 1 ? 's' : '');
-        }
-
-        return $parts !== [] ? implode(' ', $parts) : '0 seconds';
     }
 
     function is_sent_required_data_empty(array $variables_to_check)
@@ -188,9 +156,12 @@ try {
                     ':process_history' => $process_history,
                 ]);
 
-                $turnaround_time = calculateTurnaroundTime_Archiving(
-                    (string) ($row['datetime_encoded'] ?? ''),
-                    $currTime
+                $turnaround_time = voucher_tracking_calculate_total_processing_time(
+                    $pdo,
+                    $processingNo,
+                    $currTime,
+                    (string) ($row['voucher_type'] ?? ''),
+                    (string) ($row['datetime_encoded'] ?? '')
                 );
                 $trackingStmt->execute([
                     ':ada_check_no' => trim((string) ($ada_check_no ?? '')),

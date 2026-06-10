@@ -1922,6 +1922,20 @@ if ($showCashierArchiveCol) {
                 JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
             ) ?>;
 
+            function fwdIsInvalidAdaCheckNo(value) {
+                var v = String(value || '').trim();
+                return v === '' || v.toUpperCase() === 'TBD';
+            }
+
+            function fwdNotifyInvalidAdaCheckNo(focusEl) {
+                if (typeof showNotify === 'function') {
+                    showNotify("Please enter a valid ADA/Check No. before paying. Empty or 'TBD' is not allowed.", 'error', 3500);
+                }
+                if (focusEl) {
+                    focusEl.focus();
+                }
+            }
+
             function fwdSyncPayVoucherAdaCheckNo() {
                 var payAdaCheckNo = document.getElementById('ada_check_no');
                 var processAdaCheckNo = document.getElementById('fwd_ada_check_no');
@@ -2000,6 +2014,11 @@ if ($showCashierArchiveCol) {
 
             function fwdArchiveSendSaveData() {
                 fwdSyncPayVoucherAdaCheckNo();
+                var adaInput = document.getElementById('fwd_ada_check_no') || document.getElementById('ada_check_no');
+                if (fwdIsInvalidAdaCheckNo(adaInput ? adaInput.value : '')) {
+                    fwdNotifyInvalidAdaCheckNo(adaInput);
+                    return;
+                }
                 var tableData = [Object.assign({}, fwdCollectForwardingVoucherRow(), fwdCollectArchiveProcessFormData())];
                 var combinedData = {
                     data: tableData
@@ -2130,6 +2149,12 @@ if ($showCashierArchiveCol) {
             }
 
             function fwdArchiveCheckPrintInputs() {
+                fwdSyncPayVoucherAdaCheckNo();
+                var adaInput = document.getElementById('fwd_ada_check_no') || document.getElementById('ada_check_no');
+                if (fwdIsInvalidAdaCheckNo(adaInput ? adaInput.value : '')) {
+                    fwdNotifyInvalidAdaCheckNo(adaInput);
+                    return;
+                }
                 var inputs = document.querySelectorAll('#myForm_ArchiveProcessing input, #myForm_ArchiveProcessing select');
                 var allFilled = Array.from(inputs).every(function(input) {
                     return input.value.trim() !== '';
@@ -2188,6 +2213,11 @@ if ($showCashierArchiveCol) {
                         }
                         e.preventDefault();
                         e.stopPropagation();
+                        var adaInput = document.getElementById('ada_check_no');
+                        if (fwdIsInvalidAdaCheckNo(adaInput ? adaInput.value : '')) {
+                            fwdNotifyInvalidAdaCheckNo(adaInput);
+                            return;
+                        }
                         openArchiveProcessDocumentFromModal();
                     });
                 }

@@ -2,7 +2,7 @@
 /**
  * One-time fix: backfill missing cashier "Processed by" rows in voucher_action_logs
  * from voucher_archives, sync process_history on voucher_tracking, and compute
- * total_processing_time from datetime_encoded through cashier Processed by.
+ * total_processing_time from first receive at Planning/CDS through cashier Processed by.
  *
  * Targets archives created by the ADA multi-handler where action is
  * "Processed by: NAME" but the action log insert did not run (or failed),
@@ -21,6 +21,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
 require_once __DIR__ . '/../protected/core/components/helpers/handler_transaction_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     die("Error: Database connection not available. Check protected/dbconnection.inc.php\n");
@@ -147,39 +148,6 @@ function append_history_line(string $history, string $line): string
 function build_history_line(string $name, string $action, string $section, string $office): string
 {
     return implode(' | ', [$name, $action, $section, $office]);
-}
-
-function calculate_total_processing_time(string $startTimestamp, string $endTimestamp): string
-{
-    $startTime = strtotime($startTimestamp);
-    $endTime = strtotime($endTimestamp);
-    if ($startTime === false || $endTime === false || $endTime < $startTime) {
-        return 'TBD';
-    }
-
-    $durationSeconds = $endTime - $startTime;
-    $days = (int) floor($durationSeconds / (24 * 3600));
-    $remainder = $durationSeconds % (24 * 3600);
-    $hours = (int) floor($remainder / 3600);
-    $remainder %= 3600;
-    $minutes = (int) floor($remainder / 60);
-    $seconds = (int) ($remainder % 60);
-
-    $parts = [];
-    if ($days > 0) {
-        $parts[] = $days . ' day' . ($days > 1 ? 's' : '');
-    }
-    if ($hours > 0) {
-        $parts[] = $hours . ' hour' . ($hours > 1 ? 's' : '');
-    }
-    if ($minutes > 0) {
-        $parts[] = $minutes . ' minute' . ($minutes > 1 ? 's' : '');
-    }
-    if ($seconds > 0) {
-        $parts[] = $seconds . ' second' . ($seconds > 1 ? 's' : '');
-    }
-
-    return $parts !== [] ? implode(' ', $parts) : '0 seconds';
 }
 
 function processed_log_exists(PDO $pdo, string $processingNo, string $actionBy): bool
@@ -370,8 +338,14 @@ try {
             if ($encodedAt === '') {
                 $encodedAt = trim((string) ($trackingRow['datetime_encoded'] ?? ''));
             }
-            if ($processedAt !== '' && $encodedAt !== '') {
-                $totalProcessingTime = calculate_total_processing_time($encodedAt, $processedAt);
+            if ($processedAt !== '') {
+                $totalProcessingTime = voucher_tracking_calculate_total_processing_time(
+                    $pdo,
+                    $processingNo,
+                    $processedAt,
+                    '',
+                    $encodedAt
+                );
             }
 
             $current = normalize_process_history((string) ($trackingRow['process_history'] ?? ''));
@@ -445,7 +419,7 @@ try {
                 $trackingMessages[] = 'process_history';
             }
             if ($needsProcessingTime) {
-                $trackingMessages[] = "total_processing_time ({$encodedAt} → {$processedAt} = {$totalProcessingTime})";
+                $trackingMessages[] = "total_processing_time (first process receive → {$processedAt} = {$totalProcessingTime})";
             }
             out('  ' . $processingNo . ': update voucher_tracking — ' . implode(', ', $trackingMessages));
 

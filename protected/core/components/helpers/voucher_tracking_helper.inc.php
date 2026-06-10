@@ -1266,6 +1266,131 @@ function voucher_tracking_format_duration_seconds(int $seconds): string
     return implode(' ', $parts);
 }
 
+/**
+ * Human-readable turnaround label for voucher_tracking.total_processing_time.
+ */
+function voucher_tracking_format_turnaround_seconds(int $seconds): string
+{
+    if ($seconds <= 0) {
+        return '0 seconds';
+    }
+
+    $days = intdiv($seconds, 86400);
+    $remainder = $seconds % 86400;
+    $hours = intdiv($remainder, 3600);
+    $remainder %= 3600;
+    $minutes = intdiv($remainder, 60);
+    $secs = $remainder % 60;
+
+    $parts = [];
+    if ($days > 0) {
+        $parts[] = $days . ' day' . ($days > 1 ? 's' : '');
+    }
+    if ($hours > 0) {
+        $parts[] = $hours . ' hour' . ($hours > 1 ? 's' : '');
+    }
+    if ($minutes > 0) {
+        $parts[] = $minutes . ' minute' . ($minutes > 1 ? 's' : '');
+    }
+    if ($secs > 0) {
+        $parts[] = $secs . ' second' . ($secs > 1 ? 's' : '');
+    }
+
+    return implode(' ', $parts);
+}
+
+/** First workflow section that starts total processing time for a voucher type. */
+function voucher_tracking_total_processing_start_section(string $voucher_type): string
+{
+    return voucher_type_is_engp($voucher_type)
+        ? 'Conservation & Development Section'
+        : 'Planning Section';
+}
+
+/**
+ * Earliest receive timestamp at the given dashboard section from action logs.
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ */
+function voucher_tracking_first_receive_at_section(
+    array $actions,
+    string $targetSection,
+    ?object $pdo = null
+): ?int {
+    $targetSection = voucher_tracking_normalize_section_label($targetSection);
+    if ($targetSection === '') {
+        return null;
+    }
+
+    $userCache = [];
+    $earliest = null;
+    foreach ($actions as $row) {
+        if (voucher_tracking_action_kind($row['action'] ?? '') !== 'receive') {
+            continue;
+        }
+
+        $section = voucher_tracking_dashboard_section_from_action_row($row, $pdo, $userCache);
+        if ($section !== $targetSection) {
+            continue;
+        }
+
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts === false) {
+            continue;
+        }
+
+        if ($earliest === null || $ts < $earliest) {
+            $earliest = $ts;
+        }
+    }
+
+    return $earliest;
+}
+
+/**
+ * Total processing time: first receive at the workflow start section (Planning or CDS)
+ * through paid/processed by cashier.
+ */
+function voucher_tracking_calculate_total_processing_time(
+    object $pdo,
+    string $processing_no,
+    string $endTimestamp,
+    string $voucher_type = '',
+    string $fallbackStartTimestamp = ''
+): string {
+    $endTs = strtotime(trim($endTimestamp));
+    if ($endTs === false) {
+        return 'TBD';
+    }
+
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return 'TBD';
+    }
+
+    if (trim($voucher_type) === '') {
+        $voucher_type = voucher_fetch_stored_voucher_type($pdo, $processing_no);
+    }
+
+    $startSection = voucher_tracking_total_processing_start_section($voucher_type);
+    $logs = voucher_tracking_fetch_action_logs_grouped($pdo, [$processing_no]);
+    $actions = $logs[$processing_no] ?? [];
+    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
+
+    if ($startTs === null && trim($fallbackStartTimestamp) !== '') {
+        $fallbackTs = strtotime(trim($fallbackStartTimestamp));
+        if ($fallbackTs !== false) {
+            $startTs = $fallbackTs;
+        }
+    }
+
+    if ($startTs === null || $endTs < $startTs) {
+        return 'TBD';
+    }
+
+    return voucher_tracking_format_turnaround_seconds($endTs - $startTs);
+}
+
 function voucher_tracking_dashboard_recent_voucher_limit(): int
 {
     return 15;
