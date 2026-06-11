@@ -10,6 +10,13 @@ function normalizeAmountInput(raw) {
     return v;
 }
 
+/** Append .00 when amount has no decimal part (e.g. 15000 → 15000.00). */
+function ensureAmountTwoDecimals(raw) {
+    var normalized = normalizeAmountInput(raw);
+    if (normalized === '') return '';
+    return normalized.indexOf('.') === -1 ? normalized + '.00' : normalized;
+}
+
 function formatAmountDisplay(raw) {
     var normalized = normalizeAmountInput(raw);
     if (normalized === '') return '';

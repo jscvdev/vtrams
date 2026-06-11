@@ -45,6 +45,34 @@ function normalize_amount_string(mixed $raw): string
     return $v;
 }
 
+/** Append .00 when amount has no decimal part (e.g. 15000 → 15000.00). */
+function ensure_amount_two_decimals(mixed $raw): string
+{
+    $normalized = normalize_amount_string($raw);
+    if ($normalized === '') {
+        return '';
+    }
+
+    return strpos($normalized, '.') === false ? $normalized . '.00' : $normalized;
+}
+
+/** True when a stored amount is a whole number without a decimal point. */
+function amount_stored_value_needs_two_decimals(mixed $raw): bool
+{
+    if ($raw === null) {
+        return false;
+    }
+
+    $trimmed = trim(amount_pdo_value_to_string($raw));
+    if ($trimmed === '') {
+        return false;
+    }
+
+    $normalized = normalize_amount_string($raw);
+
+    return $normalized !== '' && strpos($normalized, '.') === false;
+}
+
 function amounts_equal_string(?string $a, ?string $b): bool
 {
     return normalize_amount_string($a) === normalize_amount_string($b);

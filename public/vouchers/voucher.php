@@ -352,7 +352,7 @@ function session_contains_phrase($phrase)
                                         errorEl.style.display = "none"; // hide error if edited
                                         var amountInput = document.getElementById('amount');
                                         if (amountInput) {
-                                            var normalizedAmount = normalizeAmountInput(amountInput.value);
+                                            var normalizedAmount = ensureAmountTwoDecimals(amountInput.value);
                                             if (normalizedAmount !== '') {
                                                 amountInput.value = normalizedAmount;
                                             }
@@ -1380,11 +1380,11 @@ function session_contains_phrase($phrase)
         var stringAmount = document.getElementById('string_amount');
         var encodedAmount = document.getElementById('encoded_amount');
         if (stringAmount && encodedAmount) {
-            var normalized = normalizeAmountInput(stringAmount.value);
+            var normalized = ensureAmountTwoDecimals(stringAmount.value);
             if (normalized !== '') {
                 encodedAmount.value = normalized;
             } else if (encodedAmount.value !== '') {
-                encodedAmount.value = normalizeAmountInput(encodedAmount.value);
+                encodedAmount.value = ensureAmountTwoDecimals(encodedAmount.value);
             }
         }
 

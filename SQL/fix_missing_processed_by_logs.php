@@ -1,12 +1,11 @@
 <?php
 /**
- * One-time fix: backfill missing cashier "Processed by" rows in voucher_action_logs
- * from voucher_archives, sync process_history on voucher_tracking, and compute
- * total_processing_time from first receive at Planning/CDS through cashier Processed by.
- *
- * Targets archives created by the ADA multi-handler where action is
- * "Processed by: NAME" but the action log insert did not run (or failed),
- * and process_history was never appended with the final Processed line.
+ * One-time fix:
+ * 1) Backfill missing cashier "Processed by" rows in voucher_action_logs from
+ *    voucher_archives, sync process_history on voucher_tracking, and compute
+ *    total_processing_time from first receive at Planning/CDS through cashier Processed by.
+ * 2) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
+ *    voucher tables.
  *
  * Usage (CLI):
  *   c:\xampp\php\php.exe SQL/fix_missing_processed_by_logs.php           # dry-run
@@ -22,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
 require_once __DIR__ . '/../protected/core/components/helpers/handler_transaction_helper.inc.php';
 require_once __DIR__ . '/../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/amount_helper.inc.php';
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     die("Error: Database connection not available. Check protected/dbconnection.inc.php\n");
@@ -150,6 +150,127 @@ function build_history_line(string $name, string $action, string $section, strin
     return implode(' | ', [$name, $action, $section, $office]);
 }
 
+/** @var array<string, list<string>> */
+const AMOUNT_FIX_TABLES = [
+    'vouchers' => ['amount'],
+    'voucher_incoming' => ['amount', 'charged_amount'],
+    'voucher_receiving' => ['amount', 'charged_amount'],
+    'voucher_sent' => ['amount', 'charged_amount'],
+    'voucher_archives' => ['amount', 'charged_amount'],
+    'voucher_temp' => ['amount', 'charged_amount'],
+    'voucher_tracking' => ['amount', 'charged_amount'],
+    'voucher_action_logs' => ['amount'],
+    'dv_entries' => ['amount'],
+];
+
+/**
+ * @return array{updated_rows: int, updated_columns: int}
+ */
+function fix_whole_number_amounts(PDO $pdo, bool $apply): array
+{
+    $updatedRows = 0;
+    $updatedColumns = 0;
+
+    foreach (AMOUNT_FIX_TABLES as $table => $columns) {
+        try {
+            $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1");
+        } catch (PDOException) {
+            out("Skip {$table}: table not found.");
+            continue;
+        }
+
+        $existingColumns = [];
+        $columnStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+        if ($columnStmt) {
+            while ($columnRow = $columnStmt->fetch(PDO::FETCH_ASSOC)) {
+                $field = trim((string) ($columnRow['Field'] ?? ''));
+                if ($field !== '') {
+                    $existingColumns[$field] = true;
+                }
+            }
+        }
+
+        $amountColumns = array_values(array_filter(
+            $columns,
+            static fn (string $column): bool => isset($existingColumns[$column])
+        ));
+        if ($amountColumns === []) {
+            out("Skip {$table}: no amount column(s).");
+            continue;
+        }
+
+        $idCol = isset($existingColumns['id']) ? 'id' : null;
+        $hasProcessingNo = isset($existingColumns['processing_no']);
+        $selectCols = array_values(array_unique(array_filter(array_merge(
+            $idCol !== null ? [$idCol] : [],
+            $hasProcessingNo ? ['processing_no'] : [],
+            $amountColumns
+        ))));
+
+        $selectSql = 'SELECT ' . implode(', ', array_map(
+            static fn (string $column): string => '`' . $column . '`',
+            $selectCols
+        )) . " FROM `{$table}`";
+        $rows = $pdo->query($selectSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
+
+        out('Scanning ' . count($rows) . " row(s) in {$table} for whole-number amount(s)...");
+
+        foreach ($rows as $row) {
+            $rowUpdates = [];
+            foreach ($amountColumns as $column) {
+                $current = $row[$column] ?? null;
+                if (!amount_stored_value_needs_two_decimals($current)) {
+                    continue;
+                }
+
+                $fixed = ensure_amount_two_decimals($current);
+                if ($fixed === trim(amount_pdo_value_to_string($current))) {
+                    continue;
+                }
+
+                $rowUpdates[$column] = $fixed;
+            }
+
+            if ($rowUpdates === []) {
+                continue;
+            }
+
+            $label = $hasProcessingNo
+                ? trim((string) ($row['processing_no'] ?? ''))
+                : ($idCol !== null ? (string) ($row[$idCol] ?? '') : $table);
+            if ($label === '') {
+                $label = $idCol !== null ? (string) ($row[$idCol] ?? 'unknown') : 'unknown';
+            }
+
+            foreach ($rowUpdates as $column => $fixed) {
+                $current = trim(amount_pdo_value_to_string($row[$column] ?? ''));
+                out("  {$table} {$label}: {$column} {$current} → {$fixed}");
+                if ($apply) {
+                    if ($idCol !== null) {
+                        $updateStmt = $pdo->prepare("UPDATE `{$table}` SET `{$column}` = :amount WHERE `{$idCol}` = :id");
+                        $updateStmt->bindValue(':amount', $fixed, PDO::PARAM_STR);
+                        $updateStmt->bindValue(':id', $row[$idCol], PDO::PARAM_STR);
+                        $updateStmt->execute();
+                    } elseif ($hasProcessingNo) {
+                        $updateStmt = $pdo->prepare("UPDATE `{$table}` SET `{$column}` = :amount WHERE `processing_no` = :processing_no");
+                        $updateStmt->bindValue(':amount', $fixed, PDO::PARAM_STR);
+                        $updateStmt->bindValue(':processing_no', $row['processing_no'], PDO::PARAM_STR);
+                        $updateStmt->execute();
+                    }
+                }
+                $updatedColumns++;
+            }
+
+            $updatedRows++;
+        }
+    }
+
+    return [
+        'updated_rows' => $updatedRows,
+        'updated_columns' => $updatedColumns,
+    ];
+}
+
 function processed_log_exists(PDO $pdo, string $processingNo, string $actionBy): bool
 {
     $stmt = $pdo->prepare("
@@ -172,7 +293,7 @@ if (!$isCli) {
     echo '<pre style="font-family:monospace">';
 }
 
-out('Fix missing Processed by in voucher_action_logs (source: voucher_archives.action)');
+out('Maintenance fix: missing Processed by logs + whole-number amount normalization');
 out('Mode: ' . ($apply ? 'APPLY (updates will be saved)' : 'DRY-RUN (preview only; pass --apply or ?apply=1 to commit)'));
 out(str_repeat('-', 72));
 
@@ -181,6 +302,8 @@ $updatedTracking = 0;
 $updatedArchives = 0;
 $updatedProcessingTime = 0;
 $skipped = 0;
+$amountRowsFixed = 0;
+$amountColumnsFixed = 0;
 
 try {
     $archiveStmt = $pdo->query("
@@ -294,6 +417,8 @@ try {
         &$updatedArchives,
         &$updatedProcessingTime,
         &$skipped,
+        &$amountRowsFixed,
+        &$amountColumnsFixed,
         $archives,
         $insertStmt,
         $trackingStmt,
@@ -301,6 +426,7 @@ try {
         $trackingCheck,
         $apply
     ) {
+    out('Phase 1: missing Processed by action logs');
     foreach ($archives as $archive) {
         $processingNo = trim((string) ($archive['processing_no'] ?? ''));
         $action = trim((string) ($archive['action'] ?? ''));
@@ -378,7 +504,7 @@ try {
                     ':address' => (string) ($archive['address'] ?? ''),
                     ':tin_employee_no' => (string) ($archive['tin_employee_no'] ?? ''),
                     ':particulars' => (string) ($archive['particulars'] ?? ''),
-                    ':amount' => (string) ($archive['amount'] ?? '0'),
+                    ':amount' => ensure_amount_two_decimals((string) ($archive['amount'] ?? '0')),
                     ':voucher_type' => (string) ($archive['voucher_type'] ?? ''),
                     ':voucher_date' => (string) ($archive['voucher_date'] ?? ''),
                     ':remarks' => trim((string) ($archive['remarks'] ?? '')) !== ''
@@ -440,6 +566,12 @@ try {
             }
         }
     }
+
+    out(str_repeat('-', 72));
+    out('Phase 2: whole-number amounts → two decimal places');
+    $amountFix = fix_whole_number_amounts($pdo, $apply);
+    $amountRowsFixed = $amountFix['updated_rows'];
+    $amountColumnsFixed = $amountFix['updated_columns'];
     };
 
     $tx = db_transaction($pdo, $work, !$apply || $dryRun);
@@ -454,10 +586,10 @@ try {
 
     out(str_repeat('-', 72));
     if (!$apply || $dryRun) {
-        out("Preview complete. Would insert {$insertedLogs} log(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), skipped {$skipped}.");
+        out("Preview complete. Would insert {$insertedLogs} log(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
         out('Re-run with --apply (CLI) or ?apply=1 (browser) to save. Use --dry-run to execute then roll back.');
     } else {
-        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), skipped {$skipped}.");
+        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
     }
 } catch (Throwable $e) {
     out('Migration failed: ' . $e->getMessage());
