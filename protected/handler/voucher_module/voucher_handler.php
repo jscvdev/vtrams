@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $processing_no = "PN" . "-" . date("y-m") . "-" . "{$totalFormatted}";
 
-                    // PASSED HIDDEN INPUT
+                    $encoded_from = voucher_post_string($office_from);
                     $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
                     $encoded_by = voucher_post_string($_SESSION['logged_user_emp_name'] ?? '');
 
@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $voucher_type,
                                 $particulars,
                                 $datetime_action,
-                                $action_from,
+                                $encoded_from,
                                 $encoded_by,
                                 $ors_no,
                                 $office_from,
@@ -145,10 +145,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $combined_remarks,
                                 $action,
                                 $action_by,
+                                $action_from,
                                 $remarks
                             ) {
                                 insert_voucher_no($pdo, $processing_no);
-                                move_to_pending_voucher_no($pdo, $processing_no, $dv_no, $ada_check_no, $payee, $address, $tin_employee_no, $voucher_date, $amount, $voucher_type, $particulars, $datetime_action, $action_from, $encoded_by, $ors_no, $office_from);
+                                move_to_pending_voucher_no($pdo, $processing_no, $dv_no, $ada_check_no, $payee, $address, $tin_employee_no, $voucher_date, $amount, $voucher_type, $particulars, $datetime_action, $encoded_from, $encoded_by, $ors_no, $office_from);
                                 voucher_document_tracking_logging($pdo, $processing_no, $ors_no, $ada_check_no, $dv_no, $payee, $address, $particulars, $amount, $voucher_type, $voucher_date, $datetime_action, $action, $datetime_action, $encoded_by, $office_to, $office_from, $combined_remarks, null, null, null);
                                 voucher_log_user_action(
                                     $pdo,

@@ -1206,10 +1206,6 @@ $totalRows = $displayTotal;
     const targetArray2 = target2.split(',').map(function(v) {
         return String(v || '').trim();
     }); // Convert to a trimmed array
-    const loggedUserOffice = <?= json_encode(
-        trim((string) ($_SESSION['logged_user_office'] ?? '')),
-        JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
-    ) ?>;
 
     function normalizeIncomingProcessHistory(value) {
         return String(value || '')
@@ -1249,15 +1245,6 @@ $totalRows = $displayTotal;
         return map[key] || String(section || '').trim();
     }
 
-    function incomingHistoryOriginOffice(lines) {
-        for (var i = 0; i < lines.length; i++) {
-            if (/encoded by/i.test(lines[i].action)) {
-                return lines[i].office;
-            }
-        }
-        return lines.length ? lines[0].office : '';
-    }
-
     function incomingHistoryHasPlanningReceive(lines) {
         for (var i = 0; i < lines.length; i++) {
             if (!/received by/i.test(lines[i].action)) {
@@ -1268,15 +1255,6 @@ $totalRows = $displayTotal;
             }
         }
         return false;
-    }
-
-    function incomingOfficesMatch(left, right) {
-        left = String(left || '').trim();
-        right = String(right || '').trim();
-        if (!left || !right) {
-            return false;
-        }
-        return left.toUpperCase() === right.toUpperCase();
     }
 
     function incomingVoucherTypeRequiresDvAlways(voucherType) {
@@ -1292,11 +1270,6 @@ $totalRows = $displayTotal;
 
         var lines = parseIncomingProcessHistoryLines(processHistory);
         if (!lines.length) {
-            return false;
-        }
-
-        var originOffice = incomingHistoryOriginOffice(lines);
-        if (!incomingOfficesMatch(originOffice, loggedUserOffice)) {
             return false;
         }
 

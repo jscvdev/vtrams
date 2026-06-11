@@ -37,14 +37,13 @@ $udc_param = '%' . $_SESSION['logged_user_udc'] . '%';
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $countSql = 'SELECT COUNT(*) AS total FROM voucher_sent WHERE sender_udc LIKE :udc AND office_to = :office_to';
+    $countSql = 'SELECT COUNT(*) AS total FROM voucher_sent WHERE sender_udc LIKE :udc';
     if ($voucher_type_filter !== 'all') {
         $countSql .= ' AND voucher_type = :voucher_type';
     }
     $countSql .= $searchSql;
     $stmtCount = $pdo->prepare($countSql);
     $stmtCount->bindValue(':udc', $udc_param, PDO::PARAM_STR);
-    $stmtCount->bindValue(':office_to', $_SESSION['logged_user_office'], PDO::PARAM_STR);
     if ($voucher_type_filter !== 'all') {
         $stmtCount->bindValue(':voucher_type', $voucher_type_filter, PDO::PARAM_STR);
     }
@@ -62,14 +61,13 @@ $currentPage = max(1, min($currentPage, $totalPages));
 $offset = ($currentPage - 1) * $rowsPerPage;
 $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)) : 0;
 
-$dataSql = 'SELECT * FROM voucher_sent WHERE sender_udc LIKE :udc AND office_to = :office_to';
+$dataSql = 'SELECT * FROM voucher_sent WHERE sender_udc LIKE :udc';
 if ($voucher_type_filter !== 'all') {
     $dataSql .= ' AND voucher_type = :voucher_type';
 }
 $dataSql .= $searchSql . ' ORDER BY processing_no DESC LIMIT :lim OFFSET :off';
 $fetch_voucher_sent_data = $pdo->prepare($dataSql);
 $fetch_voucher_sent_data->bindValue(':udc', $udc_param, PDO::PARAM_STR);
-$fetch_voucher_sent_data->bindValue(':office_to', $_SESSION['logged_user_office'], PDO::PARAM_STR);
 if ($voucher_type_filter !== 'all') {
     $fetch_voucher_sent_data->bindValue(':voucher_type', $voucher_type_filter, PDO::PARAM_STR);
 }

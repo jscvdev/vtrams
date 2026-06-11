@@ -408,10 +408,14 @@ function voucher_tracking_resolve_return_forward_target(
 
     $encodedFrom = trim((string) $encoded_from);
     $encoderSection = trim((string) $encoder_section);
+    $loggedOffice = voucher_logged_user_office();
     if ($encodedFrom === '') {
         return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
     if ($encoderSection !== '' && strcasecmp($encodedFrom, $encoderSection) === 0) {
+        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+    }
+    if ($loggedOffice !== '' && voucher_tracking_offices_match($encodedFrom, $loggedOffice)) {
         return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
     }
 
@@ -972,7 +976,20 @@ function voucher_type_is_engp(string $voucher_type): bool
     return str_starts_with($collapsed, 'engp');
 }
 
-/** Whether an office label refers to a CENRO field office. */
+/**
+ * Encoders at CENRO offices or offices with a registered Liaison Officer
+ * must forward all vouchers to Liaison Officer first.
+ */
+function voucher_encoder_forwards_to_liaison_first(object $pdo, string $encoder_office): bool
+{
+    $encoder_office = trim($encoder_office);
+    if ($encoder_office === '') {
+        return false;
+    }
+
+    return voucher_designation_limit_office_registered($pdo, $encoder_office, 'Liaison Officer');
+}
+
 function voucher_tracking_normalize_process_history(?string $value): string
 {
     if ($value === null) {
@@ -1080,12 +1097,12 @@ function voucher_type_requires_dv_no_always(string $voucher_type): bool
 /**
  * Accounting receive requires DV No. based on process_history:
  * - Always for selected e-NGP types.
- * - Otherwise when encoded in the logged user's office and Planning Section received it.
+ * - Otherwise once Planning Section has received the voucher (any origin office).
  */
 function voucher_incoming_requires_dv_no(
     string $voucher_type,
     string $process_history,
-    string $logged_user_office
+    string $logged_user_office = ''
 ): bool {
     if (voucher_type_requires_dv_no_always($voucher_type)) {
         return true;
@@ -1093,11 +1110,6 @@ function voucher_incoming_requires_dv_no(
 
     $lines = voucher_tracking_parse_process_history_lines($process_history);
     if ($lines === []) {
-        return false;
-    }
-
-    $originOffice = voucher_tracking_history_origin_office($lines);
-    if (!voucher_tracking_offices_match($originOffice, $logged_user_office)) {
         return false;
     }
 
@@ -1210,8 +1222,9 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
 
 /**
  * Default forward target for encoders based on designation_limit office registration.
+ * CENRO / liaison-assigned offices are routed via voucher_encoder_forwards_to_liaison_first().
  * eNGP vouchers → Conservation & Development Section when registered for the office.
- * Other PENRO vouchers → Planning Section; CENRO/other offices → Liaison Officer when registered.
+ * Other PENRO vouchers → Planning Section when registered.
  */
 function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office, string $voucher_type = ''): string
 {
@@ -1220,22 +1233,20 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
         return '';
     }
 
+    if (voucher_encoder_forwards_to_liaison_first($pdo, $logged_user_office)) {
+        return '';
+    }
+
     if (voucher_type_is_engp($voucher_type)) {
-        $engpTargets = ['Conservation & Development Section', 'Liaison Officer'];
-        foreach ($engpTargets as $designation) {
-            if (voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
-                return $designation;
-            }
+        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Conservation & Development Section')) {
+            return 'Conservation & Development Section';
         }
 
         return '';
     }
 
-    $targets = ['Planning Section', 'Liaison Officer'];
-    foreach ($targets as $designation) {
-        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, $designation)) {
-            return $designation;
-        }
+    if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')) {
+        return 'Planning Section';
     }
 
     return '';

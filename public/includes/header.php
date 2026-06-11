@@ -40,12 +40,11 @@ $fetch_voucher_incoming_data->bindParam(":udc", $udc_param, PDO::PARAM_STR);
 $fetch_voucher_incoming_data->bindParam(":office_to", $_SESSION["logged_user_office"]);
 $fetch_voucher_incoming_data->execute();
 
-//SENT
-$fetch_voucher_sent_data_query = "SELECT * FROM voucher_sent WHERE sender_udc LIKE :udc and office_to = :office_to ORDER BY processing_no DESC";
+//SENT — match voucher_sent.php: show all vouchers the user sent, any destination office
+$fetch_voucher_sent_data_query = "SELECT * FROM voucher_sent WHERE sender_udc LIKE :udc ORDER BY processing_no DESC";
 $fetch_voucher_sent_data = $pdo->prepare($fetch_voucher_sent_data_query);
 $udc_param = '%' . $_SESSION["logged_user_udc"] . '%'; // Prepare the parameter with '%' wildcards
 $fetch_voucher_sent_data->bindParam(":udc", $udc_param, PDO::PARAM_STR);
-$fetch_voucher_sent_data->bindParam(":office_to", $_SESSION["logged_user_office"]);
 $fetch_voucher_sent_data->execute();
 $target = explode(",", $_SESSION['logged_user_designation']);
 

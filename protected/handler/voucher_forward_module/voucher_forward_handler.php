@@ -115,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 if (isset($_REQUEST['forward_voucher'])) {
                     $logged_user_office = voucher_logged_user_office();
+                    $voucher_office_from = trim(voucher_post_string($_POST['office_from'] ?? ''));
                     $office_from = $logged_user_office;
                     $office_to = $logged_user_office;
                     $forwarded_by = $_SESSION['logged_user_emp_name'];
@@ -129,7 +130,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $combined_remarks = "N/A";
                     }
 
+                    $encoder_office = $voucher_office_from;
+                    if ($encoder_office === '') {
+                        $encoder_office = trim(voucher_post_string($encoded_from ?? ''));
+                    }
+                    if ($encoder_office === '') {
+                        $encoder_office = $logged_user_office;
+                    }
+
+                    // encoded_from stores the encoder's office; correct legacy section labels on encoder forward.
+                    if (
+                        $encoder_office !== ''
+                        && trim((string) ($encoded_by ?? '')) === trim((string) ($_SESSION['logged_user_emp_name'] ?? ''))
+                    ) {
+                        $encoded_from = $encoder_office;
+                    }
+
                     $forwarded_to = '';
+                    $target_to = '';
                     if ($needsReturnForward) {
                         // Re-forward returned voucher to whoever returned it (from voucher_tracking).
                         $resolved = voucher_forward_receiver_for_return_target(
@@ -139,6 +157,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $office_to,
                             $sender_udc
                         );
+                        $receiver_udc = $resolved['receiver_udc'];
+                        $forwarded_to = $resolved['forwarded_to'];
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        }
+                    } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
+                        $target_to = 'Liaison Officer';
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
                         if ($resolved['temp_errors']) {
@@ -154,10 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
                     } elseif (
-                        ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $logged_user_office, $voucher_type ?? '')) !== ''
+                        ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $encoder_office, $voucher_type ?? '')) !== ''
                     ) {
                         $target_to = $encoderForwardTarget;
-                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $logged_user_office);
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
                         $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
@@ -180,6 +207,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         && voucher_udcs_excluding($receiver_udc, $sender_udc) === ''
                     ) {
                         $temp_dump['self_send'] = 'Cannot forward this document to yourself';
+                    }
+
+                    if (!$needsReturnForward && trim($receiver_udc) === '') {
+                        $temp_dump['unassigned_udc'] = $temp_dump['unassigned_udc']
+                            ?? 'No user is assigned to accept this voucher. Forwarding was blocked.';
                     }
 
                     $variables_to_check = [
