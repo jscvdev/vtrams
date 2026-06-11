@@ -972,6 +972,168 @@ function voucher_type_is_engp(string $voucher_type): bool
     return str_starts_with($collapsed, 'engp');
 }
 
+/** Whether an office label refers to a CENRO field office. */
+function voucher_tracking_normalize_process_history(?string $value): string
+{
+    if ($value === null) {
+        return '';
+    }
+    $value = str_replace(["\r\n", "\r"], "\n", (string) $value);
+    $value = preg_replace('/\\\\n/', "\n", $value) ?? $value;
+
+    return trim($value);
+}
+
+/**
+ * @return list<array{name: string, action: string, section: string, office: string}>
+ */
+function voucher_tracking_parse_process_history_lines(string $value): array
+{
+    $value = voucher_tracking_normalize_process_history($value);
+    if ($value === '') {
+        return [];
+    }
+
+    $parsed = [];
+    foreach (preg_split('/\n/', $value) as $line) {
+        $line = trim($line);
+        if ($line === '' || !str_contains($line, '|')) {
+            continue;
+        }
+
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        if (!isset($parts[0], $parts[1], $parts[2], $parts[3])) {
+            continue;
+        }
+
+        $parsed[] = [
+            'name' => trim($parts[0]),
+            'action' => trim($parts[1]),
+            'section' => trim($parts[2]),
+            'office' => trim($parts[3]),
+        ];
+    }
+
+    return $parsed;
+}
+
+function voucher_tracking_offices_match(string $left, string $right): bool
+{
+    $left = trim($left);
+    $right = trim($right);
+    if ($left === '' || $right === '') {
+        return false;
+    }
+
+    return strcasecmp($left, $right) === 0;
+}
+
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_origin_office(array $lines): string
+{
+    foreach ($lines as $line) {
+        if (stripos($line['action'], 'Encoded By') !== false) {
+            return trim($line['office']);
+        }
+    }
+
+    return trim((string) ($lines[0]['office'] ?? ''));
+}
+
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_has_planning_receive(array $lines): bool
+{
+    foreach ($lines as $line) {
+        if (stripos($line['action'], 'Received by') === false) {
+            continue;
+        }
+        if (voucher_tracking_normalize_section_label($line['section']) === 'Planning Section') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** e-NGP types that always require DV No. at accounting receive. */
+function voucher_type_requires_dv_no_always(string $voucher_type): bool
+{
+    static $types = [
+        'e-NGP Retention',
+        'e-NGP Seedling Production & MP',
+    ];
+
+    $voucher_type = trim($voucher_type);
+    foreach ($types as $type) {
+        if (strcasecmp($voucher_type, $type) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Accounting receive requires DV No. based on process_history:
+ * - Always for selected e-NGP types.
+ * - Otherwise when encoded in the logged user's office and Planning Section received it.
+ */
+function voucher_incoming_requires_dv_no(
+    string $voucher_type,
+    string $process_history,
+    string $logged_user_office
+): bool {
+    if (voucher_type_requires_dv_no_always($voucher_type)) {
+        return true;
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    if ($lines === []) {
+        return false;
+    }
+
+    $originOffice = voucher_tracking_history_origin_office($lines);
+    if (!voucher_tracking_offices_match($originOffice, $logged_user_office)) {
+        return false;
+    }
+
+    return voucher_tracking_history_has_planning_receive($lines);
+}
+
+/** Whether process_history shows the voucher was encoded in the logged user's office. */
+function voucher_history_origin_matches_logged_office(string $process_history, string $logged_user_office): bool
+{
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    if ($lines === []) {
+        return false;
+    }
+
+    return voucher_tracking_offices_match(
+        voucher_tracking_history_origin_office($lines),
+        $logged_user_office
+    );
+}
+
+/**
+ * Forwarding workflow uses full in-office actions (Process, Transmit, all forward targets)
+ * when encoded in the logged user's office or when the voucher type is e-NGP.
+ */
+function voucher_forwarding_treat_as_same_office_workflow(
+    string $voucher_type,
+    string $process_history,
+    string $logged_user_office
+): bool {
+    if (voucher_type_is_engp($voucher_type)) {
+        return true;
+    }
+
+    return voucher_history_origin_matches_logged_office($process_history, $logged_user_office);
+}
+
 /** Whether encoder forward should use the return/re-forward routing path. */
 function voucher_tracking_needs_return_forward(
     ?array $tracking_row,

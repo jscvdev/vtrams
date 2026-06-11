@@ -17,6 +17,7 @@ require_once __DIR__ . '/checklist_config.php';
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 $dashboard_voucher_types = checklist_types_with_labels();
 $voucher_type_filter = isset($_GET['voucher_type']) && $_GET['voucher_type'] !== 'all' ? trim((string) $_GET['voucher_type']) : 'all';
 
@@ -129,10 +130,12 @@ $isLiaisonOfficer = in_array('Liaison Officer', $target, true);
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $showForwardCol = !$hideForwardForCashiersUnit;
-$showOptionsCol = (
+$showProcessCol = (
     (in_array("Accounting Unit", $target) && !in_array("Accountant III", $target))
     || in_array("Processor", $target)
 );
+$isAlternateWorkflowRole = $showProcessCol || in_array('ICU', $target, true);
+$loggedUserOffice = voucher_logged_user_office();
 $showTransmitCol = (
     (!in_array("Accountant III", $target) && in_array("Accounting Unit", $target))
     || (in_array("Budget Unit", $target) && !in_array("Budget Officer", $target))
@@ -667,8 +670,8 @@ if ($showCashierArchiveCol) {
                         <?php if ($showForwardCol) : ?>
                             <th id="forward_header">Forward</th>
                         <?php endif; ?>
-                        <?php if ($showOptionsCol) : ?>
-                            <th id="forward_header">Options</th>
+                        <?php if ($showProcessCol) : ?>
+                            <th id="forward_header">Process</th>
                         <?php endif; ?>
                         <?php if ($showTransmitCol) : ?>
                             <th id="forward_header">Transmit</th>
@@ -764,11 +767,20 @@ if ($showCashierArchiveCol) {
 
                             <?php
                             $forwardHtml = '';
-                            $optionsHtml = '';
+                            $processHtml = '';
                             $transmitHtml = '';
                             $archiveHtml = '';
+                            $treatAsSameOfficeWorkflow = voucher_forwarding_treat_as_same_office_workflow(
+                                (string) ($row['voucher_type'] ?? ''),
+                                (string) ($row['process_history'] ?? ''),
+                                $loggedUserOffice
+                            );
 
-                            if ($roleAccounting || $roleProcessor) {
+                            if ($isAlternateWorkflowRole && !$treatAsSameOfficeWorkflow) {
+                                if ($showForwardCol && !$roleCashiers) {
+                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                }
+                            } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
                                     if ($processProcessed && $roleAccountantIII) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
@@ -777,9 +789,9 @@ if ($showCashierArchiveCol) {
                                     }
                                 }
                                 if ($processEmpty) {
-                                    $optionsHtml = '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
+                                    $processHtml = '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
                                 } elseif ($processProcessing) {
-                                    $optionsHtml = '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
+                                    $processHtml = '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
                                 }
                                 if ($processProcessed && !$roleAccountantIII) {
                                     if ($transmitEmpty) {
@@ -832,8 +844,8 @@ if ($showCashierArchiveCol) {
                             <?php if ($showForwardCol) : ?>
                                 <td data-label="forward"><?php echo $forwardHtml; ?></td>
                             <?php endif; ?>
-                            <?php if ($showOptionsCol) : ?>
-                                <td data-label="options"><?php echo $optionsHtml; ?></td>
+                            <?php if ($showProcessCol) : ?>
+                                <td data-label="process"><?php echo $processHtml; ?></td>
                             <?php endif; ?>
                             <?php if ($showTransmitCol) : ?>
                                 <td data-label="transmit"><?php echo $transmitHtml; ?></td>
@@ -1070,17 +1082,133 @@ if ($showCashierArchiveCol) {
     const selectElements2 = document.querySelectorAll(".form-custom-input"); // Get all form elements
     const target2 = "<?php echo $_SESSION['logged_user_designation']; ?>";
     const isLiaisonOfficer = <?php echo $isLiaisonOfficer ? 'true' : 'false'; ?>;
+    const loggedUserOffice = <?= json_encode(
+        $loggedUserOffice,
+        JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+    ) ?>;
+
+    const docToSelect = document.getElementById('document_to');
+    const docToOriginalHtml = docToSelect ? docToSelect.innerHTML : '';
+
+    function normalizeForwardingProcessHistory(value) {
+        return String(value || '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .replace(/\\n/g, '\n')
+            .trim();
+    }
+
+    function parseForwardingProcessHistoryLines(value) {
+        var normalized = normalizeForwardingProcessHistory(value);
+        if (!normalized) {
+            return [];
+        }
+
+        return normalized.split('\n').map(function(line) {
+            return String(line || '').trim();
+        }).filter(function(line) {
+            return line !== '' && line.indexOf('|') !== -1;
+        }).map(function(line) {
+            var parts = line.split(/\s*\|\s*/);
+            return {
+                name: (parts[0] || '').trim(),
+                action: (parts[1] || '').trim(),
+                section: (parts[2] || '').trim(),
+                office: (parts.slice(3).join(' | ') || '').trim()
+            };
+        });
+    }
+
+    function forwardingHistoryOriginOffice(lines) {
+        for (var i = 0; i < lines.length; i++) {
+            if (/encoded by/i.test(lines[i].action)) {
+                return lines[i].office;
+            }
+        }
+        return lines.length ? lines[0].office : '';
+    }
+
+    function forwardingOfficesMatch(left, right) {
+        left = String(left || '').trim();
+        right = String(right || '').trim();
+        if (!left || !right) {
+            return false;
+        }
+        return left.toUpperCase() === right.toUpperCase();
+    }
+
+    function isAlternateForwardingRole() {
+        return targetArray2.includes('Accounting Unit')
+            || targetArray2.includes('Processor')
+            || targetArray2.includes('ICU');
+    }
+
+    function isEngpVoucherType(voucherType) {
+        var value = String(voucherType || '').trim();
+        if (!value) {
+            return false;
+        }
+        if (/e-?\s*ngp/i.test(value)) {
+            return true;
+        }
+        var collapsed = value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+        return collapsed.indexOf('engp') === 0;
+    }
+
+    function forwardingTreatAsSameOfficeWorkflow(voucherType, processHistory) {
+        if (isEngpVoucherType(voucherType)) {
+            return true;
+        }
+        return forwardingSameOfficeOrigin(processHistory);
+    }
+
+    function forwardingSameOfficeOrigin(processHistory) {
+        var lines = parseForwardingProcessHistoryLines(processHistory);
+        if (!lines.length) {
+            return false;
+        }
+        return forwardingOfficesMatch(forwardingHistoryOriginOffice(lines), loggedUserOffice);
+    }
+
+    function hideOwnDesignationOptions(selectElement) {
+        if (!selectElement || !selectElement.options || !selectElement.options.length) {
+            return;
+        }
+        Array.from(selectElement.options).forEach(function(option) {
+            if (targetArray2.includes(option.value)) {
+                option.classList.add('hidden');
+            }
+        });
+    }
+
+    function restoreForwardDestinationOptions() {
+        if (!docToSelect || !docToOriginalHtml) {
+            return;
+        }
+        docToSelect.innerHTML = docToOriginalHtml;
+        hideOwnDesignationOptions(docToSelect);
+    }
+
+    function applyForwardingDestinationOptions(voucherType, processHistory) {
+        if (!docToSelect || isLiaisonOfficer) {
+            return;
+        }
+
+        if (isAlternateForwardingRole() && !forwardingTreatAsSameOfficeWorkflow(voucherType, processHistory)) {
+            docToSelect.innerHTML = ''
+                + '<option value="" disabled selected>Please Select</option>'
+                + '<option value="Planning Section">Planning Section</option>';
+            docToSelect.value = 'Planning Section';
+            return;
+        }
+
+        restoreForwardDestinationOptions();
+    }
 
     const targetArray2 = target2.split(',').map(function(item) { return item.trim(); }).filter(Boolean);
 
     selectElements2.forEach(selectElement => {
-        if (selectElement.options && selectElement.options.length) {
-            Array.from(selectElement.options).forEach(option => { // Loop through each option
-                if (targetArray2.includes(option.value)) {
-                    option.classList.add('hidden'); // Add 'hidden' class if value matches
-                }
-            });
-        }
+        hideOwnDesignationOptions(selectElement);
     });
 
     // Make ORS No. editable, required, and visually emphasized (red border)
@@ -1391,6 +1519,7 @@ if ($showCashierArchiveCol) {
             }
 
             if (name === "btn-return") {
+                restoreForwardDestinationOptions();
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("document_to").required = false;
                 document.querySelector(".btn-dynamic").textContent = "Return";
@@ -1436,11 +1565,14 @@ if ($showCashierArchiveCol) {
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_receiving_module/voucher_receiving_handler.php');
                 document.querySelector(".btn-dynamic").textContent = "Forward";
                 document.getElementById("form_title").textContent = "Forward Voucher";
+                restoreForwardDestinationOptions();
                 var docToForward = document.getElementById("document_to");
                 if (docToForward) {
                     docToForward.required = true;
                     if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
+                    } else {
+                        applyForwardingDestinationOptions(voucher_type, process_history_val);
                     }
                 }
                 document.querySelector(".btn-dynamic").setAttribute("name", "forward_voucher");
@@ -1493,6 +1625,7 @@ if ($showCashierArchiveCol) {
 
             if (name === "btn-pay") {
 
+                restoreForwardDestinationOptions();
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_archiving_module/voucher_archiving_handler.php');
                 document.querySelector(".btn-dynamic").textContent = "Pay";
                 document.getElementById("form_title").textContent = "Pay Voucher";

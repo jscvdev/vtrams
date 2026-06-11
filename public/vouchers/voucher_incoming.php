@@ -417,6 +417,10 @@ $totalRows = $displayTotal;
                                 <input type="text" name="process_status" class="process_status" id="process_status" value="">
                             </div>
                             <div class="label-input__container hidden_input">
+                                <label for="">Process History</label>
+                                <textarea name="process_history" class="process_history form-custom-input" id="process_history" rows="4" style="display:none;"></textarea>
+                            </div>
+                            <div class="label-input__container hidden_input">
                                 <label for="">Voucher Type</label>
                                 <input type="text" name="voucher_type" class="voucher_type" id="voucher_type" value="">
                             </div>
@@ -1202,15 +1206,119 @@ $totalRows = $displayTotal;
     const targetArray2 = target2.split(',').map(function(v) {
         return String(v || '').trim();
     }); // Convert to a trimmed array
+    const loggedUserOffice = <?= json_encode(
+        trim((string) ($_SESSION['logged_user_office'] ?? '')),
+        JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+    ) ?>;
 
-    if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III")) {
-        const dvInput = document.getElementById("dv_no");
-        if (dvInput) {
-            dvInput.required = true;
-            dvInput.readOnly = false;
-            dvInput.style.border = "1px solid red";
+    function normalizeIncomingProcessHistory(value) {
+        return String(value || '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .replace(/\\n/g, '\n')
+            .trim();
+    }
+
+    function parseIncomingProcessHistoryLines(value) {
+        var normalized = normalizeIncomingProcessHistory(value);
+        if (!normalized) {
+            return [];
         }
 
+        return normalized.split('\n').map(function(line) {
+            return String(line || '').trim();
+        }).filter(function(line) {
+            return line !== '' && line.indexOf('|') !== -1;
+        }).map(function(line) {
+            var parts = line.split(/\s*\|\s*/);
+            return {
+                name: (parts[0] || '').trim(),
+                action: (parts[1] || '').trim(),
+                section: (parts[2] || '').trim(),
+                office: (parts.slice(3).join(' | ') || '').trim()
+            };
+        });
+    }
+
+    function normalizeIncomingHistorySection(section) {
+        var key = String(section || '').trim().toUpperCase();
+        var map = {
+            'PLANNING': 'Planning Section',
+            'PLANNING SECTION': 'Planning Section'
+        };
+        return map[key] || String(section || '').trim();
+    }
+
+    function incomingHistoryOriginOffice(lines) {
+        for (var i = 0; i < lines.length; i++) {
+            if (/encoded by/i.test(lines[i].action)) {
+                return lines[i].office;
+            }
+        }
+        return lines.length ? lines[0].office : '';
+    }
+
+    function incomingHistoryHasPlanningReceive(lines) {
+        for (var i = 0; i < lines.length; i++) {
+            if (!/received by/i.test(lines[i].action)) {
+                continue;
+            }
+            if (normalizeIncomingHistorySection(lines[i].section) === 'Planning Section') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function incomingOfficesMatch(left, right) {
+        left = String(left || '').trim();
+        right = String(right || '').trim();
+        if (!left || !right) {
+            return false;
+        }
+        return left.toUpperCase() === right.toUpperCase();
+    }
+
+    function incomingVoucherTypeRequiresDvAlways(voucherType) {
+        var value = String(voucherType || '').trim();
+        return value.localeCompare('e-NGP Retention', undefined, { sensitivity: 'accent' }) === 0
+            || value.localeCompare('e-NGP Seedling Production & MP', undefined, { sensitivity: 'accent' }) === 0;
+    }
+
+    function incomingRequiresDvNo(voucherType, processHistory) {
+        if (incomingVoucherTypeRequiresDvAlways(voucherType)) {
+            return true;
+        }
+
+        var lines = parseIncomingProcessHistoryLines(processHistory);
+        if (!lines.length) {
+            return false;
+        }
+
+        var originOffice = incomingHistoryOriginOffice(lines);
+        if (!incomingOfficesMatch(originOffice, loggedUserOffice)) {
+            return false;
+        }
+
+        return incomingHistoryHasPlanningReceive(lines);
+    }
+
+    function applyIncomingDvNoRules(voucherType, processHistory) {
+        const isAccountingRole = targetArray2.includes("Accounting Unit")
+            || targetArray2.includes("Processor")
+            || targetArray2.includes("Accountant III");
+        const dvInput = document.getElementById("dv_no");
+        if (!dvInput || !isAccountingRole) {
+            return;
+        }
+
+        const requiresDv = incomingRequiresDvNo(voucherType, processHistory);
+        dvInput.required = requiresDv;
+        dvInput.readOnly = !requiresDv;
+        dvInput.style.border = requiresDv ? "1px solid red" : "";
+    }
+
+    if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III")) {
         // Allow editing of the Charged Amount (Edited) field instead of the main Amount
         const chargedInput = document.getElementById('charged_string_amount');
         const numericAmountInput = document.querySelector('input[name="amount"]');
@@ -1362,6 +1470,8 @@ $totalRows = $displayTotal;
             var remarks = row.querySelector('[data-label="remarks"]').textContent;
             var sender_remarks = (row.querySelector('[data-label="sender_remarks"]')?.textContent || '').trim();
             var voucher_type = row.querySelector('[data-label="voucher_type"]').textContent;
+            var process_history_cell = row.querySelector('[data-label="process_history"]');
+            var process_history = process_history_cell ? process_history_cell.textContent : '';
             var coa_options_cell = row.querySelector('[data-label="coa_options"]');
             var coa_options = coa_options_cell ? coa_options_cell.textContent : '';
             var coa_category_cell = row.querySelector('[data-label="coa_category"]');
@@ -1400,6 +1510,10 @@ $totalRows = $displayTotal;
             document.querySelector('.sender_remarks').value = sender_remarks;
             document.querySelector('.combined_remarks').value = remarks;
             document.querySelector('.voucher_type').value = voucher_type;
+            var processHistoryInput = document.getElementById('process_history');
+            if (processHistoryInput) {
+                processHistoryInput.value = process_history;
+            }
 
             // Populate COA options if they exist
             const selectedCoaOptionsInput = document.getElementById('selected_coa_options');
@@ -1517,13 +1631,7 @@ $totalRows = $displayTotal;
                 document.querySelector(".btn-dynamic").setAttribute("name", "receive_voucher");
                 document.querySelector(".btn-dynamic").classList.remove("warning");
                 document.querySelector(".btn-dynamic").classList.add("success");
-                if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III")) {
-                    const dvInput = document.getElementById("dv_no");
-                    if (dvInput) {
-                        dvInput.required = true;
-                        dvInput.readOnly = false;
-                    }
-                }
+                applyIncomingDvNoRules(voucher_type, process_history);
             } else if (name === "btn-return") {
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("dv_no").required = false;
@@ -1561,6 +1669,11 @@ $totalRows = $displayTotal;
             const isAccountingRole = targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III");
 
             if (actionName === 'receive_voucher' && isAccountingRole) {
+                const voucherType = document.getElementById('voucher_type')?.value || '';
+                const processHistory = document.getElementById('process_history')?.value || '';
+                if (!incomingRequiresDvNo(voucherType, processHistory)) {
+                    return;
+                }
                 const dvInput = document.getElementById('dv_no');
                 const dvValue = dvInput ? String(dvInput.value || '').trim() : '';
                 if (dvValue === '' || dvValue.toUpperCase() === 'TBD') {

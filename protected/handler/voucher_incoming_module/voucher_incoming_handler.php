@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_incoming.model.inc.php';
     require_once 'voucher_incoming.ctrl.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
     /** @var PDO $pdo */
 
     // Check if token is valid
@@ -33,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "process_status",
             "combined_remarks",
             "sender_remarks",
+            "process_history",
             "selected_coa_options",
             "coa_category",
             "coa_subsection"
@@ -61,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'process_status' => 'process_status',
             'combined_remarks' => 'combined_remarks',
             'sender_remarks' => 'sender_remarks',
+            'process_history' => 'process_history',
             'selected_coa_options' => 'coa_options',
             'coa_category' => 'coa_category',
             'coa_subsection' => 'coa_subsection'
@@ -159,6 +162,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         $temp_dump['empty_data'] .= implode(', ', $empty_value_strings);
+                    }
+
+                    $isAccountingReceive = in_array('Accounting Unit', $target, true)
+                        || in_array('Processor', $target, true)
+                        || in_array('Accountant III', $target, true);
+                    if ($isAccountingReceive) {
+                        $processHistoryForDv = voucher_tracking_normalize_process_history($process_history);
+                        if ($processHistoryForDv === '' && trim($processing_no) !== '') {
+                            $histStmt = $pdo->prepare(
+                                'SELECT process_history FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1'
+                            );
+                            $histStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+                            $histStmt->execute();
+                            $histRow = $histStmt->fetch(PDO::FETCH_ASSOC);
+                            if (is_array($histRow)) {
+                                $processHistoryForDv = voucher_tracking_normalize_process_history(
+                                    (string) ($histRow['process_history'] ?? '')
+                                );
+                            }
+                        }
+
+                        if (
+                            voucher_incoming_requires_dv_no(
+                                $voucher_type,
+                                $processHistoryForDv,
+                                voucher_logged_user_office()
+                            )
+                        ) {
+                            $dvTrim = trim((string) $dv_no);
+                            if ($dvTrim === '' || strcasecmp($dvTrim, 'TBD') === 0) {
+                                $temp_dump['invalid_dv'] = "Please enter a valid DV No. before receiving. Empty or 'TBD' is not allowed.";
+                            }
+                        }
                     }
 
                     //CHECK IF DOCUMENT IS ALREADY RECEIVED
