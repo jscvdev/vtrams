@@ -143,6 +143,12 @@ $showTransmitCol = (
     || (in_array("Planning Section", $target) && !in_array("Planning Section Chief", $target))
     || in_array("Processor", $target)
 );
+$showEditCol = (
+    in_array('Accounting Unit', $target, true)
+    || in_array('Processor', $target, true)
+    || in_array('Budget Unit', $target, true)
+    || in_array('Budget Officer', $target, true)
+);
 
 $ada_options = [];
 $ada_option_defaults = [];
@@ -666,7 +672,9 @@ if ($showCashierArchiveCol) {
                         <th>Date/Time Forwarded</th>
                         <th>Remarks</th>
                         <th>Return</th>
-                        <th>Edit</th>
+                        <?php if ($showEditCol) : ?>
+                            <th>Edit</th>
+                        <?php endif; ?>
                         <?php if ($showForwardCol) : ?>
                             <th id="forward_header">Forward</th>
                         <?php endif; ?>
@@ -752,13 +760,10 @@ if ($showCashierArchiveCol) {
                             $rolePlanning      = in_array("Planning Section", $target);
                             $rolePlanningChief = in_array("Planning Section Chief", $target);
                             $roleOfficePenro   = in_array("Office of the PENRO", $target);
-                            $roleCanEditAmount = $roleBudget || $roleAccounting || $roleProcessor || $rolePlanning || $rolePlanningChief;
                             ?>
 
-                            <?php if ($roleCanEditAmount) : ?>
+                            <?php if ($showEditCol) : ?>
                                 <td data-label="edit"><button class="btn danger pPop" id="openPopup" name="btn-edit_amount" type="button">Edit</button></td>
-                            <?php else : ?>
-                                <td data-label="edit"></td>
                             <?php endif; ?>
 
                             <?php

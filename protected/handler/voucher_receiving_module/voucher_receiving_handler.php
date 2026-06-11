@@ -87,6 +87,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // MULTIPLE FILE UPLOAD SUPPORTED 27/04/2024
             try {
                 if (isset($_REQUEST['edit_voucher_amount'])) {
+                    $editAmountDesignations = voucher_logged_user_designations();
+                    $canEditVoucherAmount = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
+                        || voucher_user_has_designation($editAmountDesignations, 'Processor')
+                        || voucher_user_has_designation($editAmountDesignations, 'Budget Unit')
+                        || voucher_user_has_designation($editAmountDesignations, 'Budget Officer');
+
+                    if (!$canEditVoucherAmount) {
+                        echo "<script>process_functionAlert('You are not authorized to edit voucher amounts.', 'voucher_receiving_redirect')</script>";
+                        $_SESSION['token'] = generateToken();
+                        die();
+                    }
+
                     // Simple edit of amount only, no forwarding/transmitting logic
                     $variables_to_check = [
                         'processing_no' => $processing_no,
