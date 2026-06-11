@@ -359,6 +359,45 @@ function session_contains_phrase($phrase)
                                         }
                                     }
                                 });
+
+                                window.clearNewVoucherForm = function() {
+                                    const payeeEl = document.getElementById('payee_name');
+                                    const payeeDefault = payeeEl && payeeEl.getAttribute('data-default') ? payeeEl.getAttribute('data-default') : "";
+
+                                    if (selectEl) {
+                                        selectEl.value = "";
+                                        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                                    }
+
+                                    const voucherFields = {
+                                        payee_name: payeeDefault,
+                                        tin_employee_no: "",
+                                        address: "",
+                                        particulars: "",
+                                        amount: "1.00"
+                                    };
+                                    for (const id in voucherFields) {
+                                        const el = document.getElementById(id);
+                                        if (el) el.value = voucherFields[id];
+                                    }
+
+                                    const voucherDateEl = document.getElementById('voucher_date');
+                                    if (voucherDateEl) {
+                                        voucherDateEl.value = new Date().toISOString().split('T')[0];
+                                    }
+
+                                    if (errorEl) errorEl.style.display = "none";
+                                    const addressError = document.getElementById('address-error');
+                                    if (addressError) addressError.style.display = "none";
+
+                                    if (payeeEl) {
+                                        payeeEl.readOnly = false;
+                                        payeeEl.removeAttribute('data-autofilled');
+                                        payeeEl.style.backgroundColor = "";
+                                        payeeEl.style.color = "";
+                                        payeeEl.style.cursor = "";
+                                    }
+                                };
                             </script>
                             <div class="label-input__container number-input">
                                 <label for="">Amount</label>
@@ -379,7 +418,7 @@ function session_contains_phrase($phrase)
                 <div class="popupForm-footer__container">
                     <div class="footer-button__container">
                         <button class="btn primary" name="save_document" type="submit">Save voucher</button>
-                        <button class="btn warning transparent" id="voucher-btn-clear" name="" onclick="functionAlert('Are you sure to clear?', 'voucher-clear')" type="button">CLEAR</button>
+                        <button class="btn warning transparent" id="voucher-btn-clear" name="" onclick="functionAlert('Are you sure to clear?', 'voucher-clear', clearNewVoucherForm)" type="button">CLEAR</button>
                         <button class="btn secondary transparent" id="close_popup2" type="button">CANCEL</button>
                     </div>
                 </div>
