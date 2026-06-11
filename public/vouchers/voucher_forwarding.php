@@ -694,17 +694,13 @@ if ($showCashierArchiveCol) {
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address" class="status"><?php echo $row['address']; ?></td>
                             <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                            <td data-label="amount" class="amount">
-                                <?php
-                                $baseAmount = $row['amount'];
-                                $charged = isset($row['charged_amount']) ? trim((string)$row['charged_amount']) : '';
-                                if ($charged !== '' && $charged !== '0' && $charged !== '0.00') {
-                                    echo '<span style="color: red;">' . htmlspecialchars($charged) . '</span>';
-                                } else {
-                                    echo htmlspecialchars($baseAmount);
-                                }
-                                ?>
-                            </td>
+                            <?php
+                            $baseAmount = (string) ($row['amount'] ?? '');
+                            $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
+                            $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
+                            $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
+                            ?>
+                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="datetime_forwarded"><?php echo $row['datetime_forwarded']; ?></td>
@@ -1377,7 +1373,8 @@ if ($showCashierArchiveCol) {
             var particulars = row.querySelector('[data-label="particulars"]').textContent;
             var tin_employee_no = row.querySelector('[data-label="tin_employee_no"]').textContent;
             var amountOriginalCell = row.querySelector('[data-label="amount_original"]');
-            var amountOriginal = amountOriginalCell ? amountOriginalCell.textContent : row.querySelector('[data-label="amount"]').textContent;
+            var amountTd = row.querySelector('[data-label="amount"]');
+            var amountOriginal = normalizeAmountInput(amountOriginalCell ? amountOriginalCell.textContent : (amountTd ? (amountTd.getAttribute('data-amount') || amountTd.textContent) : ''));
             var voucher_date = row.querySelector('[data-label="voucher_date"]').textContent;
             var office_to = row.querySelector('[data-label="office_to"]').textContent;
             var office_from = row.querySelector('[data-label="office_from"]').textContent;
@@ -1394,7 +1391,7 @@ if ($showCashierArchiveCol) {
             var process_history_cell = row.querySelector('[data-label="process_history"]');
             var process_history_val = process_history_cell ? process_history_cell.textContent.trim() : '';
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
-            var charged_amount = charged_amount_cell ? charged_amount_cell.textContent : '';
+            var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
             var coa_options_cell = row.querySelector('[data-label="coa_options"]');
             var coa_options = coa_options_cell ? coa_options_cell.textContent : '';
             var coa_category_cell = row.querySelector('[data-label="coa_category"]');
@@ -1417,7 +1414,7 @@ if ($showCashierArchiveCol) {
             document.querySelector('.particulars').value = particulars;
             document.querySelector('.tin_employee_no').value = tin_employee_no;
             document.querySelector('.amount').value = convertedBack;
-            document.querySelector('.string_amount').value = amount;
+            setAmountDisplayValue(document.getElementById('string_amount'), amount);
 
             document.querySelector('.voucher_date').value = voucher_date;
             document.querySelector('.office_from').value = office_from;
@@ -1482,7 +1479,7 @@ if ($showCashierArchiveCol) {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
                 if (stringAmountInput) stringAmountInput.removeAttribute('required');
                 if (chargedContainer) chargedContainer.style.display = 'flex';
-                if (chargedStringInput) chargedStringInput.value = String(charged_amount || '').trim();
+                if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
             } else {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                 if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');

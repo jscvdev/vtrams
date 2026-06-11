@@ -31,7 +31,7 @@ function voucher_document_user_action(
     string $coa_subsection = null
 ) {
     vouchers_amount_ensure_string_column($pdo);
-    $amount = normalize_amount_string($amount);
+    $amount = ensure_amount_two_decimals($amount);
 
     $query = "INSERT INTO voucher_action_logs (
                     processing_no,

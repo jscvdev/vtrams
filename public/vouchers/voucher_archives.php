@@ -510,17 +510,13 @@ $c2 = 0;
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address" class="status"><?php echo $row['address']; ?></td>
                             <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                            <td data-label="amount">
-                                <?php
-                                $baseAmount = $row['amount'];
-                                $charged = isset($row['charged_amount']) ? trim((string)$row['charged_amount']) : '';
-                                if ($charged !== '' && $charged !== '0' && $charged !== '0.00') {
-                                    echo '<span style="color: red;">' . htmlspecialchars($charged) . '</span>';
-                                } else {
-                                    echo htmlspecialchars($baseAmount);
-                                }
-                                ?>
-                            </td>
+                            <?php
+                            $baseAmount = (string) ($row['amount'] ?? '');
+                            $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
+                            $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
+                            $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
+                            ?>
+                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string)($row['amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
@@ -731,6 +727,7 @@ $c2 = 0;
 </script>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <script>
@@ -833,11 +830,11 @@ $c2 = 0;
             var address = row.querySelector('[data-label="address"]').textContent;
             var particulars = row.querySelector('[data-label="particulars"]').textContent;
             var amountOriginalCell = row.querySelector('[data-label="amount_original"]');
-            var amountOriginal = amountOriginalCell ? amountOriginalCell.textContent.trim() : '';
+            var amountTd = row.querySelector('[data-label="amount"]');
+            var amountOriginal = normalizeAmountInput(amountOriginalCell ? amountOriginalCell.textContent : (amountTd ? (amountTd.getAttribute('data-amount') || amountTd.textContent) : ''));
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
-            var charged_amount = charged_amount_cell ? charged_amount_cell.textContent.trim() : '';
+            var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
             var amount = (charged_amount !== '') ? charged_amount : amountOriginal;
-            amount = String(amount).replace(/,/g, '');
             var voucher_date = row.querySelector('[data-label="voucher_date"]').textContent;
             var passed_priority = row.querySelector('[data-label="priority"]').textContent;
             var office_to = row.querySelector('[data-label="office_to"]').textContent;
@@ -886,8 +883,8 @@ $c2 = 0;
                 const originalStringInput = document.getElementById('original_string_amount');
                 const chargedStringInput = document.getElementById('charged_string_amount');
 
-                if (originalStringInput) originalStringInput.value = amountOriginal;
-                if (chargedStringInput) chargedStringInput.value = charged_amount;
+                if (originalStringInput) setAmountDisplayValue(originalStringInput, amountOriginal);
+                if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
             }
 
             document.querySelectorAll('.hidden_input').forEach(function(input) {

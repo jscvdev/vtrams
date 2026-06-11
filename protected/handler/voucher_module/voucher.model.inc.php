@@ -169,7 +169,7 @@ function insert_dv_entry(
     string $office_from
 ): bool {
     ensure_dv_entries_table($pdo);
-    $amount = normalize_amount_string($amount);
+    $amount = ensure_amount_two_decimals($amount);
 
     // Legacy table requires coa_* / return_remarks / process_history columns; omit them from ON DUPLICATE so forwarded data is not cleared.
     $sql = "INSERT INTO dv_entries (
@@ -301,7 +301,7 @@ function vouchers_ensure_id_auto_increment(object $pdo): void
 function insert_to_vouchers(object $pdo, string $processing_no, string $dv_no, string $ada_check_no, string $payee_name, string $address, string $tin_employee_no, string $voucher_date, string $amount, string $voucher_type, string $particulars, string $datetime_action, string $encoded_from, string $encoded_by) {
     vouchers_amount_ensure_string_column($pdo);
     vouchers_ensure_id_auto_increment($pdo);
-    $amount = normalize_amount_string($amount);
+    $amount = ensure_amount_two_decimals($amount);
     $query = "INSERT INTO vouchers (processing_no, dv_no, ada_check_no, payee, address, amount, voucher_type, particulars, datetime_encoded, encoded_from, encoded_by, tin_employee_no, voucher_date) 
                         VALUES (:processing_no, :dv_no, :ada_check_no, :payee, :address, :amount, :voucher_type, :particulars, :datetime_encoded, :encoded_from, :encoded_by, :tin_employee_no, :voucher_date)";
 
@@ -352,7 +352,7 @@ function get_dv_no(object $pdo, string $dv_no) {
 
 function voucher_log_to_document_tracking(object $pdo, string $processing_no, string $ors_no, string $ada_check_no, string $dv_no, string $payee, string $address, string $particulars, string $amount, string $voucher_type, string $voucher_date, string $datetime_encoded, string $action, string $datetime_action, string $encoded_by, string $office_to, string $office_from, string $combined_remarks, string $coa_options = null, string $coa_category = null, string $coa_subsection = null) {
     vouchers_amount_ensure_string_column($pdo);
-    $amount = normalize_amount_string($amount);
+    $amount = ensure_amount_two_decimals($amount);
     $ada_check_date = 'TBD';
     $status = 'TBD';
     $query = "INSERT INTO voucher_tracking (processing_no, ors_no, ada_check_no, ada_check_date, dv_no, payee, address, particulars, amount, voucher_type, voucher_date, datetime_encoded, voucher_status, status, datetime_status, encoded_by, office_to, office_from, remarks, coa_options, coa_category, coa_subsection, active_status) 
@@ -421,7 +421,7 @@ function sync_voucher_tracking_after_edit(
     string $datetime_status
 ): bool {
     vouchers_amount_ensure_string_column($pdo);
-    $amount = normalize_amount_string($amount);
+    $amount = ensure_amount_two_decimals($amount);
 
     $query = 'UPDATE voucher_tracking SET
         payee = :payee,
@@ -458,7 +458,7 @@ function sync_voucher_tracking_charged_amount(object $pdo, string $processing_no
 
     $charged = null;
     if ($charged_amount !== null && trim($charged_amount) !== '') {
-        $charged = normalize_amount_string($charged_amount);
+        $charged = ensure_amount_two_decimals($charged_amount);
     }
 
     $query = 'UPDATE voucher_tracking SET charged_amount = :charged_amount WHERE processing_no = :processing_no';

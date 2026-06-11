@@ -495,17 +495,13 @@ $totalRows = $displayTotal;
                                 <td data-label="payee"><?php echo $row['payee']; ?></td>
                                 <td data-label="address" class="status"><?php echo $row['address']; ?></td>
                                 <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                                <td data-label="amount" class="amount">
-                                    <?php
-                                    $baseAmount = $row['amount'];
-                                    $charged = isset($row['charged_amount']) ? trim((string)$row['charged_amount']) : '';
-                                    if ($charged !== '' && $charged !== '0' && $charged !== '0.00') {
-                                        echo '<span style="color: red;">' . htmlspecialchars($charged) . '</span>';
-                                    } else {
-                                        echo htmlspecialchars($baseAmount);
-                                    }
-                                    ?>
-                                </td>
+                                <?php
+                                $baseAmount = (string) ($row['amount'] ?? '');
+                                $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
+                                $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
+                                $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
+                                ?>
+                                <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string)$row['amount']); ?></td>
                                 <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
                                 <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
@@ -1100,7 +1096,8 @@ $totalRows = $displayTotal;
             var address = row.querySelector('[data-label="address"]').textContent;
             var particulars = row.querySelector('[data-label="particulars"]').textContent;
             var amountOriginalCell = row.querySelector('[data-label="amount_original"]');
-            var amountOriginal = amountOriginalCell ? amountOriginalCell.textContent : row.querySelector('[data-label="amount"]').textContent;
+            var amountTd = row.querySelector('[data-label="amount"]');
+            var amountOriginal = normalizeAmountInput(amountOriginalCell ? amountOriginalCell.textContent : (amountTd ? (amountTd.getAttribute('data-amount') || amountTd.textContent) : ''));
             var voucher_date = row.querySelector('[data-label="voucher_date"]').textContent;
             var office_to = row.querySelector('[data-label="office_to"]').textContent;
             var office_from = row.querySelector('[data-label="office_from"]').textContent;
@@ -1115,7 +1112,7 @@ $totalRows = $displayTotal;
             var tin_employee_no = row.querySelector('[data-label="tin_employee_no"]').textContent;
             var voucher_type = row.querySelector('[data-label="voucher_type"]').textContent;
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
-            var charged_amount = charged_amount_cell ? charged_amount_cell.textContent : '';
+            var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
 
             var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
 
@@ -1130,7 +1127,7 @@ $totalRows = $displayTotal;
             document.querySelector('.address').value = address;
             document.querySelector('.particulars').value = particulars;
             document.querySelector('.amount').value = convertedBack;
-            document.querySelector('.string_amount').value = amount;
+            setAmountDisplayValue(document.querySelector('.string_amount'), amount);
             document.querySelector('.voucher_date').value = voucher_date;
             document.querySelector('.office_from').value = office_from;
             document.querySelector('.office_to').value = office_to;
@@ -1162,7 +1159,7 @@ $totalRows = $displayTotal;
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
                 if (stringAmountInput) stringAmountInput.removeAttribute('required');
                 if (chargedContainer) chargedContainer.style.display = 'flex';
-                if (chargedStringInput) chargedStringInput.value = String(charged_amount || '').trim();
+                if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
                 if (originalStringInput) originalStringInput.value = '';
             } else {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';

@@ -46,7 +46,7 @@ function syncAmountFields(sourceValue, outputElement) {
 }
 
 function formatAmountTableCells(selector) {
-    var nodes = document.querySelectorAll(selector || '.amount[data-amount]:not([data-amount-skip])');
+    var nodes = document.querySelectorAll(selector || 'td.amount[data-amount]:not([data-amount-skip])');
     nodes.forEach(function(el) {
         if (el.getAttribute('data-amount-skip') === '1' || el.getAttribute('data-amount-formatted') === 'php') {
             return;
@@ -57,7 +57,21 @@ function formatAmountTableCells(selector) {
         }
         var formatted = formatAmountDisplay(raw);
         if (formatted !== '') {
-            el.textContent = formatted;
+            if (el.getAttribute('data-amount-charged') === '1') {
+                el.innerHTML = '<span style="color: red;">' + formatted + '</span>';
+            } else {
+                el.textContent = formatted;
+            }
         }
     });
 }
+
+/** Readonly inputs: show comma-separated amount; stored/submitted values stay unformatted. */
+function setAmountDisplayValue(input, raw) {
+    if (!input) return;
+    input.value = formatAmountDisplay(raw);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    formatAmountTableCells();
+});

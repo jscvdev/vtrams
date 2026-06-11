@@ -113,10 +113,10 @@ try {
 
             foreach ($tableData as $row) {
                 if (isset($row['amount'])) {
-                    $row['amount'] = normalize_amount_string((string) $row['amount']);
+                    $row['amount'] = ensure_amount_two_decimals((string) $row['amount']);
                 }
                 if (isset($row['final_amount'])) {
-                    $row['final_amount'] = normalize_amount_string((string) $row['final_amount']);
+                    $row['final_amount'] = ensure_amount_two_decimals((string) $row['final_amount']);
                 }
 
                 $processingNo = trim((string) ($row['processing_no'] ?? ''));

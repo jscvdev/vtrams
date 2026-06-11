@@ -440,7 +440,7 @@ function update_amount(object $pdo, string $processing_no, string $amount): arra
 {
     vouchers_amount_ensure_string_column($pdo);
 
-    $normalized = normalize_amount_string($amount);
+    $normalized = ensure_amount_two_decimals($amount);
 
     $select = $pdo->prepare('SELECT amount FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1');
     $select->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);

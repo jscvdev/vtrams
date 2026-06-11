@@ -100,7 +100,7 @@ function voucher_post_string(mixed $value): string
 /** Apply exact amount normalization to a handler-mapped POST variable. */
 function voucher_apply_exact_amount(?string &$amount): void
 {
-    $amount = normalize_amount_string((string) ($amount ?? ''));
+    $amount = ensure_amount_two_decimals((string) ($amount ?? ''));
 }
 
 /** Normalize amount before DB write; runs column migration when voucher.model is loaded. */
@@ -110,5 +110,5 @@ function voucher_prepare_stored_amount(object $pdo, string $amount): string
         vouchers_amount_ensure_string_column($pdo);
     }
 
-    return normalize_amount_string($amount);
+    return ensure_amount_two_decimals($amount);
 }
