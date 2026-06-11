@@ -825,7 +825,7 @@ function session_contains_phrase($phrase)
 
             } else if (name === "btn-edit") {
                 document.getElementById("encoded_pending_form").setAttribute('action', '../../protected/handler/edit_module/edit_handler.php');
-                document.querySelector(".btn-dynamic").textContent = "Edit Document";
+                document.querySelector(".btn-dynamic").textContent = "Save";
                 document.getElementById("form_title").textContent = "Edit Document";
                 document.querySelector(".btn-dynamic").setAttribute("name", "edit_document");
                 document.querySelector(".btn-dynamic").classList.add("btn-edit");

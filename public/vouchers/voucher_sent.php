@@ -296,7 +296,7 @@ $totalRows = $displayTotal;
     <div class="popup-form" id="popupForm">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
-                <p id="form_title">Forward Document</p>
+                <p id="form_title">Return Voucher</p>
                 <i class="ri-close-fill close-icon" id="close_popup4"></i>
             </div>
             <form action="../../protected/handler/voucher_sent_module/voucher_sent_handler.php" class="f-container" method="post" id="myIncomingForm">

@@ -1075,7 +1075,7 @@ function session_contains_phrase($phrase)
                 if (coaHidden) coaHidden.value = '';
                 var formE = document.getElementById('encoded_voucher_form');
                 if (formE) formE.setAttribute('action', '../../protected/handler/edit_module/edit_voucher_handler.php');
-                if (document.querySelector('.btn-dynamic')) document.querySelector('.btn-dynamic').textContent = 'Edit';
+                if (document.querySelector('.btn-dynamic')) document.querySelector('.btn-dynamic').textContent = 'Save';
                 if (document.getElementById('form_title')) document.getElementById('form_title').textContent = 'Edit Voucher';
                 if (document.getElementById('string_amount')) document.getElementById('string_amount').readOnly = false;
                 if (document.querySelector('.btn-dynamic')) {
