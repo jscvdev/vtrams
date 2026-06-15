@@ -29,11 +29,11 @@ function check_cur_maximum(object $pdo, $formattedDesignation, string $udc)
     return $check;
 }
 
-function update_user_account(object $pdo, string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $hashedPwd, string $section, string $division, string $formattedPosition, string $access_level, string $emp_tag)
+function update_user_account(object $pdo, string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $hashedPwd, string $section, string $division, string $formattedPosition, string $access_level, string $udc, string $office, string $emp_tag)
 {
 
     //INSERT QUERY
-    $query = "UPDATE user_group SET emp_fn=:emp_fn, emp_mi=:emp_mi, emp_ln=:emp_ln, password = :password, section=:section, division=:division, designation=:designation, access_level=:access_level, emp_tag=:emp_tag WHERE emp_id=:emp_id";
+    $query = "UPDATE user_group SET emp_fn=:emp_fn, emp_mi=:emp_mi, emp_ln=:emp_ln, password = :password, section=:section, division=:division, designation=:designation, access_level=:access_level, udc=:udc, office=:office, emp_tag=:emp_tag WHERE emp_id=:emp_id";
     $statement = $pdo->prepare($query);
     $statement->bindParam(":emp_id", $emp_id);
     $statement->bindParam(":emp_fn", $emp_fn);
@@ -44,6 +44,8 @@ function update_user_account(object $pdo, string $emp_id, string $emp_fn, string
     $statement->bindParam(":division", $division);
     $statement->bindParam(":designation", $formattedPosition);
     $statement->bindParam(":access_level", $access_level);
+    $statement->bindParam(":udc", $udc);
+    $statement->bindParam(":office", $office);
     $statement->bindParam(":emp_tag", $emp_tag);
     $statement->execute();
 }

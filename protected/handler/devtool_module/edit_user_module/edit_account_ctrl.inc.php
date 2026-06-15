@@ -40,7 +40,7 @@ function update_designation_limit (object $pdo, string $udc, string $formattedDe
     update_designations($pdo, $udc, $formattedDesignation, $fullName, $office);
 }
 
-function update_user__account (object $pdo, string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $hashedPwd, string $section, string $division, string $formattedPosition, string $access_level, string $emp_tag)
+function update_user__account (object $pdo, string $emp_id, string $emp_fn, string $emp_mi, string $emp_ln, string $hashedPwd, string $section, string $division, string $formattedPosition, string $access_level, string $udc, string $office, string $emp_tag)
 {
-    update_user_account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedPosition, $access_level, $emp_tag);
+    update_user_account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedPosition, $access_level, $udc, $office, $emp_tag);
 }

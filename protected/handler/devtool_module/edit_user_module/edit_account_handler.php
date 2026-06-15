@@ -162,24 +162,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo "<script>process_functionAlert('Edit Failed!', 'edit_account_err')</script>";
                     die();
                 } else {
-                    //LOOP FORMATTED DESIGNATION -> IF ===/ CONTAINS SPECIFIC DESIGNATION (OIC) -> UPDATE USER ACC IF ELSE
+                    $hasOicDesignation = false;
                     foreach ($designation as $desig) {
                         if ($desig === "Officer-In-Charge (PENR Office)") {
-                            if (update_designation_limit_oic($pdo, $udc, $formattedDesignation, $so_no, $datetime_start, $datetime_end, $fullName, $office) !== false) {
-                                update_user__account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedDesignation, $access_level, $emp_tag);
-                            } else {
-                                echo "<script>process_functionAlert('Edit Failed!', 'developer_edit_failed')</script>";
-                                die();
-                            }
-                        } else {
-                            if (update_designation_limit($pdo, $udc, $formattedDesignation, $fullName, $office) !== false) {
-                                update_user__account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedDesignation, $access_level, $emp_tag);
-                            } else {
-                                echo "<script>process_functionAlert('Edit Failed!', 'developer_edit_failed')</script>";
-                                die();
-                            }
+                            $hasOicDesignation = true;
+                            break;
                         }
                     }
+
+                    if ($hasOicDesignation) {
+                        $designationUpdated = update_designation_limit_oic($pdo, $udc, $formattedDesignation, $so_no, $datetime_start, $datetime_end, $fullName, $office);
+                    } else {
+                        $designationUpdated = update_designation_limit($pdo, $udc, $formattedDesignation, $fullName, $office);
+                    }
+
+                    if ($designationUpdated === false) {
+                        echo "<script>process_functionAlert('Edit Failed!', 'developer_edit_failed')</script>";
+                        die();
+                    }
+
+                    update_user__account($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $hashedPwd, $section, $division, $formattedDesignation, $access_level, $udc, $office, $emp_tag);
                     echo "<script>process_functionAlert('Edit Success!', 'developer_edit_success')</script>";
                     die();
                 }
