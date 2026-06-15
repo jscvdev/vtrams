@@ -1198,8 +1198,9 @@ if ($showCashierArchiveCol) {
         if (isAlternateForwardingRole() && !forwardingTreatAsSameOfficeWorkflow(voucherType, processHistory)) {
             docToSelect.innerHTML = ''
                 + '<option value="" disabled selected>Please Select</option>'
-                + '<option value="Planning Section">Planning Section</option>';
-            docToSelect.value = 'Planning Section';
+                + '<option value="Budget Unit">Budget Unit</option>'
+                + '<option value="Accounting Unit">Accounting Unit</option>';
+            docToSelect.value = '';
             return;
         }
 

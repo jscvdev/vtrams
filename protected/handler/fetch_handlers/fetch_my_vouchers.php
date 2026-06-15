@@ -81,6 +81,7 @@ try {
     if ($fetchLimit > 0) {
         $stmt = $pdo->prepare(
             'SELECT v.*, vt.active_status, vt.voucher_status AS tracking_voucher_status,
+                    vt.process_history AS tracking_process_history,
                     COALESCE(NULLIF(v.ors_no, \'\'), NULLIF(de.ors_no, \'\'), NULLIF(vt.ors_no, \'\'), \'\') AS ors_no,
                     COALESCE(NULLIF(de.dv_no, \'\'), v.dv_no) AS dv_no_resolved,
                     COALESCE(NULLIF(de.ada_check_no, \'\'), v.ada_check_no) AS ada_check_no_resolved
@@ -122,11 +123,13 @@ try {
             (string) ($row['tracking_voucher_status'] ?? ''),
             (string) ($row['encoded_from'] ?? ''),
             (string) ($_SESSION['logged_user_section'] ?? ''),
-            $encodedBy
+            $encodedBy,
+            (string) ($row['tracking_process_history'] ?? '')
         );
         $row['returned_by_name'] = $returnTarget['returned_by'];
         $row['forward_return_designation'] = $returnTarget['designation'];
         $row['forward_return_label'] = $returnTarget['label'];
+        $row['forward_return_office'] = $returnTarget['office'];
         $row['needs_return_forward_target'] = voucher_tracking_needs_return_forward(
             ['active_status' => $row['active_status'], 'voucher_status' => $row['tracking_voucher_status']],
             (string) ($row['tracking_voucher_status'] ?? ''),

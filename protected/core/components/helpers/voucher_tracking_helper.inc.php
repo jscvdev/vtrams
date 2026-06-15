@@ -312,26 +312,59 @@ function voucher_tracking_primary_designation(?string $designation): string
 }
 
 /**
+ * Office from the most recent "Returned by" entry in process_history.
+ */
+function voucher_tracking_history_last_return_office(string $process_history): string
+{
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    $lastOffice = '';
+    foreach ($lines as $line) {
+        if (stripos($line['action'], 'Returned by') === false) {
+            continue;
+        }
+        $office = trim($line['office']);
+        if ($office !== '') {
+            $lastOffice = $office;
+        }
+    }
+
+    return $lastOffice;
+}
+
+/**
  * Resolve forward target when re-forwarding a returned voucher.
  *
- * @return array{designation: string, label: string, returned_by: string}
+ * @return array{designation: string, label: string, returned_by: string, udc: string, office: string}
  */
-function voucher_tracking_return_forward_target(object $pdo, ?string $tracking_voucher_status): array
-{
+function voucher_tracking_return_forward_target(
+    object $pdo,
+    ?string $tracking_voucher_status,
+    string $process_history = ''
+): array {
+    $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
     $returnedBy = voucher_tracking_parse_returned_by($tracking_voucher_status);
     if ($returnedBy === '') {
-        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+        return $empty;
     }
 
     $user = voucher_tracking_lookup_user_by_display_name($pdo, $returnedBy);
     $designation = '';
     $udc = '';
+    $office = '';
     if ($user !== null) {
         $udc = trim((string) ($user['udc'] ?? ''));
+        $office = trim((string) ($user['office'] ?? ''));
         $designation = voucher_tracking_primary_designation($user['designation']);
         if ($designation === '' && $user['section'] !== '') {
             $designation = $user['section'];
         }
+    }
+
+    if ($office === '' && trim($process_history) !== '') {
+        $office = voucher_tracking_history_last_return_office($process_history);
+    }
+    if ($office === '' && $designation !== '') {
+        $office = voucher_resolve_office_for_designation_route($pdo, $designation, '');
     }
 
     $label = $returnedBy;
@@ -344,6 +377,7 @@ function voucher_tracking_return_forward_target(object $pdo, ?string $tracking_v
         'label' => $label,
         'returned_by' => $returnedBy,
         'udc' => $udc,
+        'office' => $office,
     ];
 }
 
@@ -389,37 +423,44 @@ function voucher_tracking_forward_target_from_section(object $pdo, string $secti
 /**
  * Resolve Forward To when encoder re-forwards after a return (active_status may be "no").
  *
- * @return array{designation: string, label: string, returned_by: string}
+ * @return array{designation: string, label: string, returned_by: string, udc: string, office: string}
  */
 function voucher_tracking_resolve_return_forward_target(
     object $pdo,
     ?string $tracking_voucher_status,
     ?string $encoded_from,
     ?string $encoder_section = null,
-    ?string $logged_user_name = null
+    ?string $logged_user_name = null,
+    string $process_history = ''
 ): array {
+    $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
     if (voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
         if (voucher_tracking_is_self_return($tracking_voucher_status, $logged_user_name)) {
-            return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+            return $empty;
         }
 
-        return voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
+        return voucher_tracking_return_forward_target($pdo, $tracking_voucher_status, $process_history);
     }
 
     $encodedFrom = trim((string) $encoded_from);
     $encoderSection = trim((string) $encoder_section);
     $loggedOffice = voucher_logged_user_office();
     if ($encodedFrom === '') {
-        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+        return $empty;
     }
     if ($encoderSection !== '' && strcasecmp($encodedFrom, $encoderSection) === 0) {
-        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+        return $empty;
     }
     if ($loggedOffice !== '' && voucher_tracking_offices_match($encodedFrom, $loggedOffice)) {
-        return ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => ''];
+        return $empty;
     }
 
-    return voucher_tracking_forward_target_from_section($pdo, $encodedFrom);
+    $target = voucher_tracking_forward_target_from_section($pdo, $encodedFrom);
+    $target['office'] = $target['designation'] !== ''
+        ? voucher_resolve_office_for_designation_route($pdo, $target['designation'], '')
+        : '';
+
+    return $target;
 }
 
 /** Receiver for encoder re-forward after "Returned by:" (specific person, then designation). */
@@ -428,9 +469,14 @@ function voucher_forward_receiver_for_return_target(
     ?string $tracking_voucher_status,
     string $forward_designation,
     string $office_to,
-    string $exclude_udc = ''
+    string $exclude_udc = '',
+    string $process_history = ''
 ): array {
-    $returnTarget = voucher_tracking_return_forward_target($pdo, $tracking_voucher_status);
+    $returnTarget = voucher_tracking_return_forward_target($pdo, $tracking_voucher_status, $process_history);
+    $returnOffice = trim((string) ($returnTarget['office'] ?? ''));
+    if ($returnOffice !== '') {
+        $office_to = $returnOffice;
+    }
     $returnedByUdc = trim((string) ($returnTarget['udc'] ?? ''));
     if ($returnedByUdc !== '') {
         $validatedUdc = voucher_filter_udcs_by_user_group_office($pdo, $returnedByUdc, $office_to);

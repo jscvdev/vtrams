@@ -90,20 +90,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $receiver_udc = "";
         $tracking_row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no ?? '');
         $tracking_voucher_status = $tracking_row['voucher_status'] ?? null;
+        $process_history = (string) ($tracking_row['process_history'] ?? '');
         $loggedEncoderName = (string) ($_SESSION['logged_user_emp_name'] ?? '');
         $needsReturnForward = voucher_tracking_needs_return_forward($tracking_row, $tracking_voucher_status, $loggedEncoderName);
         $forward_return_designation = isset($forward_return_designation) ? trim((string) $forward_return_designation) : '';
-        if ($needsReturnForward && $forward_return_designation === '') {
+        $returnForwardOffice = '';
+        if ($needsReturnForward) {
             $returnForward = voucher_tracking_resolve_return_forward_target(
                 $pdo,
                 $tracking_voucher_status,
                 $encoded_from ?? '',
                 (string) ($_SESSION['logged_user_section'] ?? ''),
-                $loggedEncoderName
+                $loggedEncoderName,
+                $process_history
             );
-            if ($returnForward['designation'] !== '') {
+            if ($forward_return_designation === '' && $returnForward['designation'] !== '') {
                 $forward_return_designation = $returnForward['designation'];
             }
+            $returnForwardOffice = trim((string) ($returnForward['office'] ?? ''));
         }
         if (empty($combined_remarks)) {
             $combined_remarks = "";
@@ -150,12 +154,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $target_to = '';
                     if ($needsReturnForward) {
                         // Re-forward returned voucher to whoever returned it (from voucher_tracking).
+                        if ($returnForwardOffice !== '') {
+                            $office_to = $returnForwardOffice;
+                        }
                         $resolved = voucher_forward_receiver_for_return_target(
                             $pdo,
                             $tracking_voucher_status,
                             $forward_return_designation,
                             $office_to,
-                            $sender_udc
+                            $sender_udc,
+                            $process_history
                         );
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
