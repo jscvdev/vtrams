@@ -1022,6 +1022,23 @@ function voucher_type_is_engp(string $voucher_type): bool
     return str_starts_with($collapsed, 'engp');
 }
 
+/** Voucher types configured for direct forward routing (Special Access utility). */
+function voucher_type_has_special_access(object $pdo, string $voucher_type): bool
+{
+    return voucher_special_access_forward_target($pdo, $voucher_type) !== '';
+}
+
+/**
+ * Direct forward designation from Special Access utility (empty when none).
+ */
+function voucher_special_access_forward_target(object $pdo, string $voucher_type): string
+{
+    require_once __DIR__ . '/utilities_special_access_helper.inc.php';
+    utilities_special_access_ensure_schema($pdo);
+
+    return utilities_special_access_resolve_target($pdo, $voucher_type);
+}
+
 /**
  * Encoders at CENRO offices or offices with a registered Liaison Officer
  * must forward all vouchers to Liaison Officer first.

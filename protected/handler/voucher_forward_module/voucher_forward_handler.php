@@ -170,6 +170,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
+                    } elseif (
+                        !$needsReturnForward
+                        && ($specialAccessTarget = voucher_special_access_forward_target($pdo, (string) ($voucher_type ?? ''))) !== ''
+                    ) {
+                        $target_to = $specialAccessTarget;
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+                        $receiver_udc = $resolved['receiver_udc'];
+                        $forwarded_to = $resolved['forwarded_to'];
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        }
                     } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
                         $target_to = 'Liaison Officer';
                         $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
