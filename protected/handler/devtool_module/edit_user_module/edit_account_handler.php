@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require '../../../core/components/notifications/custom_process_alert.php';
     require 'edit_account_model.inc.php';
     require 'edit_account_ctrl.inc.php';
+    require_once __DIR__ . '/../user_duplicate_helper.inc.php';
 
     $keyList = array(
         "emp_id",
@@ -57,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $emp_mi = trim((string) $emp_mi);
+    normalize_user_name_fields($emp_fn, $emp_mi, $emp_ln);
 
     $so_no = "";
     $datetime_start = "";
@@ -154,6 +156,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (check_if_exists_maximum($pdo, $formattedDesignation, $udc)) {
                         $temp_dump['maximum_designated'] = "" . $_SESSION['maxed_designation'] . ": Already reached the maximum designation!";
                     }
+                }
+
+                $duplicateErrors = get_user_duplicate_errors($pdo, $emp_id, $emp_fn, $emp_mi, $emp_ln, $emp_id);
+                if ($duplicateErrors) {
+                    $temp_dump = array_merge($temp_dump, $duplicateErrors);
                 }
 
                 //CHECK ANY VALIDATION FAILS ELSE PROCEED TO EXECUTE DATABASE QUERY

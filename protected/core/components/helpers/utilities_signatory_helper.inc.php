@@ -157,6 +157,16 @@ function utilities_signatory_fetch_offices(PDO $pdo): array
 {
     $offices = [];
     try {
+        require_once __DIR__ . '/utilities_office_helper.inc.php';
+        utilities_office_ensure_schema($pdo);
+        foreach (utilities_office_registered_names($pdo, true) as $office) {
+            $offices[] = $office;
+        }
+    } catch (Throwable $e) {
+        $offices = [];
+    }
+
+    try {
         $stmt = $pdo->query("
             SELECT DISTINCT TRIM(office) AS office
             FROM user_group
@@ -171,7 +181,7 @@ function utilities_signatory_fetch_offices(PDO $pdo): array
             }
         }
     } catch (Throwable $e) {
-        $offices = [];
+        // keep registry offices when user_group lookup fails
     }
 
     $defaultOffice = utilities_signatory_default_office();
@@ -179,7 +189,21 @@ function utilities_signatory_fetch_offices(PDO $pdo): array
         array_unshift($offices, $defaultOffice);
     }
 
-    return array_values(array_unique($offices));
+    $unique = [];
+    foreach ($offices as $office) {
+        $exists = false;
+        foreach ($unique as $existing) {
+            if (utilities_signatory_offices_match($office, $existing)) {
+                $exists = true;
+                break;
+            }
+        }
+        if (!$exists) {
+            $unique[] = $office;
+        }
+    }
+
+    return $unique;
 }
 
 function utilities_signatory_resolve_office(PDO $pdo, ?string $requestedOffice = null): string

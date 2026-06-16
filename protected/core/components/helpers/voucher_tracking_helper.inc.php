@@ -887,8 +887,16 @@ function voucher_resolve_office_for_designation_route(object $pdo, string $desig
  */
 function voucher_forward_liaison_icu_receiver(object $pdo, string $logged_user_office): array
 {
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    utilities_office_ensure_schema($pdo);
+
     $targetTo = 'ICU';
-    $officeTo = voucher_resolve_office_for_designation_route($pdo, $targetTo, $logged_user_office);
+    $processingOffice = utilities_office_liaison_forward_processing_office($pdo, $logged_user_office);
+    $officeTo = voucher_resolve_office_for_designation_route(
+        $pdo,
+        $targetTo,
+        $processingOffice !== '' ? $processingOffice : $logged_user_office
+    );
     $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $targetTo, $officeTo);
 
     return [
@@ -897,6 +905,22 @@ function voucher_forward_liaison_icu_receiver(object $pdo, string $logged_user_o
         'office_to' => $officeTo,
         'temp_errors' => $resolved['temp_errors'],
     ];
+}
+
+/**
+ * Office where a Liaison Officer should receive encoder forwards.
+ */
+function voucher_encoder_liaison_route_office(object $pdo, string $encoder_office): string
+{
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    utilities_office_ensure_schema($pdo);
+
+    $routeOffice = utilities_office_encoder_liaison_office($pdo, $encoder_office);
+    if ($routeOffice !== '') {
+        return $routeOffice;
+    }
+
+    return trim($encoder_office);
 }
 
 /**
@@ -1050,6 +1074,12 @@ function voucher_encoder_forwards_to_liaison_first(object $pdo, string $encoder_
         return false;
     }
 
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    utilities_office_ensure_schema($pdo);
+    if (utilities_office_encoder_requires_liaison_first($pdo, $encoder_office)) {
+        return true;
+    }
+
     return voucher_designation_limit_office_registered($pdo, $encoder_office, 'Liaison Officer');
 }
 
@@ -1137,6 +1167,128 @@ function voucher_tracking_history_has_planning_receive(array $lines): bool
     }
 
     return false;
+}
+
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_has_budget_receive(array $lines): bool
+{
+    foreach ($lines as $line) {
+        if (stripos($line['action'], 'Received by') === false) {
+            continue;
+        }
+        if (voucher_tracking_normalize_section_label($line['section']) === 'Budget Unit') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** Whether special-access routing sends the voucher directly to accounting roles. */
+function voucher_special_access_routes_to_accounting(object $pdo, string $voucher_type): bool
+{
+    $target = voucher_special_access_forward_target($pdo, $voucher_type);
+    if ($target === '') {
+        return false;
+    }
+
+    $normalized = voucher_tracking_normalize_section_label($target);
+
+    return in_array($normalized, ['Accounting Unit', 'Processor', 'Accountant III'], true)
+        || in_array($target, ['Accounting Unit', 'Processor', 'Accountant III'], true);
+}
+
+/**
+ * Planning/Budget have received the voucher, or it has direct special-access routing to accounting.
+ */
+function voucher_forwarding_upstream_routing_complete(
+    object $pdo,
+    string $voucher_type,
+    string $process_history
+): bool {
+    if (voucher_special_access_routes_to_accounting($pdo, $voucher_type)) {
+        return true;
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+
+    return voucher_tracking_history_has_planning_receive($lines)
+        || voucher_tracking_history_has_budget_receive($lines);
+}
+
+function voucher_incoming_load_process_history(object $pdo, string $processing_no, string $process_history): string
+{
+    $process_history = voucher_tracking_normalize_process_history($process_history);
+    if ($process_history !== '' || trim($processing_no) === '') {
+        return $process_history;
+    }
+
+    $histStmt = $pdo->prepare(
+        'SELECT process_history FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1'
+    );
+    $histStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $histStmt->execute();
+    $histRow = $histStmt->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($histRow)) {
+        return '';
+    }
+
+    return voucher_tracking_normalize_process_history((string) ($histRow['process_history'] ?? ''));
+}
+
+/**
+ * Status written to document tracking when a voucher is received on Incoming.
+ */
+function voucher_incoming_resolve_receive_status(
+    array $target,
+    string $voucher_type,
+    string $process_history,
+    object $pdo
+): string {
+    if (voucher_user_has_designation($target, 'Planning Section')) {
+        return 'For Charging';
+    }
+    if (voucher_user_has_designation($target, 'Budget Unit')) {
+        return 'Verifying Availability of Fund and Allotment';
+    }
+    if (voucher_user_has_designation($target, 'Office of the PENRO')) {
+        return 'For Approval of the PENRO';
+    }
+    if (voucher_user_has_designation($target, 'Cashiers Unit')) {
+        return 'For Preparation of Check, ACIC or LDDAP-ADA';
+    }
+
+    $isAccountingRole = voucher_user_has_designation($target, 'Accounting Unit')
+        || voucher_user_has_designation($target, 'Processor')
+        || voucher_user_has_designation($target, 'Accountant III');
+    $isIcu = voucher_user_has_designation($target, 'ICU');
+
+    if ($isIcu || $isAccountingRole) {
+        if (voucher_forwarding_upstream_routing_complete($pdo, $voucher_type, $process_history)) {
+            return 'Processing the Disbursement Voucher';
+        }
+
+        return 'Checking of Requirements';
+    }
+
+    return '';
+}
+
+function voucher_forwarding_process_action_html(string $processStatus): string
+{
+    $processEmpty = $processStatus === '' || $processStatus === 'N/A';
+    $processProcessing = $processStatus === 'Processing';
+
+    if ($processEmpty) {
+        return '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
+    }
+    if ($processProcessing) {
+        return '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
+    }
+
+    return '';
 }
 
 /** e-NGP types that always require DV No. at accounting receive. */

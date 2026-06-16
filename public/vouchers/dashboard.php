@@ -5,8 +5,10 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     require __DIR__ . '/../../protected/core/components/security/config_session.inc.php';
     require __DIR__ . '/../../protected/core/components/security/router.inc.php';
     require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+    require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 
     $voucher_type = isset($_GET['voucher_type']) && $_GET['voucher_type'] !== 'all' ? trim((string) $_GET['voucher_type']) : null;
+    $office = isset($_GET['office']) && $_GET['office'] !== 'all' ? trim((string) $_GET['office']) : null;
     $month = isset($_GET['month']) && $_GET['month'] !== 'all' ? (int) $_GET['month'] : null;
     $day = isset($_GET['day']) && $_GET['day'] !== 'all' ? (int) $_GET['day'] : null;
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
@@ -19,6 +21,11 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         if ($voucher_type !== null && $voucher_type !== '') {
             $query .= ' AND vt.voucher_type = :voucher_type';
             $params[':voucher_type'] = $voucher_type;
+        }
+
+        if ($office !== null && $office !== '') {
+            $query .= ' AND LOWER(TRIM(vt.office_from)) = LOWER(TRIM(:office))';
+            $params[':office'] = $office;
         }
 
         if ($month !== null && $day !== null && $yearDate !== null) {
@@ -76,8 +83,11 @@ if (!$can_view_dashboard) {
 }
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 AuditHelper::logPageView('Dashboard');
 require_once __DIR__ . '/checklist_config.php';
+utilities_signatory_ensure_schema($pdo);
+$dashboard_offices = utilities_signatory_fetch_offices($pdo);
 $dashboard_timing_section_labels = array_map(
     static fn(string $section): string => match ($section) {
         'Planning Section' => 'Planning',
@@ -380,6 +390,17 @@ if ($scriptName !== '') {
                 </select>
             </div>
 
+            <div>
+                <label for="officeFilter">Office:</label>
+                <select id="officeFilter">
+                    <option value="all" selected>All Offices</option>
+                    <?php foreach ($dashboard_offices as $office_name): ?>
+                        <option value="<?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
             <div>
                 <label>Date (MDY):</label>
@@ -513,6 +534,7 @@ if ($scriptName !== '') {
         document.addEventListener('DOMContentLoaded', () => {
             const FETCH_VOUCHER_DATA = <?= json_encode($fetch_voucher_data_url, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
             const voucherTypeFilter = document.getElementById('voucherTypeFilter');
+            const officeFilter = document.getElementById('officeFilter');
             const monthFilter = document.getElementById('monthFilter');
             const dayFilter = document.getElementById('dayFilter');
             const yearDateFilter = document.getElementById('yearDateFilter');
@@ -885,6 +907,7 @@ if ($scriptName !== '') {
             function buildFetchUrl() {
                 const params = new URLSearchParams({
                     voucher_type: voucherTypeFilter.value,
+                    office: officeFilter.value,
                     month: monthFilter.value,
                     day: dayFilter.value,
                     yearDate: yearDateFilter.value,

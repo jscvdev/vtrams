@@ -127,6 +127,34 @@
             return d.innerHTML;
         }
 
+        function maskNamePart(part) {
+            const value = String(part || '').trim();
+            if (value === '') return '';
+            if (value.length === 1) return value;
+
+            let head;
+            let tail;
+            if (value.length > 4) {
+                head = value.substring(0, 2);
+                tail = value.charAt(value.length - 1);
+            } else {
+                head = value.charAt(0);
+                tail = value.charAt(value.length - 1);
+            }
+
+            const hiddenCount = Math.max(0, value.length - head.length - tail.length);
+            return head + '*'.repeat(hiddenCount) + tail;
+        }
+
+        function formatPartialPayeeName(name) {
+            return String(name || '')
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .map(maskNamePart)
+                .join(' ');
+        }
+
         function formatDatetime(value) {
             if (value == null || String(value).trim() === '') {
                 return '—';
@@ -165,13 +193,23 @@
             const lowerStatus = String(status).toLowerCase();
             let activeIndex = -1;
 
-            if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) activeIndex = 0;
-            else if (lowerStatus.includes('charging')) activeIndex = 1;
-            else if (lowerStatus.includes('verifying')) activeIndex = 2;
-            else if (lowerStatus.includes('processing')) activeIndex = 3;
-            else if (lowerStatus.includes('approval')) activeIndex = 4;
-            else if (lowerStatus.includes('preparation')) activeIndex = 5;
-            else if (lowerStatus.includes('paid')) activeIndex = 6;
+            if (lowerStatus.includes('checking of requirements')) {
+                activeIndex = 0;
+            } else if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) {
+                activeIndex = 0;
+            } else if (lowerStatus.includes('charging')) {
+                activeIndex = 1;
+            } else if (lowerStatus.includes('verifying')) {
+                activeIndex = 2;
+            } else if (lowerStatus.includes('processing the disbursement') || lowerStatus.includes('processing')) {
+                activeIndex = 3;
+            } else if (lowerStatus.includes('approval')) {
+                activeIndex = 4;
+            } else if (lowerStatus.includes('preparation')) {
+                activeIndex = 5;
+            } else if (lowerStatus.includes('paid')) {
+                activeIndex = 6;
+            }
 
             if (activeIndex >= 0) {
                 for (let i = 0; i <= activeIndex; i++) {
@@ -207,7 +245,7 @@
         function buildResultRow(item, showSelect) {
             const proc = item.processing_no != null ? String(item.processing_no) : '';
             const dv = item.dv_no != null ? String(item.dv_no) : '—';
-            const payee = item.payee != null ? String(item.payee) : '';
+            const payee = formatPartialPayeeName(item.payee != null ? String(item.payee) : '');
             const trackingStatus = item.tracking_status != null ? String(item.tracking_status) : '—';
             const voucherStatus = item.voucher_status != null ? String(item.voucher_status) : '—';
             const datetimeAction = formatDatetime(item.datetime_action);

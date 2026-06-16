@@ -250,10 +250,10 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             </a>
                                         </div>
                                         <div class="sidebar-link-container">
-                                            <a href="../utilities/special_access.php" class="sidebar__link">
+                                            <a href="../utilities/routing.php" class="sidebar__link">
                                                 <i class="ri-route-line"></i>
-                                                <span class="sidebar__link-name">Special Access</span>
-                                                <span class="sidebar__link-floating">Special Access</span>
+                                                <span class="sidebar__link-name">Routing</span>
+                                                <span class="sidebar__link-floating">Routing</span>
                                             </a>
                                         </div>
                                     <?php endif; ?>

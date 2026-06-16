@@ -117,21 +117,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
                     }
 
-                    if (in_array("Planning Section", $target)) {
-                        $status = "For Charging";
-                    } elseif (in_array("Budget Unit", $target)) {
-                        $status = "Verifying Availability of Fund and Allotment";
-                    } elseif (
-                        in_array('Accounting Unit', $target, true)
-                        || in_array('Processor', $target, true)
-                        || in_array('Accountant III', $target, true)
-                    ) {
-                        $status = 'Processing the Disbursement Voucher';
-                    } elseif (in_array("Office of the PENRO", $target)) {
-                        $status = "For Approval of the PENRO";
-                    } elseif (in_array("Cashiers Unit", $target)) {
-                        $status = "For Preparation of Check, ACIC or LDDAP-ADA";
-                    }
+                    $processHistoryForStatus = voucher_incoming_load_process_history(
+                        $pdo,
+                        $processing_no,
+                        $process_history
+                    );
+                    $status = voucher_incoming_resolve_receive_status(
+                        $target,
+                        $voucher_type,
+                        $processHistoryForStatus,
+                        $pdo
+                    );
 
                     $variables_to_check = [
                         'processing_no' => $processing_no,
@@ -168,25 +164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         || in_array('Processor', $target, true)
                         || in_array('Accountant III', $target, true);
                     if ($isAccountingReceive) {
-                        $processHistoryForDv = voucher_tracking_normalize_process_history($process_history);
-                        if ($processHistoryForDv === '' && trim($processing_no) !== '') {
-                            $histStmt = $pdo->prepare(
-                                'SELECT process_history FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1'
-                            );
-                            $histStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
-                            $histStmt->execute();
-                            $histRow = $histStmt->fetch(PDO::FETCH_ASSOC);
-                            if (is_array($histRow)) {
-                                $processHistoryForDv = voucher_tracking_normalize_process_history(
-                                    (string) ($histRow['process_history'] ?? '')
-                                );
-                            }
-                        }
-
                         if (
                             voucher_incoming_requires_dv_no(
                                 $voucher_type,
-                                $processHistoryForDv,
+                                $processHistoryForStatus,
                                 voucher_logged_user_office()
                             )
                         ) {
@@ -272,36 +253,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $coa_subsection
                             ) {
                                 voucher_move_to_receiving(
-                            $pdo,
-                            $processing_no,
-                            $dv_no,
-                            $ors_no,
-                            $ada_check_no,
-                            $payee,
-                            $address,
-                            $particulars,
-                            $tin_employee_no,
-                            $amount,
-                            $voucher_type,
-                            $voucher_date,
-                            $datetime_action,
-                            $sender_udc,
-                            $receiver_udc,
-                            $office_from,
-                            $office_to,
-                            $encoded_by,
-                            $encoded_from,
-                            $datetime_encoded,
-                            $forwarded_by,
-                            $process_status,
-                            $combined_remarks,
-                            $sender_remarks,
-                            "",
-                            $coa_options,
-                            $coa_category,
-                            $coa_subsection
-                        );
-                        update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
+                                    $pdo,
+                                    $processing_no,
+                                    $dv_no,
+                                    $ors_no,
+                                    $ada_check_no,
+                                    $payee,
+                                    $address,
+                                    $particulars,
+                                    $tin_employee_no,
+                                    $amount,
+                                    $voucher_type,
+                                    $voucher_date,
+                                    $datetime_action,
+                                    $sender_udc,
+                                    $receiver_udc,
+                                    $office_from,
+                                    $office_to,
+                                    $encoded_by,
+                                    $encoded_from,
+                                    $datetime_encoded,
+                                    $forwarded_by,
+                                    $process_status,
+                                    $combined_remarks,
+                                    $sender_remarks,
+                                    "",
+                                    $coa_options,
+                                    $coa_category,
+                                    $coa_subsection
+                                );
+                                update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
                                 voucher_log_user_action(
                                     $pdo,
                                     $processing_no,

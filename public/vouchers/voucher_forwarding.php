@@ -776,10 +776,30 @@ if ($showCashierArchiveCol) {
                                 (string) ($row['process_history'] ?? ''),
                                 $loggedUserOffice
                             );
+                            $upstreamRoutingComplete = voucher_forwarding_upstream_routing_complete(
+                                $pdo,
+                                (string) ($row['voucher_type'] ?? ''),
+                                (string) ($row['process_history'] ?? '')
+                            );
+                            $canShowProcess = ($roleAccounting || $roleProcessor) && $upstreamRoutingComplete;
 
                             if ($isAlternateWorkflowRole && !$treatAsSameOfficeWorkflow) {
                                 if ($showForwardCol && !$roleCashiers) {
-                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    if ($canShowProcess && $processProcessed && ($transmitEmpty || $transmitDone)) {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                    } else {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    }
+                                }
+                                if ($canShowProcess) {
+                                    $processHtml = voucher_forwarding_process_action_html($processStatus);
+                                    if ($processProcessed && !$roleAccountantIII) {
+                                        if ($transmitEmpty) {
+                                            $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                        } elseif ($transmitYes) {
+                                            $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                        }
+                                    }
                                 }
                             } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
@@ -789,12 +809,10 @@ if ($showCashierArchiveCol) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
                                     }
                                 }
-                                if ($processEmpty) {
-                                    $processHtml = '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
-                                } elseif ($processProcessing) {
-                                    $processHtml = '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
+                                if ($canShowProcess) {
+                                    $processHtml = voucher_forwarding_process_action_html($processStatus);
                                 }
-                                if ($processProcessed && !$roleAccountantIII) {
+                                if ($canShowProcess && $processProcessed && !$roleAccountantIII) {
                                     if ($transmitEmpty) {
                                         $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
                                     } elseif ($transmitYes) {

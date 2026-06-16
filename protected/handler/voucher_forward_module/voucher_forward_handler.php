@@ -184,7 +184,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
                         $target_to = 'Liaison Officer';
-                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+                        $liaisonOffice = voucher_encoder_liaison_route_office($pdo, $encoder_office);
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $liaisonOffice);
                         $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
