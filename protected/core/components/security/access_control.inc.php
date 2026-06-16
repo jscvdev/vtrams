@@ -62,9 +62,11 @@ class AccessControl
         'checklist.php' => 999,
         'routing.php' => 999,
         'dashboard.php' => 7,
+        'voucher_fowarding.php' => 7,
         'voucher_performance.php' => 7,
         'file_tracking.php' => 10,
-        'pending.php' => 4
+        'pending.php' => 4,
+        'auditing.php' => 999,
     ];
 
     /**
@@ -78,6 +80,7 @@ class AccessControl
         'utilities.php' => ['System Admin'],
         'checklist.php' => ['System Admin'],
         'routing.php' => ['System Admin'],
+        'auditing.php' => ['System Admin'],
     ];
 
     /**
@@ -308,6 +311,7 @@ class AccessControl
             case 'utilities':
             case 'checklist':
             case 'routing':
+            case 'auditing':
                 return self::canAccessSystemUtilities();
 
             case 'dashboard':

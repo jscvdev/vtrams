@@ -219,6 +219,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
                         $can_view_designations = $can_view_system_utilities;
                         $can_view_performance = $can_view_dashboard;
+                        $can_view_processing = $can_view_dashboard;
 
                         $show_general_section = (
                             $can_view_voucher_overview_pages
@@ -330,20 +331,22 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     or in_array("Budget Unit", $target) or in_array("Accounting Unit", $target)
                                     or in_array("Office of the PENRO", $target) or in_array("Cashiers Unit", $target) or in_array("Processor", $target)
                                 ) : ?>
-                                    <div class="sidebar-link-container">
-                                        <a href='../vouchers/voucher_incoming.php' class='sidebar__link'>
-                                            <i class='ri-file-list-3-line sidebar__link_incoming' id='vouchers_incoming'></i>
-                                            <span class='sidebar__link-name'>Incoming</span>
-                                            <span class='sidebar__link-floating'>Incoming</span>
-                                        </a>
-                                    </div>
-                                    <div class="sidebar-link-container">
-                                        <a href='../vouchers/voucher_forwarding.php' class='sidebar__link' id='button1'>
-                                            <i class='ri-price-tag-3-line sidebar__link_incoming' id='vouchers_forwarding'></i>
-                                            <span class='sidebar__link-name'>Processing</span>
-                                            <span class='sidebar__link-floating'>Processing</span>
-                                        </a>
-                                    </div>
+                                    <?php if ($can_view_performance): ?>
+                                        <div class="sidebar-link-container">
+                                            <a href='../vouchers/voucher_incoming.php' class='sidebar__link'>
+                                                <i class='ri-file-list-3-line sidebar__link_incoming' id='vouchers_incoming'></i>
+                                                <span class='sidebar__link-name'>Incoming</span>
+                                                <span class='sidebar__link-floating'>Incoming</span>
+                                            </a>
+                                        </div>
+                                        <div class="sidebar-link-container">
+                                            <a href='../vouchers/voucher_forwarding.php' class='sidebar__link' id='button1'>
+                                                <i class='ri-price-tag-3-line sidebar__link_incoming' id='vouchers_forwarding'></i>
+                                                <span class='sidebar__link-name'>Processing</span>
+                                                <span class='sidebar__link-floating'>Processing</span>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
                                     <div class="sidebar-link-container">
                                         <a href='../vouchers/voucher_sent.php' class='sidebar__link'>
                                             <i class='ri-file-paper-2-line sidebar__link_incoming' id='vouchers_sent'></i>
@@ -370,7 +373,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                 </h3>
                 <!--=============== SECOND LIST ===============!-->
                 <div class="sidebar__list">
-                    <?php if (in_array("System Admin", $target)) : ?>
+                    <?php if ($can_view_system_utilities): ?>
                         <div class="sidebar-link-container">
                             <a href='../vouchers/auditing.php' class='sidebar__link'>
                                 <i class='ri-shield-check-line'></i>
@@ -378,8 +381,6 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <span class='sidebar__link-floating'>Auditing</span>
                             </a>
                         </div>
-                    <?php endif; ?>
-                    <?php if (in_array("System Admin", $target)) : ?>
                         <div class="sidebar-link-container">
                             <a href='../vouchers/settings.php' class='sidebar__link'>
                                 <i class='ri-settings-3-line'></i>
