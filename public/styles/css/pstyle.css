@@ -46,7 +46,8 @@ button {
 .popupForm-box__container {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    max-height: min(85vh, calc(100dvh - 2rem));
+    overflow: hidden;
 }
 
 .popup-form a {
@@ -58,9 +59,8 @@ button {
 
 .popup-form {
     display: none;
-    width: calc(100vw - 30%);
-    max-height: calc(100vh - 2em);
-    max-width: 900px;
+    width: min(900px, calc(100vw - 2rem));
+    max-height: min(85vh, calc(100dvh - 2rem));
     position: fixed;
     text-align: center;
     top: 50%;
@@ -69,13 +69,14 @@ button {
     background: #FFFFFF;
     border-radius: 16px;
     z-index: 9999;
-    /* overflow-y: scroll; */
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* Voucher modal - modern card styling */
 .popup-form.voucher-modal {
     max-width: 720px;
-    width: calc(100vw - 40%);
+    width: min(720px, calc(100vw - 2rem));
     border-radius: 16px;
     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
     overflow: hidden;
@@ -91,6 +92,10 @@ button {
     background: white;
     border-radius: 4px;
     z-index: 9999;
+    width: min(900px, calc(100vw - 2rem));
+    max-height: min(85vh, calc(100dvh - 2rem));
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .popup-form3 {
@@ -101,8 +106,22 @@ button {
     left: 50%;
     transform: translate(-50%, -50%);
     background: white;
-    border-radius: 4px;
+    border-radius: 16px;
     z-index: 9999;
+    width: min(480px, calc(100vw - 2rem));
+    max-height: min(85vh, calc(100dvh - 2rem));
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.popup-form .label-input__container .form-custom-input,
+.popup-form .label-input__container .form-custom-multi-input,
+.popup-form2 .label-input__container input,
+.popup-form2 .label-input__container select,
+.popup-form3 .label-input__container .form-custom-input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 
@@ -117,6 +136,7 @@ button {
     align-items: center;
     justify-content: space-between;
     padding: 0 24px;
+    flex-shrink: 0;
 }
 
 .popupForm-header__container::after {
@@ -159,27 +179,36 @@ button {
 .f-container {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 
     .box-body__container {
         display: flex;
         flex-direction: column;
-        flex: 1;
-        justify-content: space-between;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
 
         &.flex-row {
             flex-direction: row;
+            flex-wrap: wrap;
+            align-items: flex-start;
         }
 
         .popupForm-body__container {
-            flex: 1;
+            flex: 1 1 280px;
+            min-width: 0;
+            max-width: 100%;
 
             .form-container {
                 text-align: left;
                 max-height: none;
-                height: 100%;
+                height: auto;
                 display: flex;
-                scrollbar-width: none;
+                scrollbar-width: thin;
                 flex-direction: column;
                 padding: 20px 24px;
                 gap: 16px;
@@ -222,7 +251,7 @@ button {
                 
                     .form-custom-input {
                         width: 100%;
-                        max-width: 480px;
+                        max-width: 100%;
                         height: 44px;
                         font-size: 13px;
                         padding: 0 14px;
@@ -231,14 +260,20 @@ button {
                         border-radius: 8px;
                         background-color: #F9FAFB;
                         color: #111827;
+                        box-sizing: border-box;
                     }
 
                     .form-custom-multi-input {
+                        width: 100%;
+                        max-width: 100%;
+                        max-height: 160px;
                         border: 1px solid #D1D5DB;
                         border-radius: 8px;
                         background-color: #F9FAFB;
                         color: #111827;
                         padding: .5rem;
+                        box-sizing: border-box;
+                        overflow-y: auto;
                     }
 
                     select.form-custom-input {
@@ -280,14 +315,17 @@ button {
     border-top: 1px solid #E5E7EB;
     background-color: #F9FAFB;
     border-radius: 0 0 16px 16px;
+    flex-shrink: 0;
 }
 
 .popup-form2 .label-input__container input {
     width: 100%;
-    height: 30px;   
+    max-width: 100%;
+    height: 30px;
     font-size: 12px;
     padding: 10px;
     text-align: left;
+    box-sizing: border-box;
 }
 
 .popupForm-body__container .label-input__container .multi-line-input {
@@ -442,18 +480,28 @@ button {
     text-align: center;
     top: 50%;
     left: 50%;
-    width: 1000px;
-    height: 700px;
+    width: min(1000px, calc(100vw - 2rem));
+    max-height: min(85vh, calc(100dvh - 2rem));
     transform: translate(-50%, -50%);
     border: thin solid black;
     background: #ffffff;
     border-radius: 6px;
     z-index: 9999;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.reply_form .popupForm-box__container {
+    max-height: min(85vh, calc(100dvh - 2rem));
 }
 
 .reply_form .popupForm_reply_body__container {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .reply_form .label-input__container input {
@@ -476,6 +524,72 @@ button {
 .reply_form .footer-button__container {
     margin-right: 1rem;
     margin-bottom: 1rem;
+}
+
+/* Modal responsive layout — stack columns and tighten spacing on small screens */
+@media (max-width: 768px) {
+    .popup-form,
+    .popup-form.voucher-modal,
+    .popup-form2,
+    .popup-form3,
+    .reply_form {
+        width: calc(100vw - 1rem);
+        max-height: min(92vh, calc(100dvh - 1rem));
+    }
+
+    .popupForm-box__container,
+    .reply_form .popupForm-box__container {
+        max-height: min(92vh, calc(100dvh - 1rem));
+    }
+
+    .f-container .box-body__container.flex-row {
+        flex-direction: column;
+    }
+
+    .f-container .box-body__container .popupForm-body__container {
+        flex: 1 1 100%;
+    }
+
+    .f-container .box-body__container .popupForm-body__container .form-container {
+        padding: 16px;
+    }
+
+    .popupForm-header__container {
+        padding: 0 16px;
+    }
+
+    .popupForm-footer__container {
+        padding: 12px 16px 16px;
+    }
+
+    .popupForm-footer__container .footer-button__container {
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+
+    .popupForm-footer__container .footer-button__container .btn {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+}
+
+@media (max-height: 600px) {
+    .popup-form,
+    .popup-form.voucher-modal,
+    .popup-form2,
+    .popup-form3,
+    .reply_form {
+        max-height: calc(100dvh - 0.75rem);
+    }
+
+    .popupForm-box__container,
+    .reply_form .popupForm-box__container {
+        max-height: calc(100dvh - 0.75rem);
+    }
+
+    .popupForm-header__container {
+        height: 52px;
+    }
 }
 
 
