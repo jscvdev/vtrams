@@ -57,7 +57,12 @@ class AccessControl
     private static $fileAccessRules = [
         'devtool.php' => 8,
         'edit_form.php' => 8,
-        'designations.php' => 8,
+        'designations.php' => 999,
+        'utilities.php' => 999,
+        'checklist.php' => 999,
+        'routing.php' => 999,
+        'dashboard.php' => 7,
+        'voucher_performance.php' => 7,
         'file_tracking.php' => 10,
         'pending.php' => 4
     ];
@@ -68,7 +73,11 @@ class AccessControl
      */
     private static $fileDesignationRules = [
         'document_tracking.php' => ['Records Unit'],
-        'voucher_ada.php' => ['Cashiers Unit', 'System Admin']
+        'voucher_ada.php' => ['Cashiers Unit', 'System Admin'],
+        'designations.php' => ['System Admin'],
+        'utilities.php' => ['System Admin'],
+        'checklist.php' => ['System Admin'],
+        'routing.php' => ['System Admin'],
     ];
 
     /**
@@ -120,6 +129,22 @@ class AccessControl
     public static function getACL()
     {
         return $_SESSION['acl'] ?? 1;
+    }
+
+    /**
+     * System Admin utilities (Utilities, Checklist, Routing, Designations).
+     */
+    public static function canAccessSystemUtilities(): bool
+    {
+        return self::hasRole('System Admin') && self::hasMinimumACL(999);
+    }
+
+    /**
+     * Dashboard and Performance overview pages.
+     */
+    public static function canAccessOverviewReports(): bool
+    {
+        return self::hasMinimumACL(7);
     }
 
     /**
@@ -244,9 +269,6 @@ class AccessControl
     public static function checkModuleAccess($module)
     {
         switch ($module) {
-            case 'dashboard':
-                return true; // All roles
-
             case 'user_management':
                 return self::hasRole('System Admin'); // System Admin only
 
@@ -280,8 +302,17 @@ class AccessControl
 
             case 'devtool':
             case 'edit_form':
-            case 'designations':
                 return self::hasMinimumACL(8); // ACL >= 8
+
+            case 'designations':
+            case 'utilities':
+            case 'checklist':
+            case 'routing':
+                return self::canAccessSystemUtilities();
+
+            case 'dashboard':
+            case 'performance':
+                return self::canAccessOverviewReports();
 
             case 'file_tracking':
                 return self::hasMinimumACL(10); // ACL >= 10
@@ -379,8 +410,9 @@ class AccessControl
     {
         $modules = [];
 
-        // All authenticated users
-        $modules['dashboard'] = 'Dashboard';
+        if (self::canAccessOverviewReports()) {
+            $modules['dashboard'] = 'Dashboard';
+        }
 
         // Voucher modules based on ACL or designations
         if (self::checkModuleAccess('voucher_incoming')) {
@@ -402,6 +434,9 @@ class AccessControl
         if (self::hasMinimumACL(8)) {
             $modules['devtool'] = 'Developer Tools';
             $modules['edit_form'] = 'Edit Form';
+        }
+
+        if (self::canAccessSystemUtilities()) {
             $modules['designations'] = 'Designations';
         }
 

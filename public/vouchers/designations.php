@@ -2,6 +2,11 @@
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 AuditHelper::logPageView('Designations');
+
+if (!AccessControl::canAccessSystemUtilities()) {
+    echo "<script>process_functionAlert('Access denied!', 'dashboard_redirect')</script>";
+    die();
+}
 include('../../protected/core/components/notifications/err_handler_custom_alert.php');
 require_once __DIR__ . '/../../protected/core/components/notifications/custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';

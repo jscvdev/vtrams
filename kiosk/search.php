@@ -3,11 +3,26 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
 require_once __DIR__ . '/../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/security/filter_input.inc.php';
 
-$query = trim((string)($_POST['query'] ?? ''));
-$query = preg_replace('/\s+/u', ' ', $query);
+const KIOSK_QUERY_MAX_LEN = 120;
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Invalid request method.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$rawQuery = (string) ($_POST['query'] ?? '');
+$query = filterInput($rawQuery, KIOSK_QUERY_MAX_LEN);
 
 if ($query === '') {
+    if (trim($rawQuery) !== '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'Search text contains invalid characters or is too long.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     echo json_encode([]);
     exit;
 }
@@ -49,5 +64,6 @@ try {
     unset($row);
     echo json_encode($results, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (PDOException $e) {
-    echo json_encode(['error' => 'Query error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    http_response_code(500);
+    echo json_encode(['error' => 'Could not complete search. Please try again.'], JSON_UNESCAPED_UNICODE);
 }

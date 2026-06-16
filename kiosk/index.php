@@ -109,8 +109,29 @@
 <script>
     (function() {
         const COL_COUNT = 8;
+        const QUERY_MAX_LEN = 120;
         const resultsTable = document.getElementById('kiosk-results-table');
         const resultsContainer = document.getElementById('results');
+        const filterInput = document.getElementById('filterInput');
+
+        filterInput.setAttribute('maxlength', String(QUERY_MAX_LEN));
+        filterInput.setAttribute('pattern', '[A-Za-z0-9\\s\\-.,]+');
+        filterInput.setAttribute('title', 'Use letters, numbers, spaces, hyphens, periods, or commas only.');
+
+        function sanitizeQuery(value) {
+            return String(value || '')
+                .replace(/[\x00-\x1F\x7F]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, QUERY_MAX_LEN);
+        }
+
+        function isValidQuery(value) {
+            if (value === '') {
+                return false;
+            }
+            return /^[\p{L}\p{N}\s\-.,]+$/u.test(value);
+        }
 
         function notify(message, type, ms) {
             if (typeof showNotify === 'function') {
@@ -282,7 +303,7 @@
 
         document.getElementById('searchForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const query = document.getElementById('filterInput').value.trim();
+            const query = sanitizeQuery(document.getElementById('filterInput').value);
 
             if (query === '') {
                 resetProgress();
@@ -291,6 +312,16 @@
                 resultsContainer.innerHTML = '';
                 return;
             }
+
+            if (!isValidQuery(query)) {
+                resetProgress();
+                toggleSelectColumn(false);
+                notify('Search text contains invalid characters. Use letters, numbers, spaces, hyphens, periods, or commas only.', 'warning', 3200);
+                resultsContainer.innerHTML = '';
+                return;
+            }
+
+            document.getElementById('filterInput').value = query;
 
             resultsContainer.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="kiosk-table-msg">Searching…</td></tr>';
 

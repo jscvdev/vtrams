@@ -4,6 +4,15 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     require __DIR__ . '/../../protected/dbconnection.inc.php';
     require __DIR__ . '/../../protected/core/components/security/config_session.inc.php';
     require __DIR__ . '/../../protected/core/components/security/router.inc.php';
+    require_once __DIR__ . '/../../protected/core/components/security/access_control.inc.php';
+
+    if (!AccessControl::canAccessOverviewReports()) {
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code(403);
+        echo json_encode(['error' => 'Access denied']);
+        exit;
+    }
+
     require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
     require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 
@@ -64,21 +73,8 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
 }
 
 include('../includes/header.php');
-// Allow dashboard for: budget, cashier, finance, and higher ACL roles
-$can_view_dashboard = (
-    isset($_SESSION['acl']) && $_SESSION['acl'] >= 8
-    || (isset($target) && (
-        in_array("Budget Unit", $target)
-        || in_array("Cashiers Unit", $target)
-        || in_array("Accounting Unit", $target)
-        || in_array("Processor", $target)
-        || in_array("Accountant III", $target)
-        || in_array("Conservation & Development Section", $target)
-        || in_array("CDS", $target)
-    ))
-);
-if (!$can_view_dashboard) {
-    header("Location: ../documents/index.php");
+if (!AccessControl::canAccessOverviewReports()) {
+    header('Location: ../documents/index.php');
     die();
 }
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';

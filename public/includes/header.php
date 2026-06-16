@@ -215,10 +215,18 @@ $header_text = $pageTitleHelper->getHeaderText();
                             || in_array("Conservation & Development Section", $target)
                             || in_array("CDS", $target)
                         );
-                        $can_view_designations = ($_SESSION["acl"] >= 8);
-                        $can_view_performance = true;
+                        $can_view_dashboard = AccessControl::canAccessOverviewReports();
+                        $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
+                        $can_view_designations = $can_view_system_utilities;
+                        $can_view_performance = $can_view_dashboard;
 
-                        $show_general_section = ($can_view_voucher_overview_pages || $can_view_designations || $can_view_performance);
+                        $show_general_section = (
+                            $can_view_voucher_overview_pages
+                            || $can_view_dashboard
+                            || $can_view_system_utilities
+                            || $can_view_designations
+                            || $can_view_performance
+                        );
                         ?>
 
                         <?php if ($show_general_section): ?>
@@ -226,7 +234,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <span>General</span>
                             </h3>
                             <div class="sidebar__list">
-                                <?php if ($can_view_voucher_overview_pages): ?>
+                                <?php if ($can_view_dashboard): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/dashboard.php" class="sidebar__link" id="button1">
                                             <i class="ri-dashboard-fill"></i>
@@ -234,29 +242,31 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             <span class="sidebar__link-floating">Dashboard</span>
                                         </a>
                                     </div>
-                                    <?php if (in_array("System Admin", $target)): ?>
-                                        <div class="sidebar-link-container">
-                                            <a href="../utilities/utilities.php" class="sidebar__link">
-                                                <i class="ri-tools-line"></i>
-                                                <span class="sidebar__link-name">Utilities</span>
-                                                <span class="sidebar__link-floating">Utilities</span>
-                                            </a>
-                                        </div>
-                                        <div class="sidebar-link-container">
-                                            <a href="../utilities/checklist.php" class="sidebar__link">
-                                                <i class="ri-checkbox-multiple-line"></i>
-                                                <span class="sidebar__link-name">Checklist</span>
-                                                <span class="sidebar__link-floating">Checklist</span>
-                                            </a>
-                                        </div>
-                                        <div class="sidebar-link-container">
-                                            <a href="../utilities/routing.php" class="sidebar__link">
-                                                <i class="ri-route-line"></i>
-                                                <span class="sidebar__link-name">Routing</span>
-                                                <span class="sidebar__link-floating">Routing</span>
-                                            </a>
-                                        </div>
-                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <?php if ($can_view_system_utilities): ?>
+                                    <div class="sidebar-link-container">
+                                        <a href="../utilities/utilities.php" class="sidebar__link">
+                                            <i class="ri-tools-line"></i>
+                                            <span class="sidebar__link-name">Utilities</span>
+                                            <span class="sidebar__link-floating">Utilities</span>
+                                        </a>
+                                    </div>
+                                    <div class="sidebar-link-container">
+                                        <a href="../utilities/checklist.php" class="sidebar__link">
+                                            <i class="ri-checkbox-multiple-line"></i>
+                                            <span class="sidebar__link-name">Checklist</span>
+                                            <span class="sidebar__link-floating">Checklist</span>
+                                        </a>
+                                    </div>
+                                    <div class="sidebar-link-container">
+                                        <a href="../utilities/routing.php" class="sidebar__link">
+                                            <i class="ri-route-line"></i>
+                                            <span class="sidebar__link-name">Routing</span>
+                                            <span class="sidebar__link-floating">Routing</span>
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($can_view_voucher_overview_pages): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_status.php" class="sidebar__link" id="button1">
                                             <i class="ri-notification-badge-line"></i>

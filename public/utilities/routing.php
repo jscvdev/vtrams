@@ -8,8 +8,7 @@ require_once __DIR__ . '/../vouchers/checklist_config.php';
 AuditHelper::logPageView('Routing');
 
 $target = explode(',', $_SESSION['logged_user_designation'] ?? '');
-$can_view = in_array('System Admin', $target);
-if (!$can_view) {
+if (!AccessControl::canAccessSystemUtilities()) {
     echo "<script>process_functionAlert('Access denied!', 'dashboard_redirect')</script>";
     die();
 }
@@ -449,6 +448,21 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
         min-width: auto;
     }
 
+    .rt-page .util-add .field.util-add-chk-field {
+        flex: 0 0 auto;
+        min-width: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .rt-page .util-add .field.util-add-chk-field .chk {
+        height: 2.5rem;
+        min-height: 2.5rem;
+        margin: 0;
+        box-sizing: border-box;
+    }
+
     .rt-page .util-add .field.util-add-btn-field label.util-field-spacer {
         display: block;
         visibility: hidden;
@@ -629,7 +643,11 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
 
     .rt-page .util-office-flow strong { color: var(--util-text); }
 
-    .rt-page .voucher-card + .voucher-card { margin-top: 1.5rem; }
+    .rt-page .util-routing-section + .util-routing-section {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--util-border);
+    }
 </style>
 
 <div class="main main--dashboard rt-page" id="main">
@@ -648,11 +666,12 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
         <h2 class="voucher-card-title">
             <span class="voucher-card-title__label">
                 <i class="ri-route-line ri-icon"></i>
-                Direct Forward Routing
+                Direct Forward Routing &amp; Office Hierarchy
             </span>
         </h2>
         <div class="content-wrapper">
-            <p class="util-section-title">All routing configurations</p>
+            <section class="util-routing-section">
+            <p class="util-section-title">Direct forward routing</p>
             <p class="util-dv-desc">
                 Configure voucher types that skip the standard workflow when forwarded from the Voucher page
                 (e.g. e-NGP types sent directly to Accounting Unit or another unit). Each voucher type can have one active rule.
@@ -751,18 +770,10 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                     <?php endforeach; ?>
                 </div>
             </div>
-        </div>
-    </div>
+            </section>
 
-    <div class="voucher-card voucher-card--table">
-        <h2 class="voucher-card-title">
-            <span class="voucher-card-title__label">
-                <i class="ri-building-4-line ri-icon"></i>
-                Office Hierarchy
-            </span>
-        </h2>
-        <div class="content-wrapper">
-            <p class="util-section-title">Office registry and forwarding relationships</p>
+            <section class="util-routing-section">
+            <p class="util-section-title">Office hierarchy</p>
             <p class="util-dv-desc">
                 Register offices used in user accounts and define parent-child relationships for voucher forwarding.
                 Mark one office as the <strong>processing office</strong> (main PENRO). Sub-offices forward encoders to a
@@ -811,9 +822,9 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                             <label for="add_office_sort_order">Sort</label>
                             <input class="form-custom-input" type="number" name="sort_order" id="add_office_sort_order" value="0">
                         </div>
-                        <div class="field" style="min-width:140px;">
+                        <div class="field util-add-chk-field">
                             <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
-                            <label class="chk" style="height:2.5rem;">
+                            <label class="chk" for="add_is_processing_office">
                                 <input type="checkbox" name="is_processing_office" id="add_is_processing_office">
                                 <span>Processing office</span>
                             </label>
@@ -831,6 +842,7 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                     <?php endif; ?>
                 </div>
             </div>
+            </section>
         </div>
     </div>
 </div>

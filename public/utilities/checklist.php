@@ -6,8 +6,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_help
 AuditHelper::logPageView('Checklist');
 
 $target = explode(',', $_SESSION['logged_user_designation'] ?? '');
-$can_view = in_array('System Admin', $target);
-if (!$can_view) {
+if (!AccessControl::canAccessSystemUtilities()) {
     echo "<script>process_functionAlert('Access denied!', 'dashboard_redirect')</script>";
     die();
 }

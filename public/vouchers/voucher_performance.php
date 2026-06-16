@@ -1,5 +1,9 @@
 <?php
 include('../includes/header.php');
+if (!AccessControl::canAccessOverviewReports()) {
+    header('Location: ../documents/index.php');
+    die();
+}
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 AuditHelper::logPageView('Performance');
