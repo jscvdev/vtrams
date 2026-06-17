@@ -61,7 +61,7 @@ class AccessControl
         'utilities.php' => 999,
         'checklist.php' => 999,
         'routing.php' => 999,
-        'dashboard.php' => 7,
+        'dashboard.php' => 6,
         'voucher_fowarding.php' => 7,
         'voucher_performance.php' => 7,
         'file_tracking.php' => 10,
