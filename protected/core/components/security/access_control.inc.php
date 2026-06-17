@@ -152,8 +152,8 @@ class AccessControl
     public static function canAccessExtended(): bool
     {
         return self::hasMinimumACL(7) && self::hasRole('Processor') || self::hasRole('Budget Unit')
-        || self::hasRole('Accounting Unit') || self::hasRole('Cashiers Unit') || self::hasRole('Planning Section')
-        || self::hasRole('Liaison Officer');
+            || self::hasRole('Accounting Unit') || self::hasRole('Cashiers Unit') || self::hasRole('Planning Section')
+            || self::hasRole('Liaison Officer');
     }
 
     /**
@@ -442,6 +442,7 @@ class AccessControl
         if (self::canAccessExtended()) {
             $modules['voucher_incoming'] = 'Voucher Incoming';
             $modules['voucher_forwarding'] = 'Voucher Forwarding';
+            $modules['voucher_performance'] = 'Voucher Performance';
         }
 
         // Voucher modules based on ACL or designations
