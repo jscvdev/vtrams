@@ -282,6 +282,7 @@ class AccessControl
 
             case 'voucher_incoming':
             case 'voucher_forwarding':
+            case 'performance':
                 return self::canAccessExtended() ||
                     self::hasAnyRole([
                         'Planning Section',
@@ -289,32 +290,32 @@ class AccessControl
                         'Accounting Unit',
                         'Cashiers Unit',
                         'Processor',
-                        'Liaison'
+                        'Liaison',
                     ]);;
 
-            // case 'voucher_incoming':
-            //     // ACL >= 3 OR specific designations
-            //     return self::hasMinimumACL(3) ||
-            //         self::hasAnyRole([
-            //             'Planning Section',
-            //             'Budget Unit',
-            //             'Accounting Unit',
-            //             'Cashiers Unit',
-            //             'Processor',
-            //             'Liaison'
-            //         ]);
+                // case 'voucher_incoming':
+                //     // ACL >= 3 OR specific designations
+                //     return self::hasMinimumACL(3) ||
+                //         self::hasAnyRole([
+                //             'Planning Section',
+                //             'Budget Unit',
+                //             'Accounting Unit',
+                //             'Cashiers Unit',
+                //             'Processor',
+                //             'Liaison'
+                //         ]);
 
-            // case 'voucher_forwarding':
-            //     // ACL >= 3 OR specific designations
-            //     return self::hasMinimumACL(3) ||
-            //         self::hasAnyRole([
-            //             'Planning Section',
-            //             'Budget Unit',
-            //             'Accounting Unit',
-            //             'Cashiers Unit',
-            //             'Processor',
-            //             'Liaison'
-            //         ]);
+                // case 'voucher_forwarding':
+                //     // ACL >= 3 OR specific designations
+                //     return self::hasMinimumACL(3) ||
+                //         self::hasAnyRole([
+                //             'Planning Section',
+                //             'Budget Unit',
+                //             'Accounting Unit',
+                //             'Cashiers Unit',
+                //             'Processor',
+                //             'Liaison'
+                //         ]);
 
             case 'voucher_ada':
                 return self::hasAnyRole(['Cashiers Unit', 'System Admin']);
@@ -334,7 +335,6 @@ class AccessControl
                 return self::canAccessSystemUtilities();
 
             case 'dashboard':
-            case 'performance':
                 return self::canAccessOverviewReports();
 
             case 'file_tracking':
