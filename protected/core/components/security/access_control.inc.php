@@ -147,11 +147,11 @@ class AccessControl
      */
     public static function canAccessOverviewReports(): bool
     {
-        return self::hasMinimumACL(7);
+        return self::hasMinimumACL(6);
     }
     public static function canAccessExtended(): bool
     {
-        return self::hasMinimumACL(6);
+        return self::hasMinimumACL(7);
     }
 
     /**
