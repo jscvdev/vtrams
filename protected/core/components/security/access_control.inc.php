@@ -47,7 +47,7 @@ class AccessControl
         'Accounting Unit' => 4,
         'Cashiers Unit' => 3,
         'Processor' => 2,
-        'Liaison Officer' => 1
+        'Liaison Officer' => 6
     ];
 
     /**
@@ -74,7 +74,6 @@ class AccessControl
      * Maps file names to required designations
      */
     private static $fileDesignationRules = [
-        'document_tracking.php' => ['Records Unit'],
         'voucher_ada.php' => ['Cashiers Unit', 'System Admin'],
         'designations.php' => ['System Admin'],
         'utilities.php' => ['System Admin'],
@@ -284,7 +283,7 @@ class AccessControl
 
             case 'voucher_incoming':
             case 'voucher_forwarding':
-            case 'performance':
+            case 'voucher_performance':
                 return self::canAccessExtended() ||
                     self::hasAnyRole([
                         'Planning Section',
@@ -321,9 +320,6 @@ class AccessControl
 
             case 'voucher_ada':
                 return self::hasAnyRole(['Cashiers Unit', 'System Admin']);
-
-            case 'document_tracking':
-                return self::hasRole('Records Unit');
 
             case 'devtool':
             case 'edit_form':
@@ -454,11 +450,6 @@ class AccessControl
         // Cashiers Unit and System Admin
         if (self::checkModuleAccess('voucher_ada')) {
             $modules['voucher_ada'] = 'Voucher ADA';
-        }
-
-        // Records Unit
-        if (self::checkModuleAccess('document_tracking')) {
-            $modules['document_tracking'] = 'Document Tracking';
         }
 
         // High ACL users

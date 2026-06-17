@@ -1,6 +1,6 @@
 <?php
 include('../includes/header.php');
-if (!AccessControl::canAccessOverviewReports()) {
+if (!AccessControl::canAccessExtended()) {
     header('Location: ../documents/index.php');
     die();
 }
