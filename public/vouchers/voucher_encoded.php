@@ -105,6 +105,138 @@ function session_contains_phrase($phrase)
         </div>
     </div>
     <div class="overlay" id="overlay"></div>
+    <style>
+        #coaOptionsModalForward,
+        #signatoryModal {
+            z-index: 10001;
+        }
+        #natureOfClaimModal {
+            z-index: 10005 !important;
+        }
+        #coa_modal_overlay_forward,
+        #signatory_modal_overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+        }
+        #nature_of_claim_modal_overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10004 !important;
+        }
+        #coaOptionsModalForward .popupForm-box__container,
+        #signatoryModal .popupForm-box__container,
+        #natureOfClaimModal .popupForm-box__container {
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #coaOptionsModalForward .f-container,
+        #signatoryModal .f-container,
+        #natureOfClaimModal .f-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #coaOptionsModalForward .box-body__container,
+        #signatoryModal .box-body__container,
+        #natureOfClaimModal .box-body__container {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+        }
+        #coa_options_list_forward input[type="checkbox"] {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        .voucher-print-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+    </style>
+    <!-- COA checklist modal (forward slip reprint) -->
+    <div class="popup-form" id="coaOptionsModalForward" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p id="coa_modal_title_forward">COA Requirements</p>
+                <i class="ri-close-fill close-icon" id="close_coa_modal_forward"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container" style="width: 100%;">
+                        <div class="form-container">
+                            <div class="label-input__container">
+                                <label for="coa_options_checklist_forward">Select COA Requirements <span style="color: red;">*</span></label>
+                                <div id="coa_options_list_forward" style="background-color: white; border: 1px solid #ccc; border-radius: 4px; padding: 10px; max-height: 400px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <p style="margin: 0; font-size: 12px; color: #555; flex: 1; min-width: 200px;">Use <strong>Save</strong> to store your default checklist for this voucher type. <strong>Confirm</strong> applies your selection and opens the slip print dialog.</p>
+                        <button class="btn tertiary" id="coa_modal_select_all_forward" type="button">Select all</button>
+                        <button class="btn secondary" id="coa_modal_persist_forward" type="button">Save</button>
+                        <button class="btn primary" id="coa_modal_save_forward" type="button">Confirm</button>
+                        <button class="btn secondary transparent" id="coa_modal_cancel_forward" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
+    <!-- DV signatory selection modal (before print) -->
+    <div class="popup-form" id="signatoryModal" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p id="signatory_modal_title">Select Signatories</p>
+                <i class="ri-close-fill close-icon" id="close_signatory_modal"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container" style="width: 100%;">
+                        <div class="form-container">
+                            <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Choose signatories for the printed Disbursement Voucher before proceeding.</p>
+                            <div class="label-input__container" id="dv_sig_office_container" style="display: none;">
+                                <label for="dv_sig_office_select">Office <span style="color: #64748b; font-weight: normal;">(optional)</span></label>
+                                <select class="form-custom-input" id="dv_sig_office_select"></select>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="dv_sig_cert_select">A. Certified <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_cert_select" required></select>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="dv_sig_accounting_select">C. Certified (Accounting) <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_accounting_select" required></select>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="dv_sig_approved_select">D. Approved for Payment <span style="color: red;">*</span></label>
+                                <select class="form-custom-input" id="dv_sig_approved_select" required></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn primary" id="signatory_modal_print" type="button">Print Voucher</button>
+                        <button class="btn secondary transparent" id="signatory_modal_cancel" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="signatory_modal_overlay" style="display: none;"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">Encoded Voucher Summary</h2>
         <style>
@@ -144,7 +276,7 @@ function session_contains_phrase($phrase)
                         <th>Date</th>
                         <th>Type</th>
                         <th>Remarks</th>
-                        <th>Print</th>
+                        <th style="white-space: nowrap;">Print / Slip</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -166,6 +298,49 @@ function session_contains_phrase($phrase)
             </div>
         </div>
     </div>
+</div>
+
+<!-- Nature of Claim (forward slip reprint) -->
+<div class="popup-form" id="natureOfClaimModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="nature_of_claim_modal_title">
+    <div class="popupForm-box__container">
+        <div class="popupForm-header__container">
+            <p id="nature_of_claim_modal_title">Nature of Claim</p>
+            <i class="ri-close-fill close-icon" id="close_nature_of_claim_modal"></i>
+        </div>
+        <div class="f-container">
+            <div class="box-body__container flex-row">
+                <div class="popupForm-body__container" style="width: 100%;">
+                    <div class="form-container">
+                        <p style="margin: 0 0 12px; font-size: 13px; color: #555;">Enter the nature of claim to appear on the printed forward slip.</p>
+                        <div class="label-input__container">
+                            <label for="nature_of_claim_modal_input">Nature of Claim <span style="color: red;">*</span></label>
+                            <input type="text" class="form-custom-input" id="nature_of_claim_modal_input" autocomplete="off" placeholder="e.g. Traveling Expenses, Procurement of Supplies">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="popupForm-footer__container">
+                <div class="footer-button__container">
+                    <button class="btn primary" id="nature_of_claim_modal_confirm" type="button">Confirm &amp; Print Slip</button>
+                    <button class="btn secondary transparent" id="nature_of_claim_modal_cancel" type="button">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
+
+<div id="encoded-slip-hidden-fields" style="display:none;" aria-hidden="true">
+    <input type="text" id="encoded_payee" value="">
+    <input type="text" id="string_amount" value="">
+    <input type="text" id="voucher_type" value="">
+    <input type="text" id="encoded_type_hidden" value="">
+    <input type="text" id="remarks" value="">
+    <input type="text" id="nature_of_claim" value="">
+    <input type="text" id="selected_coa_options_forward" value="">
+    <input type="text" id="coa_category_forward_hidden" value="">
+    <input type="text" id="coa_subsection_forward_hidden" value="">
+    <button type="button" id="print_forward_slip" tabindex="-1" aria-hidden="true"></button>
 </div>
 
 <script>
@@ -235,6 +410,52 @@ function session_contains_phrase($phrase)
             list[pn] = arr;
             return list;
         }
+        function attachPrintHandler(btn, row) {
+            btn.addEventListener('click', function() {
+                try {
+                    const payload = buildPassItemPayload(row);
+                    const pn = String(row.processing_no ?? '');
+                    if (typeof passItem === 'function') {
+                        passItem(payload, pn);
+                    }
+                } catch (e) {}
+                if (typeof openSignatoryModal === 'function') {
+                    openSignatoryModal();
+                } else {
+                    window.print();
+                }
+            });
+        }
+        function populateSlipFields(row) {
+            const setVal = function(id, val) {
+                const el = document.getElementById(id);
+                if (el) el.value = String(val ?? '');
+            };
+            const amountNorm = normalizeAmountInput(row.amount || '');
+            const amountShown = amountNorm !== '' && typeof formatAmountDisplay === 'function'
+                ? formatAmountDisplay(amountNorm)
+                : String(row.amount || '');
+            setVal('encoded_payee', row.payee);
+            setVal('string_amount', amountShown);
+            setVal('voucher_type', row.voucher_type);
+            setVal('encoded_type_hidden', row.voucher_type);
+            setVal('remarks', row.return_remarks || '');
+            setVal('nature_of_claim', '');
+            setVal('coa_category_forward_hidden', row.voucher_type || '');
+            setVal('coa_subsection_forward_hidden', row.voucher_type || '');
+            const coaRaw = String(row.coa_options || '').trim();
+            setVal('selected_coa_options_forward', coaRaw);
+        }
+        function attachSlipPrintHandler(btn, row) {
+            btn.addEventListener('click', function() {
+                populateSlipFields(row);
+                if (typeof window.openEncodedSlipChecklistModal === 'function') {
+                    window.openEncodedSlipChecklistModal(row);
+                } else if (typeof showNotify === 'function') {
+                    showNotify('Checklist dialog is not available. Please refresh the page.', 'warning', 3500);
+                }
+            });
+        }
         function setPagination() {
             if (!pagWrap || !pagInfo || !prevBtn || !nextBtn) return;
             const hasRows = totalRows > 0;
@@ -301,16 +522,14 @@ function session_contains_phrase($phrase)
                     '<td data-label="encoded_from" class="hidden">' + escapeHtml(row.encoded_from) + '</td>' +
                     '<td data-label="tin_employee_no" class="hidden">' + escapeHtml(row.tin_employee_no) + '</td>' +
                     '<td data-label="voucher_type" class="hidden">' + escapeHtml(row.voucher_type) + '</td>' +
-                    '<td data-label=""><button class="btn warning" name="btn-gen-slip" type="button">Print</button></td>';
+                    '<td data-label=""><div class="voucher-print-actions">' +
+                    '<button class="btn warning" name="btn-gen-slip" type="button">Print</button>' +
+                    '<button class="btn secondary" name="btn-print-slip" type="button">Print Slip</button>' +
+                    '</div></td>';
                 const printBtn = tr.querySelector('button[name="btn-gen-slip"]');
-                if (printBtn) {
-                    printBtn.addEventListener('click', function() {
-                        const payload = buildPassItemPayload(row);
-                        const pn = String(row.processing_no ?? '');
-                        if (typeof passItem === 'function') passItem(payload, pn);
-                        window.print();
-                    });
-                }
+                if (printBtn) attachPrintHandler(printBtn, row);
+                const slipBtn = tr.querySelector('button[name="btn-print-slip"]');
+                if (slipBtn) attachSlipPrintHandler(slipBtn, row);
                 frag.appendChild(tr);
             });
             tableBody.appendChild(frag);
@@ -427,6 +646,675 @@ function session_contains_phrase($phrase)
     // Expose logged user name to external scripts (safe JSON encoding)
     window.__loggedUserEmpName = <?php echo json_encode($_SESSION['logged_user_emp_name'] ?? $logged_user_name ?? ''); ?>;
 </script>
+
+<script>
+    // Encoded page: COA checklist modal for forward slip reprint.
+    (function() {
+        const templates = <?php echo json_encode(checklist_get_active_templates(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const COA_PREFS_API = '../../protected/handler/coa_prefs_module/coa_forward_prefs_handler.php';
+        const COA_PREFS_TOKEN = <?php echo json_encode((string)($_SESSION['token'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+        const coaPrefsCache = Object.create(null);
+        let activeSlipRow = null;
+
+        const modal = document.getElementById('coaOptionsModalForward');
+        const overlay = document.getElementById('coa_modal_overlay_forward');
+        const modalTitle = document.getElementById('coa_modal_title_forward');
+        const optionsList = document.getElementById('coa_options_list_forward');
+        const closeBtn = document.getElementById('close_coa_modal_forward');
+        const cancelBtn = document.getElementById('coa_modal_cancel_forward');
+        const saveBtn = document.getElementById('coa_modal_save_forward');
+        const persistBtn = document.getElementById('coa_modal_persist_forward');
+        const selectAllBtn = document.getElementById('coa_modal_select_all_forward');
+        const hiddenSelected = document.getElementById('selected_coa_options_forward');
+        const hiddenCategory = document.getElementById('coa_category_forward_hidden');
+        const hiddenSubsection = document.getElementById('coa_subsection_forward_hidden');
+
+        function getCurrentVoucherType() {
+            return String(
+                (activeSlipRow && activeSlipRow.voucher_type) ||
+                document.getElementById('voucher_type')?.value ||
+                document.getElementById('encoded_type_hidden')?.value ||
+                ''
+            ).trim();
+        }
+
+        function labelNeedsExtraText(label) {
+            const t = String(label || '').trim().toLowerCase();
+            return t === 'etc' || t === 'etc.' || t === 'others' || t === 'other';
+        }
+
+        function parseChecklistItem(raw) {
+            if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.label) {
+                const subs = Array.isArray(raw.subitems)
+                    ? raw.subitems.map(function(s) { return String(s || '').trim(); }).filter(Boolean)
+                    : [];
+                return { label: String(raw.label || '').trim(), subitems: subs };
+            }
+            return { label: String(raw || '').trim(), subitems: [] };
+        }
+
+        function getTemplateLabels(voucherType) {
+            const t = templates[voucherType];
+            const labels = new Set();
+            if (!t || !Array.isArray(t.items)) return labels;
+            t.items.forEach(function(raw) {
+                const meta = parseChecklistItem(raw);
+                if (meta.label) labels.add(meta.label);
+                meta.subitems.forEach(function(s) { labels.add(String(s || '').trim()); });
+            });
+            return labels;
+        }
+
+        function loadSavedPrefs(voucherType) {
+            const vt = String(voucherType || '').trim();
+            if (!vt) return Promise.resolve(null);
+            if (Object.prototype.hasOwnProperty.call(coaPrefsCache, vt)) {
+                return Promise.resolve(coaPrefsCache[vt]);
+            }
+            const url = COA_PREFS_API + '?voucher_type=' + encodeURIComponent(vt);
+            return fetch(url, { credentials: 'same-origin' })
+                .then(function(res) {
+                    return res.json().then(function(data) {
+                        return { ok: res.ok, data: data };
+                    });
+                })
+                .then(function(payload) {
+                    const data = payload && payload.data;
+                    if (!payload || !payload.ok || !data || !data.ok || !Array.isArray(data.items)) {
+                        coaPrefsCache[vt] = null;
+                        return null;
+                    }
+                    coaPrefsCache[vt] = data.items.length ? data.items : null;
+                    return coaPrefsCache[vt];
+                })
+                .catch(function() {
+                    coaPrefsCache[vt] = null;
+                    return null;
+                });
+        }
+
+        function saveSavedPrefsToDb(voucherType, selectedOptions) {
+            const vt = String(voucherType || '').trim();
+            if (!vt || !Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+                return Promise.reject(new Error('No selections to save'));
+            }
+            return fetch(COA_PREFS_API, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: COA_PREFS_TOKEN,
+                    voucher_type: vt,
+                    selected_options: selectedOptions
+                })
+            })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data || !data.ok) {
+                        throw new Error((data && data.error) ? data.error : 'Save failed');
+                    }
+                    coaPrefsCache[vt] = selectedOptions;
+                    return data;
+                });
+        }
+
+        function splitSavedCoaLabel(full, knownBase) {
+            const s = String(full || '').trim();
+            const base = String(knownBase || '').trim();
+            if (!base) return { base: s, extra: '' };
+            if (s === base) return { base: base, extra: '' };
+            const prefix = base + ' - ';
+            if (s.indexOf(prefix) === 0) {
+                return { base: base, extra: s.slice(prefix.length).trim() };
+            }
+            return { base: s, extra: '' };
+        }
+
+        function savedItemMatchesCheckbox(savedOpt, checkboxBase) {
+            const full = String((savedOpt && (savedOpt.label || savedOpt.value)) || '').trim();
+            const base = String(checkboxBase || '').trim();
+            if (!full || !base) return false;
+            if (full === base) return true;
+            return splitSavedCoaLabel(full, base).base === base;
+        }
+
+        function filterSavedToTemplate(voucherType, savedItems) {
+            const allowed = getTemplateLabels(voucherType);
+            if (!allowed.size) return [];
+            return (savedItems || []).filter(function(opt) {
+                const full = String((opt && (opt.label || opt.value)) || '').trim();
+                if (!full) return false;
+                if (allowed.has(full)) return true;
+                for (const lab of allowed) {
+                    if (full === lab || full.indexOf(lab + ' - ') === 0) return true;
+                }
+                return false;
+            });
+        }
+
+        function getCheckboxBaseLabel(cb) {
+            return (cb.parentElement && cb.parentElement.querySelector('span')
+                ? cb.parentElement.querySelector('span').textContent
+                : cb.value) || '';
+        }
+
+        function applySelectionsToList(savedItems) {
+            if (!optionsList || !Array.isArray(savedItems) || savedItems.length === 0) return;
+            const checkboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
+            checkboxes.forEach(function(cb) {
+                const base = String(getCheckboxBaseLabel(cb) || '').trim();
+                const match = savedItems.find(function(opt) {
+                    return savedItemMatchesCheckbox(opt, base);
+                });
+                cb.checked = !!match;
+                const extraInput = cb.parentElement && cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
+                if (extraInput && match) {
+                    const full = String((match.label || match.value) || '').trim();
+                    extraInput.value = splitSavedCoaLabel(full, base).extra;
+                } else if (extraInput) {
+                    extraInput.value = '';
+                }
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            if (selectAllBtn && checkboxes.length) {
+                const allChecked = checkboxes.every(function(cb) { return cb.checked; });
+                selectAllBtn.textContent = allChecked ? 'Unselect all' : 'Select all';
+            }
+        }
+
+        function getStoredCoaSelections() {
+            const raw = String(hiddenSelected && hiddenSelected.value || '').trim();
+            if (!raw) return null;
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) && parsed.length ? parsed : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function collectSelectedOptionsFromCheckboxes() {
+            if (!optionsList) return [];
+            const allCheckboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
+            const checked = allCheckboxes.filter(function(cb) { return cb.checked; });
+            return checked.map(function(cb) {
+                const base = cb.parentElement.querySelector('span') ? cb.parentElement.querySelector('span').textContent : cb.value;
+                const extra = cb.parentElement.querySelector('input[type="text"][data-coa-extra-text="1"]');
+                const extraText = String(extra && extra.value || '').trim();
+                const label = extraText ? (String(base || '').trim() + ' - ' + extraText) : String(base || '').trim();
+                return {
+                    id: cb.getAttribute('data-id'),
+                    value: label,
+                    label: label
+                };
+            });
+        }
+
+        function attachExtraTextInput(checkbox, wrapEl, labelText) {
+            if (!checkbox || !wrapEl || !labelNeedsExtraText(labelText)) return;
+            const extra = document.createElement('input');
+            extra.type = 'text';
+            extra.className = 'coa-extra-text';
+            extra.placeholder = 'Please specify';
+            extra.autocomplete = 'off';
+            extra.setAttribute('data-coa-extra-text', '1');
+            extra.style.cssText = 'margin-left: 10px; flex: 1; min-width: 180px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; display: none;';
+            wrapEl.appendChild(extra);
+            function syncExtraVisibility() {
+                const on = !!checkbox.checked;
+                extra.style.display = on ? 'block' : 'none';
+                extra.disabled = !on;
+                if (!on) extra.value = '';
+            }
+            checkbox.addEventListener('change', syncExtraVisibility);
+            syncExtraVisibility();
+        }
+
+        function closeModal() {
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function renderChecklistOptions(voucherType) {
+            const t = templates[voucherType] || {
+                title: 'SUPPORTING DOCUMENTS',
+                items: ['Obligation Request and Status', 'Disbursement Voucher', 'Supporting documents as per checklist', 'Others']
+            };
+
+            if (modalTitle) {
+                modalTitle.textContent = 'Select COA Requirements - ' + (t.title || voucherType);
+            }
+
+            if (!optionsList) return;
+
+            optionsList.innerHTML = '';
+            const header = document.createElement('div');
+            header.style.cssText = 'padding: 10px 12px; background-color: #f8f9fa; font-weight: bold; color: #333; border-bottom: 2px solid #667eea;';
+            header.textContent = (t.title || voucherType);
+            optionsList.appendChild(header);
+
+            const items = Array.isArray(t.items) ? t.items : [];
+            if (items.length === 0) {
+                const empty = document.createElement('p');
+                empty.style.cssText = 'padding: 20px; text-align: center; color: #666;';
+                empty.textContent = 'No checklist configured for this voucher type.';
+                optionsList.appendChild(empty);
+                return;
+            }
+
+            items.forEach(function(raw, idx) {
+                const meta = parseChecklistItem(raw);
+                const itemLabel = meta.label;
+                if (!itemLabel) return;
+
+                const row = document.createElement('div');
+                row.style.cssText = 'display: block; padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer;';
+                const inner = document.createElement('div');
+                inner.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'coa_options_checklist_forward[]';
+                checkbox.value = itemLabel;
+                checkbox.setAttribute('data-id', String(idx + 1));
+                const span = document.createElement('span');
+                span.textContent = itemLabel;
+                inner.appendChild(checkbox);
+                inner.appendChild(span);
+                attachExtraTextInput(checkbox, inner, itemLabel);
+                row.appendChild(inner);
+                row.addEventListener('click', function(e) {
+                    const target = e.target;
+                    if (target && target.closest && target.closest('.coa-subitem-row')) return;
+                    if (target && target.tagName === 'INPUT') return;
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+
+                if (meta.subitems.length) {
+                    const subWrap = document.createElement('div');
+                    subWrap.style.cssText = 'margin: 6px 0 0 28px; display: flex; flex-direction: column; gap: 2px;';
+                    const subCheckboxes = [];
+                    meta.subitems.forEach(function(s, subIdx) {
+                        const subRow = document.createElement('div');
+                        subRow.className = 'coa-subitem-row';
+                        subRow.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 12px; color: #444;';
+                        const subCheckbox = document.createElement('input');
+                        subCheckbox.type = 'checkbox';
+                        subCheckbox.name = 'coa_options_checklist_forward[]';
+                        subCheckbox.value = String(s || '').trim();
+                        subCheckbox.setAttribute('data-id', String(idx + 1) + '-' + String(subIdx + 1));
+                        const subSpan = document.createElement('span');
+                        subSpan.textContent = String(s || '').trim();
+                        subRow.appendChild(subCheckbox);
+                        subRow.appendChild(subSpan);
+                        attachExtraTextInput(subCheckbox, subRow, String(s || '').trim());
+                        subWrap.appendChild(subRow);
+                        subCheckboxes.push(subCheckbox);
+                    });
+                    row.appendChild(subWrap);
+
+                    function syncParentFromSubs() {
+                        checkbox.checked = subCheckboxes.some(function(cb) { return cb.checked; });
+                    }
+                    checkbox.addEventListener('change', function() {
+                        const on = checkbox.checked;
+                        if (!on) {
+                            subCheckboxes.forEach(function(cb) { cb.checked = false; });
+                        } else if (!subCheckboxes.some(function(cb) { return cb.checked; }) && subCheckboxes.length) {
+                            subCheckboxes[0].checked = true;
+                        }
+                    });
+                    subCheckboxes.forEach(function(cb) {
+                        cb.addEventListener('change', syncParentFromSubs);
+                    });
+                    syncParentFromSubs();
+                }
+
+                optionsList.appendChild(row);
+            });
+        }
+
+        function openModal(row) {
+            activeSlipRow = row || activeSlipRow;
+            const voucherType = getCurrentVoucherType();
+            if (!voucherType) {
+                if (typeof showNotify === 'function') showNotify('This voucher has no type set. Cannot open checklist.', 'warning', 3000);
+                return;
+            }
+            if (persistBtn) {
+                persistBtn.disabled = false;
+                persistBtn.textContent = 'Save';
+            }
+
+            renderChecklistOptions(voucherType);
+
+            const applyToModal = function(savedItems) {
+                const savedForModal = filterSavedToTemplate(voucherType, savedItems);
+                if (savedForModal.length) {
+                    applySelectionsToList(savedForModal);
+                }
+            };
+
+            const stored = getStoredCoaSelections();
+            if (stored) {
+                applyToModal(stored);
+            } else {
+                loadSavedPrefs(voucherType).then(function(saved) {
+                    applyToModal(saved || []);
+                });
+            }
+
+            if (selectAllBtn && (!optionsList || !optionsList.querySelector('input[type="checkbox"][name="coa_options_checklist_forward[]"]'))) {
+                selectAllBtn.textContent = 'Select all';
+            }
+
+            if (hiddenCategory) hiddenCategory.value = voucherType;
+            if (hiddenSubsection) hiddenSubsection.value = voucherType;
+
+            if (modal) modal.style.display = 'block';
+            if (overlay) overlay.style.display = 'block';
+        }
+
+        window.openEncodedSlipChecklistModal = openModal;
+
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (overlay) overlay.addEventListener('click', closeModal);
+
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', function() {
+                if (!optionsList) return;
+                const checkboxes = Array.from(optionsList.querySelectorAll('input[type="checkbox"][name="coa_options_checklist_forward[]"]'));
+                if (checkboxes.length === 0) return;
+                const allChecked = checkboxes.every(function(cb) { return cb.checked; });
+                checkboxes.forEach(function(cb) {
+                    cb.checked = !allChecked;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                selectAllBtn.textContent = allChecked ? 'Select all' : 'Unselect all';
+            });
+        }
+
+        if (persistBtn) {
+            persistBtn.addEventListener('click', function() {
+                const selectedOptions = collectSelectedOptionsFromCheckboxes();
+                if (selectedOptions.length === 0) {
+                    if (typeof showNotify === 'function') showNotify('Please select at least one requirement to save.', 'warning', 3000);
+                    return;
+                }
+                const voucherType = getCurrentVoucherType();
+                persistBtn.disabled = true;
+                const prevLabel = persistBtn.textContent;
+                persistBtn.textContent = 'Saving...';
+                saveSavedPrefsToDb(voucherType, selectedOptions)
+                    .then(function() {
+                        if (typeof showNotify === 'function') {
+                            showNotify('Default checklist saved for this voucher type.', 'success', 3000);
+                        }
+                    })
+                    .catch(function(err) {
+                        if (typeof showNotify === 'function') {
+                            showNotify(err && err.message ? err.message : 'Could not save checklist.', 'error', 3500);
+                        }
+                    })
+                    .finally(function() {
+                        persistBtn.disabled = false;
+                        persistBtn.textContent = prevLabel;
+                    });
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
+                if (!hiddenSelected) return;
+                const selectedOptions = collectSelectedOptionsFromCheckboxes();
+                if (selectedOptions.length === 0) {
+                    if (typeof showNotify === 'function') showNotify('Please select at least one requirement.', 'warning', 3000);
+                    return;
+                }
+                hiddenSelected.value = JSON.stringify(selectedOptions);
+                hiddenSelected.dispatchEvent(new Event('change', { bubbles: true }));
+                closeModal();
+                if (typeof window.openNatureOfClaimModalForSlip === 'function') {
+                    window.openNatureOfClaimModalForSlip();
+                } else if (typeof showNotify === 'function') {
+                    showNotify('Slip print dialog is not available. Please refresh the page.', 'warning', 3500);
+                }
+            });
+        }
+    })();
+</script>
+
+<script>
+    // DV print: signatory selection modal before window.print()
+    (function() {
+        const modal = document.getElementById('signatoryModal');
+        const overlay = document.getElementById('signatory_modal_overlay');
+        const closeBtn = document.getElementById('close_signatory_modal');
+        const cancelBtn = document.getElementById('signatory_modal_cancel');
+        const printBtn = document.getElementById('signatory_modal_print');
+        const certSelect = document.getElementById('dv_sig_cert_select');
+        const accountingSelect = document.getElementById('dv_sig_accounting_select');
+        const approvedSelect = document.getElementById('dv_sig_approved_select');
+        const officeContainer = document.getElementById('dv_sig_office_container');
+        const officeSelect = document.getElementById('dv_sig_office_select');
+        let signatoryFetchInFlight = null;
+
+        function getSigCfg() {
+            return window.DV_SIGNATORY || {};
+        }
+
+        function canSelectSignatoryOffice() {
+            return !!getSigCfg().canSelectOffice;
+        }
+
+        function applySignatoryPayload(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            const cfg = getSigCfg();
+            cfg.options = Array.isArray(payload.options) ? payload.options : [];
+            cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
+                ? payload.optionsByKey
+                : {};
+            if (payload.defaultCertKey) cfg.defaultCertKey = payload.defaultCertKey;
+            if (payload.office) cfg.office = payload.office;
+            window.DV_SIGNATORY = cfg;
+        }
+
+        function populateOfficeSelect(selectedOffice) {
+            if (!officeSelect || !officeContainer) return;
+            const cfg = getSigCfg();
+            const offices = Array.isArray(cfg.offices) ? cfg.offices : [];
+            const defaultOffice = String(cfg.office || cfg.penroOffice || '').trim();
+            const resolved = String(selectedOffice || defaultOffice || offices[0] || '').trim();
+            officeSelect.innerHTML = '';
+            offices.forEach(function(officeName) {
+                const option = document.createElement('option');
+                option.value = officeName;
+                option.textContent = officeName;
+                if (officeName === resolved) option.selected = true;
+                officeSelect.appendChild(option);
+            });
+            if (!officeSelect.value && offices.length) officeSelect.selectedIndex = 0;
+        }
+
+        function populateSelect(selectEl, roleKeys, labels, defaultKey) {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            const keys = Array.isArray(roleKeys) ? roleKeys : [];
+            let hasDefault = false;
+            keys.forEach(function(key) {
+                const optData = (typeof getSignatoryByKey === 'function') ? getSignatoryByKey(key) : null;
+                if (!optData) return;
+                const option = document.createElement('option');
+                option.value = key;
+                option.dataset.name = optData.name || '';
+                option.dataset.pos1 = optData.pos1 || '';
+                option.dataset.pos2 = optData.pos2 || '';
+                const label = (labels && labels[key]) ? labels[key] : key;
+                option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
+                if (defaultKey && key === defaultKey) {
+                    option.selected = true;
+                    hasDefault = true;
+                }
+                selectEl.appendChild(option);
+            });
+            if (!hasDefault && selectEl.options.length > 0) selectEl.selectedIndex = 0;
+        }
+
+        function populateAllSignatorySelects() {
+            const cfg = getSigCfg();
+            const roles = cfg.roles || {};
+            const labels = cfg.labels || {};
+            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
+            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
+            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+        }
+
+        function fetchSignatoriesForOffice(office) {
+            const cfg = getSigCfg();
+            const url = String(cfg.fetchUrl || '../../protected/handler/fetch_handlers/fetch_dv_signatories.php');
+            const targetOffice = String(office || cfg.office || '').trim();
+            const requestUrl = targetOffice
+                ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 'office=' + encodeURIComponent(targetOffice))
+                : url;
+            if (signatoryFetchInFlight) return signatoryFetchInFlight;
+            signatoryFetchInFlight = fetch(requestUrl, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().then(function(payload) {
+                    return { ok: res.ok, payload: payload };
+                });
+            }).then(function(result) {
+                if (!result.ok || !result.payload || result.payload.error) {
+                    throw new Error((result.payload && result.payload.error) ? result.payload.error : 'Failed to load signatories');
+                }
+                applySignatoryPayload(result.payload);
+                populateAllSignatorySelects();
+                return result.payload;
+            }).finally(function() {
+                signatoryFetchInFlight = null;
+            });
+            return signatoryFetchInFlight;
+        }
+
+        function hasPrintableSignatoryOptions() {
+            const roles = getSigCfg().roles || {};
+            const hasRoleOption = function(roleKeys) {
+                return (Array.isArray(roleKeys) ? roleKeys : []).some(function(key) {
+                    return typeof getSignatoryByKey === 'function' && !!getSignatoryByKey(key);
+                });
+            };
+            return hasRoleOption(roles.cert) && hasRoleOption(roles.accounting) && hasRoleOption(roles.approved);
+        }
+
+        function closeSignatoryModal() {
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function openSignatoryModal() {
+            const cfg = getSigCfg();
+            if (officeContainer) officeContainer.style.display = canSelectSignatoryOffice() ? '' : 'none';
+            if (canSelectSignatoryOffice()) populateOfficeSelect(cfg.office || '');
+            const targetOffice = (canSelectSignatoryOffice() && officeSelect && officeSelect.value)
+                ? officeSelect.value
+                : String(cfg.office || '').trim();
+            if (printBtn) printBtn.disabled = true;
+            fetchSignatoriesForOffice(targetOffice).then(function() {
+                populateAllSignatorySelects();
+                if (!hasPrintableSignatoryOptions()) {
+                    if (typeof showNotify === 'function') {
+                        const officeLabel = String((cfg && cfg.office) || '').trim();
+                        const officeHint = officeLabel ? (' (office: ' + officeLabel + ')') : '';
+                        showNotify(
+                            'DV signatories are not configured for your office yet' + officeHint + '. A system administrator must set all four DV signatories in Utilities (A. Certified MSD/TSD, C. Accounting, and D. Approved). PENRO defaults are used when an office has no local entries.',
+                            'warning',
+                            5000
+                        );
+                    }
+                    return;
+                }
+                if (modal) modal.style.display = 'block';
+                if (overlay) overlay.style.display = 'block';
+            }).catch(function(err) {
+                if (typeof showNotify === 'function') {
+                    showNotify(String(err && err.message ? err.message : 'Failed to load signatories. Please try again.'), 'warning', 3200);
+                }
+            }).finally(function() {
+                if (printBtn) printBtn.disabled = false;
+            });
+        }
+
+        function validateSelections() {
+            if (!certSelect || !certSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the A. Certified signatory.', 'warning', 2800);
+                return false;
+            }
+            if (!accountingSelect || !accountingSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the C. Certified (Accounting) signatory.', 'warning', 2800);
+                return false;
+            }
+            if (!approvedSelect || !approvedSelect.value) {
+                if (typeof showNotify === 'function') showNotify('Please select the D. Approved for Payment signatory.', 'warning', 2800);
+                return false;
+            }
+            return true;
+        }
+
+        function readSignatoryFromSelect(selectEl) {
+            if (!selectEl) return { name: '', pos1: '', pos2: '' };
+            const opt = selectEl.selectedOptions && selectEl.selectedOptions[0] ? selectEl.selectedOptions[0] : null;
+            if (!opt) return { name: '', pos1: '', pos2: '' };
+            const fromKey = (typeof getSignatoryByKey === 'function') ? getSignatoryByKey(opt.value) : null;
+            if (fromKey) {
+                return { name: fromKey.name || '', pos1: fromKey.pos1 || '', pos2: fromKey.pos2 || '' };
+            }
+            return {
+                name: opt.dataset.name || '',
+                pos1: opt.dataset.pos1 || '',
+                pos2: opt.dataset.pos2 || '',
+            };
+        }
+
+        function proceedToPrint() {
+            if (!validateSelections()) return;
+            const selection = {
+                cert: readSignatoryFromSelect(certSelect),
+                accounting: readSignatoryFromSelect(accountingSelect),
+                approved: readSignatoryFromSelect(approvedSelect),
+            };
+            if (typeof storeDvSignatories === 'function') storeDvSignatories(selection);
+            if (typeof applyDvSignatories === 'function') applyDvSignatories(selection);
+            closeSignatoryModal();
+            window.requestAnimationFrame(function() {
+                if (typeof applyDvSignatories === 'function') applyDvSignatories(selection);
+                window.print();
+            });
+        }
+
+        window.openSignatoryModal = openSignatoryModal;
+
+        if (closeBtn) closeBtn.addEventListener('click', closeSignatoryModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeSignatoryModal);
+        if (overlay) overlay.addEventListener('click', closeSignatoryModal);
+        if (printBtn) printBtn.addEventListener('click', proceedToPrint);
+        if (officeSelect) {
+            officeSelect.addEventListener('change', function() {
+                fetchSignatoriesForOffice(officeSelect.value).catch(function(err) {
+                    if (typeof showNotify === 'function') {
+                        showNotify(String(err && err.message ? err.message : 'Failed to load signatories for the selected office.'), 'warning', 3200);
+                    }
+                });
+            });
+        }
+    })();
+</script>
+<?php
+$forwardSlipJsPath = __DIR__ . '/../../protected/js/forward_slip.js';
+$forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJsPath) : time();
+?>
+<script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
 </body>
 
 </html>
