@@ -55,8 +55,8 @@ class AccessControl
      * Maps file names to required ACL levels
      */
     private static $fileAccessRules = [
-        'devtool.php' => 8,
-        'edit_form.php' => 8,
+        'devtool.php' => 999,
+        'edit_form.php' => 999,
         'designations.php' => 999,
         'utilities.php' => 999,
         'checklist.php' => 999,
@@ -148,6 +148,10 @@ class AccessControl
     public static function canAccessOverviewReports(): bool
     {
         return self::hasMinimumACL(7);
+    }
+    public static function canAccessExtended(): bool
+    {
+        return self::hasMinimumACL(6);
     }
 
     /**
@@ -275,27 +279,34 @@ class AccessControl
             case 'user_management':
                 return self::hasRole('System Admin'); // System Admin only
 
-            case 'voucher_incoming':
-                // ACL >= 3 OR specific designations
-                return self::hasMinimumACL(3) ||
-                    self::hasAnyRole([
-                        'Planning Section',
-                        'Budget Unit',
-                        'Accounting Unit',
-                        'Cashiers Unit',
-                        'Processor'
-                    ]);
 
+            case 'voucher_incoming':
             case 'voucher_forwarding':
-                // ACL >= 3 OR specific designations
-                return self::hasMinimumACL(3) ||
-                    self::hasAnyRole([
-                        'Planning Section',
-                        'Budget Unit',
-                        'Accounting Unit',
-                        'Cashiers Unit',
-                        'Processor'
-                    ]);
+                return self::canAccessExtended();
+
+            // case 'voucher_incoming':
+            //     // ACL >= 3 OR specific designations
+            //     return self::hasMinimumACL(3) ||
+            //         self::hasAnyRole([
+            //             'Planning Section',
+            //             'Budget Unit',
+            //             'Accounting Unit',
+            //             'Cashiers Unit',
+            //             'Processor',
+            //             'Liaison'
+            //         ]);
+
+            // case 'voucher_forwarding':
+            //     // ACL >= 3 OR specific designations
+            //     return self::hasMinimumACL(3) ||
+            //         self::hasAnyRole([
+            //             'Planning Section',
+            //             'Budget Unit',
+            //             'Accounting Unit',
+            //             'Cashiers Unit',
+            //             'Processor',
+            //             'Liaison'
+            //         ]);
 
             case 'voucher_ada':
                 return self::hasAnyRole(['Cashiers Unit', 'System Admin']);
@@ -416,6 +427,11 @@ class AccessControl
 
         if (self::canAccessOverviewReports()) {
             $modules['dashboard'] = 'Dashboard';
+        }
+
+        if (self::canAccessExtended()) {
+            $modules['voucher_incoming'] = 'Voucher Incoming';
+            $modules['voucher_forwarding'] = 'Voucher Forwarding';
         }
 
         // Voucher modules based on ACL or designations

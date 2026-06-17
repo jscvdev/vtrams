@@ -219,7 +219,8 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
                         $can_view_designations = $can_view_system_utilities;
                         $can_view_performance = $can_view_dashboard;
-                        $can_view_processing = $can_view_dashboard;
+                        $can_view_processing = AccessControl::canAccessExtended();
+                        
 
                         $show_general_section = (
                             $can_view_voucher_overview_pages
@@ -331,7 +332,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     or in_array("Budget Unit", $target) or in_array("Accounting Unit", $target)
                                     or in_array("Office of the PENRO", $target) or in_array("Cashiers Unit", $target) or in_array("Processor", $target)
                                 ) : ?>
-                                    <?php if ($can_view_performance): ?>
+                                    <?php if ($can_view_processing): ?>
                                         <div class="sidebar-link-container">
                                             <a href='../vouchers/voucher_incoming.php' class='sidebar__link'>
                                                 <i class='ri-file-list-3-line sidebar__link_incoming' id='vouchers_incoming'></i>
