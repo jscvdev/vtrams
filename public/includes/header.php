@@ -218,7 +218,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_dashboard = AccessControl::canAccessOverviewReports();
                         $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
                         $can_view_designations = $can_view_system_utilities;
-                        $can_view_performance = AccessControl::canAccessExtended();
+                        $can_view_performance = AccessControl::canAccessOverviewReports();
                         $can_view_processing = AccessControl::canAccessExtended();
                         
 
