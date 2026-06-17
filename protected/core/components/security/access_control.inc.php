@@ -282,7 +282,15 @@ class AccessControl
 
             case 'voucher_incoming':
             case 'voucher_forwarding':
-                return self::canAccessExtended();
+                return self::canAccessExtended() ||
+                    self::hasAnyRole([
+                        'Planning Section',
+                        'Budget Unit',
+                        'Accounting Unit',
+                        'Cashiers Unit',
+                        'Processor',
+                        'Liaison'
+                    ]);;
 
             // case 'voucher_incoming':
             //     // ACL >= 3 OR specific designations
