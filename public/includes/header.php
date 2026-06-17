@@ -206,7 +206,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         <?php endif; ?>
                         <?php
                         $can_view_voucher_overview_pages = (
-                            $_SESSION["acl"] >= 8
+                            $_SESSION["acl"] >= 6
                             || in_array("Budget Unit", $target)
                             || in_array("Cashiers Unit", $target)
                             || in_array("Accounting Unit", $target)
