@@ -450,6 +450,38 @@ function sync_voucher_tracking_after_edit(
 }
 
 /**
+ * Mirror address, particulars, and voucher_date on voucher_tracking.
+ */
+function sync_voucher_tracking_details(
+    object $pdo,
+    string $processing_no,
+    string $address,
+    string $particulars,
+    string $voucher_date,
+    string $voucher_status,
+    string $datetime_status
+): bool {
+    $query = 'UPDATE voucher_tracking SET
+        address = :address,
+        particulars = :particulars,
+        voucher_date = :voucher_date,
+        voucher_status = :voucher_status,
+        datetime_status = :datetime_status
+        WHERE processing_no = :processing_no';
+
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':address', $address, PDO::PARAM_STR);
+    $statement->bindValue(':particulars', $particulars, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_date', $voucher_date, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_status', $voucher_status, PDO::PARAM_STR);
+    $statement->bindValue(':datetime_status', $datetime_status, PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}
+
+/**
  * Mirror charged_amount on voucher_tracking so Voucher Status shows edited amounts.
  */
 function sync_voucher_tracking_charged_amount(object $pdo, string $processing_no, ?string $charged_amount): bool

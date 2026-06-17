@@ -92,18 +92,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         || voucher_user_has_designation($editAmountDesignations, 'Processor')
                         || voucher_user_has_designation($editAmountDesignations, 'Budget Unit')
                         || voucher_user_has_designation($editAmountDesignations, 'Budget Officer');
+                    $canEditVoucherDetails = $canEditVoucherAmount
+                        || voucher_user_has_designation($editAmountDesignations, 'ICU');
 
-                    if (!$canEditVoucherAmount) {
-                        echo "<script>process_functionAlert('You are not authorized to edit voucher amounts.', 'voucher_receiving_redirect')</script>";
+                    if (!$canEditVoucherDetails) {
+                        echo "<script>process_functionAlert('You are not authorized to edit vouchers.', 'voucher_receiving_redirect')</script>";
                         $_SESSION['token'] = generateToken();
                         die();
                     }
 
-                    // Simple edit of amount only, no forwarding/transmitting logic
                     $variables_to_check = [
                         'processing_no' => $processing_no,
-                        'amount' => $amount,
                     ];
+
+                    if ($canEditVoucherAmount) {
+                        $variables_to_check['amount'] = $amount;
+                    } else {
+                        $variables_to_check['address'] = $address;
+                        $variables_to_check['voucher_date'] = $voucher_date;
+                    }
 
                     $result = is_voucher_receiving_required_data_empty($variables_to_check);
 
@@ -120,20 +127,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($temp_dump) {
                         $_SESSION['error_voucher_receiving'] = $temp_dump;
-                        echo "<script>process_functionAlert('Edit amount failed!', 'voucher_receiving_redirect')</script>";
+                        echo "<script>process_functionAlert('Edit failed!', 'voucher_receiving_redirect')</script>";
                         $_SESSION['token'] = generateToken();
                         die();
                     } else {
-                        // Preserve original amount; store edit in charged_amount and sync voucher_tracking.
-                        $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount);
-                        $logAmount = $amountUpdate['effective_amount'] ?? $amount;
-
                         date_default_timezone_set('Asia/Singapore');
                         $datetime_action = date('Y-m-d H:i:s');
-                        $action = 'Amount edited by: ' . ($_SESSION['logged_user_emp_name'] ?? '');
+                        $action = 'Edited by: ' . ($_SESSION['logged_user_emp_name'] ?? '');
                         $action_by = $_SESSION['logged_user_emp_name'] ?? '';
                         $action_from = $_SESSION['logged_user_section'] ?? '';
                         $log_office_to = $office_to !== '' ? $office_to : ($_SESSION['logged_user_office'] ?? '');
+                        $logAmount = $amount;
+
+                        if ($canEditVoucherDetails) {
+                            update_voucher_receiving_details(
+                                $pdo,
+                                $processing_no,
+                                $address,
+                                $particulars,
+                                $voucher_date,
+                                $action,
+                                $datetime_action
+                            );
+                        }
+
+                        if ($canEditVoucherAmount) {
+                            $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount);
+                            $logAmount = $amountUpdate['effective_amount'] ?? $amount;
+                        }
 
                         voucher_log_user_action(
                             $pdo,
@@ -158,14 +179,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $remarks
                         );
 
-                        AuditHelper::logActivity('editing', "Edited voucher amount: {$processing_no}", [
+                        AuditHelper::logActivity('editing', "Edited voucher: {$processing_no}", [
                             'processing_no' => $processing_no,
                             'dv_no' => $dv_no,
                             'payee' => $payee,
                             'amount' => $logAmount,
+                            'address' => $address,
+                            'voucher_date' => $voucher_date,
                         ], $_SESSION['logged_user_emp_name'] ?? null, $processing_no);
 
-                        echo "<script>process_functionAlert('Amount updated successfully!', 'voucher_receiving_redirect')</script>";
+                        echo "<script>process_functionAlert('Voucher updated successfully!', 'voucher_receiving_redirect')</script>";
                         $_SESSION['token'] = generateToken();
                         die();
                     }

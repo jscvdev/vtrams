@@ -471,6 +471,46 @@ function update_amount(object $pdo, string $processing_no, string $amount): arra
     ];
 }
 
+/**
+ * @return array{updated: bool}
+ */
+function update_voucher_details(
+    object $pdo,
+    string $processing_no,
+    string $address,
+    string $particulars,
+    string $voucher_date
+): array {
+    $query = 'UPDATE voucher_receiving SET
+        address = :address,
+        particulars = :particulars,
+        voucher_date = :voucher_date
+        WHERE processing_no = :processing_no';
+
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':address', $address, PDO::PARAM_STR);
+    $statement->bindValue(':particulars', $particulars, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_date', $voucher_date, PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    $vouchersQuery = 'UPDATE vouchers SET
+        address = :address,
+        particulars = :particulars,
+        voucher_date = :voucher_date
+        WHERE processing_no = :processing_no';
+    $vouchersStatement = $pdo->prepare($vouchersQuery);
+    $vouchersStatement->bindValue(':address', $address, PDO::PARAM_STR);
+    $vouchersStatement->bindValue(':particulars', $particulars, PDO::PARAM_STR);
+    $vouchersStatement->bindValue(':voucher_date', $voucher_date, PDO::PARAM_STR);
+    $vouchersStatement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $vouchersStatement->execute();
+
+    return [
+        'updated' => $statement->rowCount() > 0,
+    ];
+}
+
 function get_employee_name_by_designation(object $pdo, string $designation, string $office = ''): ?string
 {
     $query = "SELECT TRIM(CONCAT_WS(' ',

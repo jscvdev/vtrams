@@ -184,6 +184,29 @@ function update_voucher_amount(object $pdo, string $processing_no, string $amoun
     return update_amount($pdo, $processing_no, $amount);
 }
 
+function update_voucher_receiving_details(
+    object $pdo,
+    string $processing_no,
+    string $address,
+    string $particulars,
+    string $voucher_date,
+    string $action,
+    string $datetime_action
+): array {
+    $result = update_voucher_details($pdo, $processing_no, $address, $particulars, $voucher_date);
+    sync_voucher_tracking_details(
+        $pdo,
+        $processing_no,
+        $address,
+        $particulars,
+        $voucher_date,
+        $action,
+        $datetime_action
+    );
+
+    return $result;
+}
+
 function get_voucher_receiver_name_by_role(object $pdo, string $role, string $office = ''): string
 {
     $receiverName = get_employee_name_by_designation($pdo, $role, $office);

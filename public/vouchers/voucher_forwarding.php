@@ -148,6 +148,7 @@ $showEditCol = (
     || in_array('Processor', $target, true)
     || in_array('Budget Unit', $target, true)
     || in_array('Budget Officer', $target, true)
+    || in_array('ICU', $target, true)
 );
 
 $ada_options = [];
@@ -1380,6 +1381,45 @@ if ($showCashierArchiveCol) {
         }
     }
 
+    function resetVoucherDetailEditing() {
+        ['address', 'voucher_date'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.readOnly = true;
+            }
+        });
+        var particularsEl = document.getElementById('particulars');
+        if (particularsEl) {
+            particularsEl.readOnly = true;
+            particularsEl.setAttribute('required', 'required');
+        }
+    }
+
+    function enableVoucherDetailEditing() {
+        ['address', 'voucher_date'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.readOnly = false;
+            }
+        });
+        var particularsEl = document.getElementById('particulars');
+        if (particularsEl) {
+            particularsEl.readOnly = false;
+            particularsEl.removeAttribute('required');
+        }
+    }
+
+    function isAmountEditRole() {
+        return targetArray2.includes('Accounting Unit') ||
+            targetArray2.includes('Processor') ||
+            targetArray2.includes('Budget Unit') ||
+            targetArray2.includes('Budget Officer');
+    }
+
+    function isVoucherDetailEditRole() {
+        return targetArray2.includes('ICU') || isAmountEditRole();
+    }
+
     // Get all buttons with class 'btn-forward'
     var buttons = document.querySelectorAll('#my-Table .btn');
 
@@ -1476,6 +1516,7 @@ if ($showCashierArchiveCol) {
                 coaSubsectionForward.value = coa_subsection || '';
             }
 
+            resetVoucherDetailEditing();
 
             const amountPrimaryBlock = document.querySelector('.amount_primary_block');
             const originalContainer = document.querySelector('.original_charged_container');
@@ -1709,7 +1750,6 @@ if ($showCashierArchiveCol) {
             if (name === "btn-edit_amount") {
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_receiving_module/voucher_receiving_handler.php');
                 document.querySelector(".btn-dynamic").textContent = "Save";
-                document.getElementById("form_title").textContent = "Edit Amount";
                 document.getElementById("document_to").required = false;
                 document.querySelector(".btn-dynamic").setAttribute("name", "edit_voucher_amount");
                 document.querySelector(".btn-dynamic").classList.remove("warning");
@@ -1723,43 +1763,62 @@ if ($showCashierArchiveCol) {
                 });
 
                 const amountPrimaryBlock = document.querySelector('.amount_primary_block');
-                if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
-                const stringAmountInput = document.getElementById('string_amount');
-                if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
-
                 const originalContainer = document.querySelector('.original_charged_container');
                 const chargedContainer = document.querySelector('.charged_amount_container');
-                if (originalContainer) originalContainer.style.display = 'flex';
-                if (chargedContainer) chargedContainer.style.display = 'flex';
-
+                const stringAmountInput = document.getElementById('string_amount');
                 const originalStringInput = document.getElementById('original_string_amount');
                 const chargedStringInput = document.getElementById('charged_string_amount');
-                if (originalStringInput) originalStringInput.disabled = false;
-                if (chargedStringInput) chargedStringInput.disabled = false;
+                const canEditAmount = isAmountEditRole();
+                const canEditDetails = isVoucherDetailEditRole();
 
-                const hasChargedEdit = isNonZeroAmount(charged_amount);
-
-                if (originalStringInput && chargedStringInput) {
-                    if (hasChargedEdit) {
-                        originalStringInput.value = amountOriginal;
-                        chargedStringInput.value = String(charged_amount || '').trim();
-                    } else {
-                        originalStringInput.value = amount;
-                        chargedStringInput.value = amount;
-                    }
-                } else if (chargedStringInput) {
-                    if (hasChargedEdit) {
-                        chargedStringInput.value = String(charged_amount || '').trim();
-                    } else {
-                        chargedStringInput.value = amount;
-                    }
+                if (canEditDetails) {
+                    enableVoucherDetailEditing();
                 }
 
-                const mainAmountInput = document.getElementById('string_amount');
-                if (mainAmountInput) mainAmountInput.readOnly = true;
+                if (canEditAmount) {
+                    document.getElementById("form_title").textContent = canEditDetails
+                        ? "Edit Voucher"
+                        : "Edit Amount";
 
-                // Enable editing of amount only in this mode
-                enableAmountEditing();
+                    if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
+                    if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
+                    if (originalContainer) originalContainer.style.display = 'flex';
+                    if (chargedContainer) chargedContainer.style.display = 'flex';
+                    if (originalStringInput) originalStringInput.disabled = false;
+                    if (chargedStringInput) chargedStringInput.disabled = false;
+
+                    const hasChargedEdit = isNonZeroAmount(charged_amount);
+
+                    if (originalStringInput && chargedStringInput) {
+                        if (hasChargedEdit) {
+                            originalStringInput.value = amountOriginal;
+                            chargedStringInput.value = String(charged_amount || '').trim();
+                        } else {
+                            originalStringInput.value = amount;
+                            chargedStringInput.value = amount;
+                        }
+                    } else if (chargedStringInput) {
+                        if (hasChargedEdit) {
+                            chargedStringInput.value = String(charged_amount || '').trim();
+                        } else {
+                            chargedStringInput.value = amount;
+                        }
+                    }
+
+                    const mainAmountInput = document.getElementById('string_amount');
+                    if (mainAmountInput) mainAmountInput.readOnly = true;
+
+                    enableAmountEditing();
+                } else {
+                    document.getElementById("form_title").textContent = "Edit Voucher";
+
+                    if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
+                    if (stringAmountInput) stringAmountInput.removeAttribute('required');
+                    if (originalContainer) originalContainer.style.display = 'none';
+                    if (chargedContainer) chargedContainer.style.display = 'none';
+                    if (originalStringInput) originalStringInput.disabled = true;
+                    if (chargedStringInput) chargedStringInput.disabled = true;
+                }
             }
         });
     });
