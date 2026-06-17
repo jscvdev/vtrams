@@ -146,7 +146,7 @@ class AccessControl
      */
     public static function canAccessOverviewReports(): bool
     {
-        return self::hasMinimumACL(6) && !self::hasRole('Liaison Officer');;
+        return self::hasMinimumACL(7) && !self::hasRole('Liaison Officer');;
     }
     public static function canAccessExtended(): bool
     {
