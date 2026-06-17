@@ -1095,8 +1095,16 @@ function session_contains_phrase($phrase)
                     var encodedTypeFieldName = encodedTypeSelect.getAttribute('data-field-name') || 'encoded_type';
                     encodedTypeSelect.setAttribute('name', encodedTypeFieldName);
                 }
+                if (typeof window.vtramsApplyEncodedPayeeLocking === 'function') {
+                    window.vtramsApplyEncodedPayeeLocking(true);
+                }
                 if (encodedTypeSelect && encodedTypeHidden) {
-                    encodedTypeSelect.onchange = function() { encodedTypeHidden.value = this.value; };
+                    encodedTypeSelect.onchange = function() {
+                        encodedTypeHidden.value = this.value;
+                        if (typeof window.vtramsApplyEncodedPayeeLocking === 'function') {
+                            window.vtramsApplyEncodedPayeeLocking(false);
+                        }
+                    };
                 }
             }
         }
@@ -1318,27 +1326,13 @@ function session_contains_phrase($phrase)
             'Contractual Services or Job Order Salary',
         ]);
 
-        function applyPayeeLocking() {
-            const payeeInput = document.getElementById("payee_name");
-            const typeSelect = document.getElementById("type-select");
-            if (!payeeInput || !typeSelect) return;
-
-            const selectedType = String(typeSelect.value || '').trim();
-            const shouldLock = LOCKED_PAYEE_TYPES.has(selectedType);
-
-            if (shouldLock && loggedUserName) {
-                payeeInput.value = loggedUserName;
-                payeeInput.setAttribute("data-default", loggedUserName);
-                payeeInput.setAttribute("data-autofilled", "1");
+        function setPayeeFieldLocked(payeeInput, locked) {
+            if (locked) {
                 payeeInput.readOnly = true;
                 payeeInput.style.backgroundColor = "#e9ecef";
                 payeeInput.style.color = "#6c757d";
                 payeeInput.style.cursor = "not-allowed";
             } else {
-                const wasAutofilled = payeeInput.getAttribute("data-autofilled") === "1";
-                if (wasAutofilled && payeeInput.value === (payeeInput.getAttribute("data-default") || "")) {
-                    payeeInput.value = "";
-                }
                 payeeInput.removeAttribute("data-autofilled");
                 payeeInput.readOnly = false;
                 payeeInput.style.backgroundColor = "";
@@ -1346,6 +1340,47 @@ function session_contains_phrase($phrase)
                 payeeInput.style.cursor = "";
             }
         }
+
+        function applyPayeeLockingToFields(payeeInput, typeSelect, options) {
+            if (!payeeInput || !typeSelect) return;
+
+            const preserveExistingPayee = options && options.preserveExistingPayee;
+            const selectedType = String(typeSelect.value || '').trim();
+            const shouldLock = LOCKED_PAYEE_TYPES.has(selectedType);
+
+            if (shouldLock && loggedUserName) {
+                if (!preserveExistingPayee || !String(payeeInput.value || '').trim()) {
+                    payeeInput.value = loggedUserName;
+                    payeeInput.setAttribute("data-default", loggedUserName);
+                    payeeInput.setAttribute("data-autofilled", "1");
+                }
+                setPayeeFieldLocked(payeeInput, true);
+            } else {
+                const wasAutofilled = payeeInput.getAttribute("data-autofilled") === "1";
+                if (wasAutofilled && payeeInput.value === (payeeInput.getAttribute("data-default") || "")) {
+                    payeeInput.value = "";
+                }
+                setPayeeFieldLocked(payeeInput, false);
+            }
+        }
+
+        function applyPayeeLocking() {
+            applyPayeeLockingToFields(
+                document.getElementById("payee_name"),
+                document.getElementById("type-select"),
+                { preserveExistingPayee: false }
+            );
+        }
+
+        function applyEncodedPayeeLocking(preserveExistingPayee) {
+            applyPayeeLockingToFields(
+                document.getElementById("encoded_payee"),
+                document.getElementById("encoded_type"),
+                { preserveExistingPayee: !!preserveExistingPayee }
+            );
+        }
+
+        window.vtramsApplyEncodedPayeeLocking = applyEncodedPayeeLocking;
 
         function initPayeeLocking() {
             const typeSelect = document.getElementById("type-select");
