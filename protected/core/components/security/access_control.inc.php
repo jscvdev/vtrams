@@ -151,7 +151,9 @@ class AccessControl
     }
     public static function canAccessExtended(): bool
     {
-        return self::hasMinimumACL(7);
+        return self::hasMinimumACL(7) && self::hasRole('Processor') || self::hasRole('Budget Unit')
+        || self::hasRole('Accounting Unit') || self::hasRole('Cashiers Unit') || self::hasRole('Planning Section')
+        || self::hasRole('Liaison Officer');
     }
 
     /**
