@@ -404,60 +404,60 @@ if ($showCashierArchiveCol) {
                                     <?php if ($isLiaisonOfficer) : ?>
                                         <option value='ICU' selected>ICU</option>
                                     <?php else : ?>
-                                    <option value="" disabled selected>Please Select</option>
-                                    <?php if (in_array("ICU", $target, true)) : ?>
-                                        <option value='Accounting Unit'>Accounting Unit</option>
-                                        <option value='Accountant III' class="processed">Chief Accountant</option>
-                                    <?php elseif (in_array("Planning Section", $target)) : ?>
-                                        <option value='Budget Unit'>Budget Unit</option>
-                                        <?php if (!in_array("Planning Section Chief", $target)) : ?>
-                                            <option value='Planning Section Chief' class="Planning_Officer">Planning Section Chief</option>
-                                        <?php endif ?>
-                                    <?php elseif (in_array("Conservation & Development Section", $target)) : ?>
-                                        <option value='Accounting Unit'>Accounting Unit</option>
-                                    <?php elseif (in_array("Budget Unit", $target)) : ?>
-                                        <option value='ICU'>ICU</option>
-                                        <?php if (!in_array("Budget Officer", $target)) : ?>
-                                            <option value='Budget Officer' class="Budget_Officer">Budget Officer</option>
-                                        <?php endif ?>
-                                    <?php elseif (in_array("Accounting Unit", $target) or in_array("Processor", $target)) : ?>
-                                        <?php if (in_array("Accounting Unit", $target)) : ?>
-                                            <optgroup label="Processed" class="Processed">
+                                        <option value="" disabled selected>Please Select</option>
+                                        <?php if (in_array("ICU", $target, true)) : ?>
+                                            <option value='Accounting Unit'>Accounting Unit</option>
+                                            <option value='Accountant III' class="processed">Chief Accountant</option>
+                                        <?php elseif (in_array("Planning Section", $target)) : ?>
+                                            <option value='Budget Unit'>Budget Unit</option>
+                                            <?php if (!in_array("Planning Section Chief", $target)) : ?>
+                                                <option value='Planning Section Chief' class="Planning_Officer">Planning Section Chief</option>
+                                            <?php endif ?>
+                                        <?php elseif (in_array("Conservation & Development Section", $target)) : ?>
+                                            <option value='Accounting Unit'>Accounting Unit</option>
+                                        <?php elseif (in_array("Budget Unit", $target)) : ?>
+                                            <option value='ICU'>ICU</option>
+                                            <?php if (!in_array("Budget Officer", $target)) : ?>
+                                                <option value='Budget Officer' class="Budget_Officer">Budget Officer</option>
+                                            <?php endif ?>
+                                        <?php elseif (in_array("Accounting Unit", $target) or in_array("Processor", $target)) : ?>
+                                            <?php if (in_array("Accounting Unit", $target)) : ?>
+                                                <optgroup label="Processed" class="Processed">
+                                                    <option value='Accountant III' class="processed">Chief Accountant</option>
+                                                    <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
+                                                    <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
+                                                </optgroup>
+                                                <?php if (in_array("Processor", $target)) : ?>
+                                                    <optgroup label="Processor" class="Processor">
+                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
+                                                            <option value='4HyLy'>1. Marife C. Briton</option>
+                                                        <?php endif; ?>
+                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
+                                                            <option value='YS9M3'>2. Diana E. Costuna </option>
+                                                        <?php endif; ?>
+                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
+                                                            <option value='s1JxV'>3. Gracile B. Palce</option>
+                                                        <?php endif; ?>
+                                                    </optgroup>
+                                                <?php endif; ?>
+                                            <?php elseif (!in_array("Accounting Unit", $target) and in_array("Processor", $target)) : ?>
                                                 <option value='Accountant III' class="processed">Chief Accountant</option>
                                                 <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
                                                 <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
-                                            </optgroup>
-                                            <?php if (in_array("Processor", $target)) : ?>
-                                                <optgroup label="Processor" class="Processor">
-                                                    <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
-                                                        <option value='4HyLy'>1. Marife C. Briton</option>
-                                                    <?php endif; ?>
-                                                    <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
-                                                        <option value='YS9M3'>2. Diana E. Costuna </option>
-                                                    <?php endif; ?>
-                                                    <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
-                                                        <option value='s1JxV'>3. Gracile B. Palce</option>
-                                                    <?php endif; ?>
-                                                </optgroup>
-                                            <?php endif; ?>
-                                        <?php elseif (!in_array("Accounting Unit", $target) and in_array("Processor", $target)) : ?>
-                                            <option value='Accountant III' class="processed">Chief Accountant</option>
+                                            <?php endif ?>
+                                        <?php elseif (in_array("Office of the PENRO", $target)) : ?>
+                                            <option value='Cashiers Unit'>Cashiers Unit</option>
+                                        <?php elseif (in_array("Cashiers Unit", $target)) : ?>
+                                            <option value='Accountant III'>Chief Accountant</option>
+                                            <option value='Office of the PENRO'>Office of the PENRO</option>
+                                            <?php if (!in_array("Cashier", $target)) : ?>
+                                                <option value='Cashier' class="Cashier_Officer">Cashier</option>
+                                            <?php endif ?>
+                                        <?php else : ?>
+                                            <option value='Accounting Unit'>Accounting Unit</option>
                                             <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
-                                            <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
+                                            <option value='Cashiers Unit'>Cashiers Unit</option>
                                         <?php endif ?>
-                                    <?php elseif (in_array("Office of the PENRO", $target)) : ?>
-                                        <option value='Cashiers Unit'>Cashiers Unit</option>
-                                    <?php elseif (in_array("Cashiers Unit", $target)) : ?>
-                                        <option value='Accountant III'>Chief Accountant</option>
-                                        <option value='Office of the PENRO'>Office of the PENRO</option>
-                                        <?php if (!in_array("Cashier", $target)) : ?>
-                                            <option value='Cashier' class="Cashier_Officer">Cashier</option>
-                                        <?php endif ?>
-                                    <?php else : ?>
-                                        <option value='Accounting Unit'>Accounting Unit</option>
-                                        <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
-                                        <option value='Cashiers Unit'>Cashiers Unit</option>
-                                    <?php endif ?>
                                     <?php endif ?>
                                 </select>
                             </div>
@@ -708,7 +708,7 @@ if ($showCashierArchiveCol) {
                             $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
                             $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
                             ?>
-                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="datetime_forwarded"><?php echo $row['datetime_forwarded']; ?></td>
@@ -1102,9 +1102,9 @@ if ($showCashierArchiveCol) {
     const target2 = "<?php echo $_SESSION['logged_user_designation']; ?>";
     const isLiaisonOfficer = <?php echo $isLiaisonOfficer ? 'true' : 'false'; ?>;
     const loggedUserOffice = <?= json_encode(
-        $loggedUserOffice,
-        JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
-    ) ?>;
+                                    $loggedUserOffice,
+                                    JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                                ) ?>;
 
     const docToSelect = document.getElementById('document_to');
     const docToOriginalHtml = docToSelect ? docToSelect.innerHTML : '';
@@ -1157,9 +1157,9 @@ if ($showCashierArchiveCol) {
     }
 
     function isAlternateForwardingRole() {
-        return targetArray2.includes('Accounting Unit')
-            || targetArray2.includes('Processor')
-            || targetArray2.includes('ICU');
+        return targetArray2.includes('Accounting Unit') ||
+            targetArray2.includes('Processor') ||
+            targetArray2.includes('ICU');
     }
 
     function isEngpVoucherType(voucherType) {
@@ -1214,10 +1214,11 @@ if ($showCashierArchiveCol) {
         }
 
         if (isAlternateForwardingRole() && !forwardingTreatAsSameOfficeWorkflow(voucherType, processHistory)) {
-            docToSelect.innerHTML = ''
-                + '<option value="" disabled selected>Please Select</option>'
-                + '<option value="Budget Unit">Budget Unit</option>'
-                + '<option value="Accounting Unit">Accounting Unit</option>';
+            docToSelect.innerHTML = '' +
+                '<option value="" disabled selected>Please Select</option>' +
+                '<option value="Budget Unit">Budget Unit</option>' +
+                '<option value="Accounting Unit">Accounting Unit</option>'; +
+                '<option value="Planning Section">Planning Section</option>';
             docToSelect.value = '';
             return;
         }
@@ -1225,7 +1226,9 @@ if ($showCashierArchiveCol) {
         restoreForwardDestinationOptions();
     }
 
-    const targetArray2 = target2.split(',').map(function(item) { return item.trim(); }).filter(Boolean);
+    const targetArray2 = target2.split(',').map(function(item) {
+        return item.trim();
+    }).filter(Boolean);
 
     selectElements2.forEach(selectElement => {
         hideOwnDesignationOptions(selectElement);
@@ -2072,9 +2075,9 @@ if ($showCashierArchiveCol) {
     <script>
         (function() {
             var fwdAdaSignatoryDefaults = <?= json_encode(
-                $ada_option_defaults,
-                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
-            ) ?>;
+                                                $ada_option_defaults,
+                                                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                                            ) ?>;
 
             function fwdIsInvalidAdaCheckNo(value) {
                 var v = String(value || '').trim();
@@ -2191,7 +2194,10 @@ if ($showCashierArchiveCol) {
                         })
                         .then(function(response) {
                             return response.text().then(function(text) {
-                                return { ok: response.ok, text: text };
+                                return {
+                                    ok: response.ok,
+                                    text: text
+                                };
                             });
                         })
                         .then(function(payload) {
@@ -2453,7 +2459,7 @@ if ($showCashierArchiveCol) {
                                         foreach ($list as $v) :
                                             $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>" <?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -2478,7 +2484,7 @@ if ($showCashierArchiveCol) {
                                         foreach ($list as $v) :
                                             $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>" <?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -2503,7 +2509,7 @@ if ($showCashierArchiveCol) {
                                         foreach ($list as $v) :
                                             $selected = ($hasDefault && $v === $defaultVal) ? ' selected' : '';
                                         ?>
-                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>" <?= $selected ?>><?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php
                                         endforeach;
                                     endif;
@@ -2626,7 +2632,11 @@ if ($showCashierArchiveCol) {
                     section = (colonParts[1] || '').trim();
                 }
             }
-            return { user: user, action: action, section: section };
+            return {
+                user: user,
+                action: action,
+                section: section
+            };
         }
 
         function isPersonInvolved(user, action, personName) {
