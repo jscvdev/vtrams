@@ -292,7 +292,7 @@ class AccessControl
                         'Accounting Unit',
                         'Cashiers Unit',
                         'Processor',
-                        'Liaison',
+                        'Liaison Officer',
                     ]);;
 
                 // case 'voucher_incoming':
