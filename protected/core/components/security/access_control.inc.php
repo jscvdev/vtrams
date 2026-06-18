@@ -292,6 +292,7 @@ class AccessControl
                         'Cashiers Unit',
                         'Processor',
                         'Liaison Officer',
+                        'Office of the PENRO'
                     ]);;
 
                 // case 'voucher_incoming':
