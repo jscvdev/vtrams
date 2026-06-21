@@ -1,25 +1,25 @@
 <?php
 declare(strict_types=1);
 
-function check_encode_errors() {
-    if (isset($_SESSION['error_encode'])){
-        $errors = $_SESSION['error_encode'];
+require_once __DIR__ . '/../../core/components/helpers/handler_session_err_helper.inc.php';
 
-        $err = "";
-        foreach ($errors as $error) {
-            $err .=  $error. '  ';
-        }
-        if (isset($_SESSION['purpose_encode']))
-        {
-            unset($_SESSION['purpose_encode']);
-            echo "<script>err_handler_functionAlert('Error: $err', 'encode_document_err_redirect')</script>";
-        }
-        if (isset($_SESSION['purpose_reply']))
-        {
-            unset($_SESSION['purpose_reply']);
-            echo "<script>err_handler_functionAlert('Error: $err', 'reply_encode_document_err')</script>";
-        }
-        unset($_SESSION['error_encode']);
-        die();
+function check_encode_errors(): void
+{
+    if (!isset($_SESSION['error_encode'])) {
+        return;
     }
+
+    if (isset($_SESSION['purpose_encode'])) {
+        unset($_SESSION['purpose_encode']);
+        handler_emit_session_errors('error_encode');
+        return;
+    }
+
+    if (isset($_SESSION['purpose_reply'])) {
+        unset($_SESSION['purpose_reply']);
+        handler_emit_session_errors('error_encode');
+        return;
+    }
+
+    handler_emit_session_errors('error_encode');
 }

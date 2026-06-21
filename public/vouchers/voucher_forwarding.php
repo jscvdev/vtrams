@@ -127,6 +127,7 @@ $target = array_values(array_filter(array_map(
     explode(',', (string) ($_SESSION['logged_user_designation'] ?? ''))
 )));
 $isLiaisonOfficer = in_array('Liaison Officer', $target, true);
+$bulkForwardToken = (string) ($_SESSION['token'] ?? '');
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $showForwardCol = !$hideForwardForCashiersUnit;
@@ -655,11 +656,115 @@ if ($showCashierArchiveCol) {
                 padding: 10px 0 0;
                 margin-top: auto;
             }
+
+            .voucher-bulk-forward-bar {
+                display: none;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 14px;
+                padding: 12px 14px;
+                margin-bottom: 12px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                background: linear-gradient(180deg, #fafbff 0%, #f3f6fb 100%);
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+            }
+
+            .voucher-bulk-forward-bar.is-visible {
+                display: flex;
+            }
+
+            .voucher-bulk-forward-bar label {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #374151;
+                margin: 0;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .voucher-bulk-forward-bar label input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+                accent-color: #2563eb;
+            }
+
+            .voucher-bulk-forward-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 38px;
+                padding: 0 16px;
+                border: none;
+                border-radius: 10px;
+                background: linear-gradient(135deg, #2563eb, #1d4ed8);
+                color: #fff;
+                font-size: 13px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+                transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+            }
+
+            .voucher-bulk-forward-btn:hover:not(:disabled) {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 16px rgba(37, 99, 235, 0.34);
+            }
+
+            .voucher-bulk-forward-btn:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+                box-shadow: none;
+            }
+
+            .voucher-bulk-forward-btn i {
+                font-size: 16px;
+                line-height: 1;
+            }
+
+            .voucher-bulk-forward-status {
+                font-size: 12px;
+                color: #6b7280;
+                font-weight: 500;
+            }
+
+            .voucher-bulk-select-cell {
+                width: 42px;
+                text-align: center;
+            }
+
+            .voucher-bulk-select-cell input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+                accent-color: #2563eb;
+            }
         </style>
+        <?php if ($isLiaisonOfficer) : ?>
+        <div class="voucher-bulk-forward-bar is-visible" id="voucherBulkForwardBar">
+            <label>
+                <input type="checkbox" id="voucherBulkSelectAll" aria-label="Select all vouchers on this page">
+                Select all on page
+            </label>
+            <button type="button" class="voucher-bulk-forward-btn" id="voucherBulkForwardBtn">
+                <i class="ri-share-forward-line" aria-hidden="true"></i>
+                Forward Selected
+            </button>
+            <span class="voucher-bulk-forward-status" id="voucherBulkForwardStatus"></span>
+        </div>
+        <?php endif; ?>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
                 <thead>
                     <tr>
+                        <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
+                            <th class="voucher-bulk-select-cell" aria-label="Select for bulk forward"></th>
+                        <?php endif; ?>
                         <th>Processing No.</th>
                         <th>ORS No.</th>
                         <th>DV No.</th>
@@ -696,6 +801,11 @@ if ($showCashierArchiveCol) {
                     while ($row = $fetch_voucher_receiving_data->fetch(PDO::FETCH_ASSOC)) {
                     ?>
                         <tr>
+                            <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
+                                <td class="voucher-bulk-select-cell" data-label="">
+                                    <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
+                                </td>
+                            <?php endif; ?>
                             <td data-label="processing_no"><?php echo $row['processing_no']; ?></td>
                             <td data-label="ors_no"><?php echo $row['ors_no']; ?></td>
                             <td data-label="dv_no"><?php echo $row['dv_no']; ?></td>
@@ -1102,6 +1212,120 @@ if ($showCashierArchiveCol) {
     const selectElements2 = document.querySelectorAll(".form-custom-input"); // Get all form elements
     const target2 = "<?php echo $_SESSION['logged_user_designation']; ?>";
     const isLiaisonOfficer = <?php echo $isLiaisonOfficer ? 'true' : 'false'; ?>;
+    const bulkForwardToken = <?php echo json_encode($bulkForwardToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
+    window.bulkForwardToken = bulkForwardToken;
+    const bulkForwardUrl = '../../protected/handler/voucher_receiving_module/voucher_bulk_forward_handler.php';
+    const bulkSelectAllEl = document.getElementById('voucherBulkSelectAll');
+    const bulkForwardBtn = document.getElementById('voucherBulkForwardBtn');
+    const bulkForwardStatusEl = document.getElementById('voucherBulkForwardStatus');
+    let bulkForwardInFlight = false;
+
+    function syncBulkSelectAllState() {
+        if (!isLiaisonOfficer || !bulkSelectAllEl) return;
+        const boxes = Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-select'));
+        if (boxes.length === 0) {
+            bulkSelectAllEl.checked = false;
+            bulkSelectAllEl.indeterminate = false;
+            return;
+        }
+        const checkedCount = boxes.filter(function(cb) { return cb.checked; }).length;
+        bulkSelectAllEl.checked = checkedCount === boxes.length && boxes.length > 0;
+        bulkSelectAllEl.indeterminate = false;
+    }
+
+    function selectedBulkProcessingNos() {
+        if (!isLiaisonOfficer) return [];
+        return Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-select:checked'))
+            .map(function(cb) { return String(cb.value || '').trim(); })
+            .filter(function(pn) { return pn !== ''; });
+    }
+
+    function setBulkForwardStatus(message) {
+        if (bulkForwardStatusEl) {
+            bulkForwardStatusEl.textContent = message || '';
+        }
+    }
+
+    function runBulkForward() {
+        if (!isLiaisonOfficer || bulkForwardInFlight) return;
+        const processingNos = selectedBulkProcessingNos();
+        if (processingNos.length === 0) {
+            if (typeof showNotify === 'function') {
+                showNotify('Select at least one voucher to forward.', 'warning', 2800);
+            }
+            return;
+        }
+        const confirmMsg = 'Forward ' + processingNos.length + ' selected voucher(s) to ICU? They will be processed one at a time.';
+        const proceed = function() {
+            bulkForwardInFlight = true;
+            if (bulkForwardBtn) bulkForwardBtn.disabled = true;
+            setBulkForwardStatus('Forwarding…');
+            fetch(bulkForwardUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: window.bulkForwardToken || bulkForwardToken,
+                    processing_nos: processingNos
+                })
+            })
+                .then(function(r) {
+                    return r.json().then(function(payload) {
+                        return { ok: r.ok, payload: payload };
+                    });
+                })
+                .then(function(res) {
+                    bulkForwardInFlight = false;
+                    if (bulkForwardBtn) bulkForwardBtn.disabled = false;
+                    const payload = res.payload || {};
+                    if (payload.ok === true) {
+                        const msg = payload.message || ('Forwarded ' + (payload.forwarded || 0) + ' voucher(s).');
+                        if (payload.token) {
+                            window.bulkForwardToken = payload.token;
+                        }
+                        setBulkForwardStatus(msg);
+                        if (typeof showNotify === 'function') {
+                            showNotify(msg, Number(payload.failed || 0) > 0 ? 'warning' : 'success', 4000);
+                        }
+                        window.location.reload();
+                        return;
+                    }
+                    const err = payload.error || payload.message || 'Bulk forward failed.';
+                    setBulkForwardStatus('');
+                    if (typeof showNotify === 'function') {
+                        showNotify(err, 'error', 5000);
+                    }
+                })
+                .catch(function() {
+                    bulkForwardInFlight = false;
+                    if (bulkForwardBtn) bulkForwardBtn.disabled = false;
+                    setBulkForwardStatus('');
+                    if (typeof showNotify === 'function') {
+                        showNotify('Bulk forward request failed.', 'error', 4000);
+                    }
+                });
+        };
+        if (window.confirm(confirmMsg)) {
+            proceed();
+        }
+    }
+
+    if (bulkSelectAllEl) {
+        bulkSelectAllEl.addEventListener('change', function() {
+            const checked = !!bulkSelectAllEl.checked;
+            bulkSelectAllEl.indeterminate = false;
+            document.querySelectorAll('#my-Table input.voucher-bulk-select').forEach(function(cb) {
+                cb.checked = checked;
+            });
+        });
+    }
+    if (bulkForwardBtn) {
+        bulkForwardBtn.addEventListener('click', runBulkForward);
+    }
+    document.querySelectorAll('#my-Table input.voucher-bulk-select').forEach(function(cb) {
+        cb.addEventListener('change', syncBulkSelectAllState);
+    });
+
     const loggedUserOffice = <?= json_encode(
                                     $loggedUserOffice,
                                     JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
@@ -2849,6 +3073,7 @@ if ($showCashierArchiveCol) {
         }
     })();
 </script>
+<?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
 
 </html>

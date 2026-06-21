@@ -8,10 +8,11 @@
  *   showNotify('Message here', 'success', 2500);
  */
 
-// Prevent direct access
-if (!defined('DVSYS_NOTIFICATION_LOADED')) {
-    define('DVSYS_NOTIFICATION_LOADED', true);
+// Prevent direct access / duplicate includes
+if (defined('DVSYS_NOTIFICATION_LOADED')) {
+    return;
 }
+define('DVSYS_NOTIFICATION_LOADED', true);
 ?>
 
 <!-- Notification System CSS -->

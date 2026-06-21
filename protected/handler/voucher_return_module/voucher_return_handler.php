@@ -129,21 +129,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($receiver_udc === '' && $encoder_destination !== '') {
                 $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $encoder_destination, $penro_office);
             }
-        } elseif ($return_source === 'forwarding' && !empty($return_destination) && $return_destination === 'previous_sender') {
+        } elseif (!empty($return_destination) && $return_destination === 'previous_sender') {
             $destination_designation = trim((string) (
                 ($return_target_section ?? '') !== ''
                     ? $return_target_section
                     : (($document_to ?? '') !== '' ? $document_to : '')
             ));
-            $penro_office = $logged_user_office;
-            if ($penro_office !== '') {
-                $office_to = $penro_office;
+            $previous_sender_udc = trim((string) ($sender_udc ?? ''));
+            $returner_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
+            $sender_udc = $returner_udc !== '' ? $returner_udc : $sender_udc;
+            $process_history = voucher_return_fetch_process_history($pdo, $processing_no, $return_source);
+            $previousTarget = voucher_return_resolve_previous_sender_target(
+                $pdo,
+                $destination_designation,
+                $process_history,
+                $previous_sender_udc,
+                $returner_udc,
+                $logged_user_office
+            );
+            if (($previousTarget['receiver_udc'] ?? '') !== '') {
+                $receiver_udc = (string) $previousTarget['receiver_udc'];
             }
-            $previous_sender_udc = trim((string) ($_POST['sender_udc'] ?? ''));
-            $sender_udc = $_SESSION['logged_user_udc'] ?? $sender_udc;
-            $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination_designation, $penro_office);
-            if ($receiver_udc === '' && $previous_sender_udc !== '') {
-                $receiver_udc = voucher_filter_udcs_by_user_group_office($pdo, $previous_sender_udc, $penro_office);
+            if (($previousTarget['office_from'] ?? '') !== '') {
+                $office_from = (string) $previousTarget['office_from'];
+            }
+            if (($previousTarget['office_to'] ?? '') !== '') {
+                $office_to = (string) $previousTarget['office_to'];
             }
         }
 
@@ -234,7 +245,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         // DATABASE STATEMENTS VIA MODE/CTRL
                         $target = array_map('trim', explode(',', (string) ($_SESSION['logged_user_designation'] ?? '')));
-                        if (in_array('Accounting Unit', $target, true) && $logged_user_office !== '' && trim((string) $payee) !== '') {
+                        if (
+                            in_array('Accounting Unit', $target, true)
+                            && $logged_user_office !== ''
+                            && trim((string) $payee) !== ''
+                            && (empty($return_destination) || $return_destination !== 'previous_sender')
+                        ) {
                             $payeeLookup = voucher_lookup_payee_at_office($pdo, (string) $payee, $logged_user_office);
                             if ($payeeLookup['udc'] !== '') {
                                 $sender_udc = $payeeLookup['udc'];
@@ -386,8 +402,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $voucher_type,
                                     $voucher_date,
                                     $datetime_action,
-                                    $receiver_udc,
                                     $sender_udc,
+                                    $receiver_udc,
                                     $office_from,
                                     $office_to,
                                     $encoded_by,

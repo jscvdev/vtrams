@@ -48,6 +48,7 @@ $GLOBALS['REDIRECT_MAP'] = [
     'voucher_sent'                     => 'vouchers/voucher_sent.php',
     'voucher_incoming'                 => 'vouchers/voucher_incoming.php',
     'voucher_forwarding'               => 'vouchers/voucher_forwarding.php',
+    'voucher_status_report'            => 'vouchers/voucher_status_report.php',
     'designations'                     => 'vouchers/designations.php',
 
     // Documents (for app using documents/ as in sys or legacy paths)
@@ -161,6 +162,19 @@ $GLOBALS['REDIRECT_CODE_TO_KEY'] = [
 ];
 
 /**
+ * Resolve a process/err handler redirect code to a full public URL.
+ */
+function get_redirect_url_by_code(string $code): ?string
+{
+    $codeToKey = $GLOBALS['REDIRECT_CODE_TO_KEY'] ?? [];
+    if (!isset($codeToKey[$code])) {
+        return null;
+    }
+
+    return get_redirect_url($codeToKey[$code]);
+}
+
+/**
  * Get full URL for a redirect key (public page).
  */
 function get_redirect_url($key)
@@ -202,6 +216,30 @@ function redirect_to($key)
     }
 
     echo '<script>window.location.href=' . json_encode($url) . ';</script>';
+    echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+    exit;
+}
+
+/**
+ * Redirect using a handler/process alert code (e.g. voucher_incoming_redirect).
+ *
+ * @return never
+ */
+function redirect_to_by_code(string $code): void
+{
+    $url = get_redirect_url_by_code($code);
+    if ($url === null) {
+        http_response_code(500);
+        echo 'Redirect target is not configured for code: ' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
+        exit;
+    }
+
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+        exit;
+    }
+
+    echo '<script>window.location.replace(' . json_encode($url) . ');</script>';
     echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"></noscript>';
     exit;
 }

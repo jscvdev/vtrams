@@ -1,16 +1,9 @@
 <?php
 declare(strict_types=1);
 
-function check_voucher_errors() {
-    if (isset($_SESSION['error_dv_encode'])){
-        $errors = $_SESSION['error_dv_encode'];
+require_once __DIR__ . '/../../core/components/helpers/handler_session_err_helper.inc.php';
 
-        $err = "";
-        foreach ($errors as $error) {
-            $err .=  $error. '  ';
-        }
-        echo "<script>err_handler_functionAlert('Error: $err', 'voucher_pending_err_redirect')</script>";
-
-        unset($_SESSION['error_dv_encode']);
-    }
+function check_voucher_errors(): void
+{
+    handler_emit_session_errors('error_voucher');
 }

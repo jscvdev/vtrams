@@ -106,6 +106,13 @@ $fetch_voucher_incoming_data->execute();
 
 $totalRows = $displayTotal;
 
+$target = array_values(array_filter(array_map(
+    'trim',
+    explode(',', (string) ($_SESSION['logged_user_designation'] ?? ''))
+)));
+$isLiaisonOfficer = in_array('Liaison Officer', $target, true);
+$bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
+
 ?>
 <!--=============== MAIN ===============!-->
 <div class="main main--voucher-dashboard" id="main">
@@ -437,6 +444,7 @@ $totalRows = $displayTotal;
                                 <input type="text" name="coa_subsection" class="coa_subsection" id="coa_subsection" value="">
                             </div>
                             <input type="hidden" name="return_destination" id="return_destination" value="">
+                            <input type="hidden" name="return_target_section" id="return_target_section" value="">
                             <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                         </div>
                     </div>
@@ -541,11 +549,115 @@ $totalRows = $displayTotal;
                 padding: 10px 0 0;
                 margin-top: auto;
             }
+
+            .voucher-bulk-action-bar {
+                display: none;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 14px;
+                padding: 12px 14px;
+                margin-bottom: 12px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                background: linear-gradient(180deg, #fafbff 0%, #f3f6fb 100%);
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+            }
+
+            .voucher-bulk-action-bar.is-visible {
+                display: flex;
+            }
+
+            .voucher-bulk-action-bar label {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #374151;
+                margin: 0;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .voucher-bulk-action-bar label input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+                accent-color: #059669;
+            }
+
+            .voucher-bulk-receive-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 38px;
+                padding: 0 16px;
+                border: none;
+                border-radius: 10px;
+                background: linear-gradient(135deg, #059669, #047857);
+                color: #fff;
+                font-size: 13px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28);
+                transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+            }
+
+            .voucher-bulk-receive-btn:hover:not(:disabled) {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 16px rgba(5, 150, 105, 0.34);
+            }
+
+            .voucher-bulk-receive-btn:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+                box-shadow: none;
+            }
+
+            .voucher-bulk-receive-btn i {
+                font-size: 16px;
+                line-height: 1;
+            }
+
+            .voucher-bulk-action-status {
+                font-size: 12px;
+                color: #6b7280;
+                font-weight: 500;
+            }
+
+            .voucher-bulk-select-cell {
+                width: 42px;
+                text-align: center;
+            }
+
+            .voucher-bulk-select-cell input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+                accent-color: #059669;
+            }
         </style>
+        <?php if ($isLiaisonOfficer) : ?>
+        <div class="voucher-bulk-action-bar is-visible" id="voucherBulkReceiveBar">
+            <label>
+                <input type="checkbox" id="voucherBulkSelectAll" aria-label="Select all vouchers on this page">
+                Select all on page
+            </label>
+            <button type="button" class="voucher-bulk-receive-btn" id="voucherBulkReceiveBtn">
+                <i class="ri-inbox-archive-line" aria-hidden="true"></i>
+                Receive Selected
+            </button>
+            <span class="voucher-bulk-action-status" id="voucherBulkReceiveStatus"></span>
+        </div>
+        <?php endif; ?>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
                 <thead>
                     <tr>
+                        <?php if ($isLiaisonOfficer) : ?>
+                            <th class="voucher-bulk-select-cell" aria-label="Select for bulk receive"></th>
+                        <?php endif; ?>
                         <th>Processing No.</th>
                         <th>ORS No.</th>
                         <th>DV No.</th>
@@ -568,6 +680,11 @@ $totalRows = $displayTotal;
                     while ($row = $fetch_voucher_incoming_data->fetch(PDO::FETCH_ASSOC)) {
                     ?>
                         <tr>
+                            <?php if ($isLiaisonOfficer) : ?>
+                                <td class="voucher-bulk-select-cell" data-label="">
+                                    <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
+                                </td>
+                            <?php endif; ?>
                             <td data-label="processing_no"><?php echo $row['processing_no']; ?></td>
                             <td data-label="ors_no"><?php echo $row['ors_no']; ?></td>
                             <td data-label="dv_no"><?php echo $row['dv_no']; ?></td>
@@ -1325,6 +1442,122 @@ $totalRows = $displayTotal;
         });
     }
 </script>
+<script>
+    (function() {
+        const isLiaisonOfficer = <?php echo $isLiaisonOfficer ? 'true' : 'false'; ?>;
+        const bulkReceiveToken = <?php echo json_encode($bulkReceiveToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
+        window.bulkReceiveToken = bulkReceiveToken;
+        const bulkReceiveUrl = '../../protected/handler/voucher_incoming_module/voucher_bulk_receive_handler.php';
+        const bulkSelectAllEl = document.getElementById('voucherBulkSelectAll');
+        const bulkReceiveBtn = document.getElementById('voucherBulkReceiveBtn');
+        const bulkReceiveStatusEl = document.getElementById('voucherBulkReceiveStatus');
+        let bulkReceiveInFlight = false;
+
+        function syncBulkSelectAllState() {
+            if (!isLiaisonOfficer || !bulkSelectAllEl) return;
+            const boxes = Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-select'));
+            if (boxes.length === 0) {
+                bulkSelectAllEl.checked = false;
+                bulkSelectAllEl.indeterminate = false;
+                return;
+            }
+            const checkedCount = boxes.filter(function(cb) { return cb.checked; }).length;
+            bulkSelectAllEl.checked = checkedCount === boxes.length && boxes.length > 0;
+            bulkSelectAllEl.indeterminate = false;
+        }
+
+        function selectedBulkProcessingNos() {
+            if (!isLiaisonOfficer) return [];
+            return Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-select:checked'))
+                .map(function(cb) { return String(cb.value || '').trim(); })
+                .filter(function(pn) { return pn !== ''; });
+        }
+
+        function setBulkReceiveStatus(message) {
+            if (bulkReceiveStatusEl) {
+                bulkReceiveStatusEl.textContent = message || '';
+            }
+        }
+
+        function runBulkReceive() {
+            if (!isLiaisonOfficer || bulkReceiveInFlight) return;
+            const processingNos = selectedBulkProcessingNos();
+            if (processingNos.length === 0) {
+                if (typeof showNotify === 'function') {
+                    showNotify('Select at least one voucher to receive.', 'warning', 2800);
+                }
+                return;
+            }
+            const confirmMsg = 'Receive ' + processingNos.length + ' selected voucher(s)? They will be processed one at a time.';
+            if (!window.confirm(confirmMsg)) {
+                return;
+            }
+            bulkReceiveInFlight = true;
+            if (bulkReceiveBtn) bulkReceiveBtn.disabled = true;
+            setBulkReceiveStatus('Receiving…');
+            fetch(bulkReceiveUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: window.bulkReceiveToken || bulkReceiveToken,
+                    processing_nos: processingNos
+                })
+            })
+                .then(function(r) {
+                    return r.json().then(function(payload) {
+                        return { ok: r.ok, payload: payload };
+                    });
+                })
+                .then(function(res) {
+                    bulkReceiveInFlight = false;
+                    if (bulkReceiveBtn) bulkReceiveBtn.disabled = false;
+                    const payload = res.payload || {};
+                    if (payload.ok === true) {
+                        const msg = payload.message || ('Received ' + (payload.received || 0) + ' voucher(s).');
+                        if (payload.token) {
+                            window.bulkReceiveToken = payload.token;
+                        }
+                        setBulkReceiveStatus(msg);
+                        if (typeof showNotify === 'function') {
+                            showNotify(msg, Number(payload.failed || 0) > 0 ? 'warning' : 'success', 4000);
+                        }
+                        window.location.reload();
+                        return;
+                    }
+                    const err = payload.error || payload.message || 'Bulk receive failed.';
+                    setBulkReceiveStatus('');
+                    if (typeof showNotify === 'function') {
+                        showNotify(err, 'error', 5000);
+                    }
+                })
+                .catch(function() {
+                    bulkReceiveInFlight = false;
+                    if (bulkReceiveBtn) bulkReceiveBtn.disabled = false;
+                    setBulkReceiveStatus('');
+                    if (typeof showNotify === 'function') {
+                        showNotify('Bulk receive request failed.', 'error', 4000);
+                    }
+                });
+        }
+
+        if (bulkSelectAllEl) {
+            bulkSelectAllEl.addEventListener('change', function() {
+                const checked = !!bulkSelectAllEl.checked;
+                bulkSelectAllEl.indeterminate = false;
+                document.querySelectorAll('#my-Table input.voucher-bulk-select').forEach(function(cb) {
+                    cb.checked = checked;
+                });
+            });
+        }
+        if (bulkReceiveBtn) {
+            bulkReceiveBtn.addEventListener('click', runBulkReceive);
+        }
+        document.querySelectorAll('#my-Table input.voucher-bulk-select').forEach(function(cb) {
+            cb.addEventListener('change', syncBulkSelectAllState);
+        });
+    })();
+</script>
 <!--=============== MAIN.JS ===============!-->
 <script src="../../protected/js/main.js"></script>
 <script src="../../protected/js/amount_helper.js"></script>
@@ -2011,9 +2244,21 @@ $totalRows = $displayTotal;
                 const remarksValue = (document.getElementById('return_remarks_popup')?.value || '').trim();
 
                 const destinationInput = document.getElementById('return_destination');
+                const returnTargetEl = document.getElementById('return_target_section');
                 const remarksInput = document.querySelector('#myIncomingForm .remarks');
 
                 if (destinationInput) destinationInput.value = destinationValue;
+                if (returnTargetEl) returnTargetEl.value = '';
+                if (destinationValue === 'previous_sender') {
+                    const office = document.getElementById('return_office_select')?.value || '';
+                    if (!office) {
+                        if (typeof showNotify === 'function') {
+                            showNotify('Please select the previous process to return to.', 'error', 3000);
+                        }
+                        return;
+                    }
+                    if (returnTargetEl) returnTargetEl.value = office;
+                }
                 if (remarksInput) {
                     // If remarks are empty, send explicit null marker so backend can treat as NULL
                     remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
@@ -2036,6 +2281,7 @@ $totalRows = $displayTotal;
         }
     })();
 </script>
+<?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
 
 </html>

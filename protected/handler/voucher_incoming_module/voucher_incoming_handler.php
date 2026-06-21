@@ -186,9 +186,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     //CHECK ANY VALIDATION FAILS ELSE PROCEED TO EXECUTE DATABASE QUERY
                     if ($temp_dump) {
                         $_SESSION['error_voucher_incoming'] = $temp_dump;
-                        echo "<script>process_functionAlert('Receive failed!', 'voucher_incoming_redirect')</script>";
-                        $_SESSION['token'] = generateToken();
-                        die();
+                        $errMsg = trim(implode(' ', array_map('strval', $temp_dump)));
+                        if ($errMsg === '') {
+                            $errMsg = 'Receive failed!';
+                        }
+                        require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
+                        handler_redirect_with_notify($errMsg, 'voucher_incoming_redirect', 'error', 5000);
                     } else {
                         $coa_options = null;
                         $coa_category = null;
@@ -327,9 +330,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                     }
                 } else {
-                    echo "<script>process_functionAlert('Forward Error: Wrong module used!', 'voucher_incoming_redirect')</script>";
-                    $_SESSION['token'] = generateToken();
-                    die();
+                    require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
+                    handler_redirect_with_notify('Wrong module used.', 'voucher_incoming_redirect', 'error', 4000);
                 }
             } catch (PDOException $e) {
                 echo $e->getMessage();
@@ -346,10 +348,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // die();
         }
     } else {
-        // Invalid token
-        echo "<script>process_functionAlert('Invalid token!', 'voucher_incoming_redirect')</script>";
-        $_SESSION['token'] = generateToken();
-        die();
+        require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
+        handler_redirect_with_notify('Invalid token!', 'voucher_incoming_redirect', 'error', 4000);
     }
 } else {
     require_once __DIR__ . '/../../../core/components/redirects/redirect_config.inc.php';

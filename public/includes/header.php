@@ -268,6 +268,15 @@ $header_text = $pageTitleHelper->getHeaderText();
                                         </a>
                                     </div>
                                 <?php endif; ?>
+                                <?php if ($can_view_dashboard): ?>
+                                    <div class="sidebar-link-container">
+                                        <a href="../vouchers/voucher_status_report.php" class="sidebar__link">
+                                            <i class="ri-bar-chart-grouped-line"></i>
+                                            <span class="sidebar__link-name">Status Report</span>
+                                            <span class="sidebar__link-floating">Status Report</span>
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if ($can_view_voucher_overview_pages): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_status.php" class="sidebar__link" id="button1">

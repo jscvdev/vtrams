@@ -1,16 +1,9 @@
 <?php
 declare(strict_types=1);
 
-function check_ada_errors() {
-    if (isset($_SESSION['error_ada'])){
-        $errors = $_SESSION['error_ada'];
+require_once __DIR__ . '/../../core/components/helpers/handler_session_err_helper.inc.php';
 
-        $err = "";
-        foreach ($errors as $error) {
-            $err .=  $error. '  ';
-        }
-        echo "<script>process_functionAlert('failed!', 'voucher_ada_redirect2')</script>";
-
-        unset($_SESSION['error_ada']);
-    }
+function check_ada_errors(): void
+{
+    handler_emit_session_errors('error_ada');
 }

@@ -78,6 +78,27 @@ function amounts_equal_string(?string $a, ?string $b): bool
     return normalize_amount_string($a) === normalize_amount_string($b);
 }
 
+/** True when a stored amount is present and not zero (matches amount_helper.js isNonZeroAmount). */
+function amount_is_non_zero(mixed $raw): bool
+{
+    $normalized = normalize_amount_string($raw);
+    if ($normalized === '') {
+        return false;
+    }
+
+    return !preg_match('/^0+\.?0*$/', $normalized);
+}
+
+/** Prefer charged_amount when set and non-zero; otherwise use amount. */
+function amount_resolve_charged_or_amount(mixed $charged, mixed $amount): string
+{
+    if (amount_is_non_zero($charged)) {
+        return ensure_amount_two_decimals(amount_pdo_value_to_string($charged));
+    }
+
+    return ensure_amount_two_decimals(amount_pdo_value_to_string($amount));
+}
+
 function format_amount_display(mixed $raw): string
 {
     $normalized = normalize_amount_string($raw);

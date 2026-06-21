@@ -23,7 +23,7 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
 
     try {
-        // Exclude encoded/pending at encoder only (active_status = no).
+        // Same inclusion rule as voucher_status.php: exclude encoded/pending only (active_status = no).
         $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
         $params = [];
 
@@ -489,7 +489,7 @@ if ($scriptName !== '') {
             </div>
             <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px;">
                 <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Section Processing Time Summary</h3>
-                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers.</p>
+                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers. Includes each re-processing stint after a return (e.g. Accounting returns to Planning and Planning forwards again).</p>
                 <table id="sectionSummaryTable">
                     <thead>
                         <tr>

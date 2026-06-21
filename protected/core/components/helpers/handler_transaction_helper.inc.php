@@ -147,6 +147,40 @@ function db_transaction(PDO $pdo, callable $callback, bool $dryRun = false): arr
     }
 }
 
+/** Store a toast message for the next full page load (after redirect). */
+function handler_set_flash_notify(string $message, string $type = 'success', int $ms = 2800): void
+{
+    $_SESSION['flash_notify'] = [
+        'message' => $message,
+        'type' => $type,
+        'ms' => $ms,
+    ];
+}
+
+/**
+ * Redirect after storing a flash toast for the destination page (not the handler response).
+ *
+ * @return never
+ */
+function handler_redirect_with_notify(
+    string $message,
+    string $redirectCode,
+    string $type = 'success',
+    int $notifyMs = 2800
+): void {
+    if (!function_exists('redirect_to_by_code')) {
+        require_once __DIR__ . '/../redirects/redirect_config.inc.php';
+    }
+
+    handler_set_flash_notify($message, $type, $notifyMs);
+
+    if (function_exists('generateToken')) {
+        $_SESSION['token'] = generateToken();
+    }
+
+    redirect_to_by_code($redirectCode);
+}
+
 /**
  * Emit top-right toast when the parent page defines showNotify (notification.inc.php).
  */
@@ -268,25 +302,13 @@ function handler_execute_writes(
         if (!empty($tx['implicit_commit'])) {
             $detail .= ' Some changes may already be saved because MySQL committed earlier statements. Re-run vouchers_bootstrap_schema before transactions and avoid DDL inside writes.';
         }
-        handler_emit_notify($detail, 'error', 6000);
-        echo '<script>process_functionAlert('
-            . json_encode($detail, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-            . ', '
-            . json_encode($redirectCode, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-            . ');</script>';
         $_SESSION['token'] = generateToken();
-        exit;
+        handler_redirect_with_notify($detail, $redirectCode, 'error', 6000);
     }
 
     if ($dryRun) {
-        handler_emit_notify('Dry-run completed successfully. No changes were saved.', 'info', 5000);
-        echo '<script>process_functionAlert('
-            . json_encode('Dry-run OK (rolled back)', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-            . ', '
-            . json_encode($redirectCode, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-            . ');</script>';
         $_SESSION['token'] = generateToken();
-        exit;
+        handler_redirect_with_notify('Dry-run completed successfully. No changes were saved.', $redirectCode, 'info', 5000);
     }
 
     handler_clear_form_errors();
@@ -299,14 +321,8 @@ function handler_execute_writes(
         }
     }
 
-    handler_emit_notify($successMessage, 'success', 2500);
-    echo '<script>process_functionAlert('
-        . json_encode($successMessage, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-        . ', '
-        . json_encode($redirectCode, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
-        . ');</script>';
     $_SESSION['token'] = generateToken();
-    exit;
+    handler_redirect_with_notify($successMessage, $redirectCode, 'success', 2500);
 }
 
 /**

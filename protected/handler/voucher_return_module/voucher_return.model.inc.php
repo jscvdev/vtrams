@@ -407,6 +407,158 @@ function voucher_incoming_return_exists(object $pdo, string $processing_no): boo
     return (bool) $statement->fetchColumn();
 }
 
+function voucher_return_fetch_process_history(object $pdo, string $processing_no, string $return_source): string
+{
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return '';
+    }
+
+    $tables = $return_source === 'forwarding'
+        ? ['voucher_receiving', 'voucher_tracking']
+        : ['voucher_incoming', 'voucher_tracking'];
+
+    foreach ($tables as $table) {
+        $stmt = $pdo->prepare('SELECT process_history FROM ' . $table . ' WHERE processing_no = :processing_no LIMIT 1');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $value = trim((string) ($stmt->fetchColumn() ?: ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function voucher_return_destination_matches_office(PDO $pdo, string $destination): string
+{
+    $destination = trim($destination);
+    if ($destination === '') {
+        return '';
+    }
+
+    require_once __DIR__ . '/../../core/components/helpers/utilities_office_helper.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/utilities_signatory_helper.inc.php';
+
+    utilities_office_ensure_schema($pdo);
+    foreach (utilities_office_registered_names($pdo, true) as $officeName) {
+        if (utilities_signatory_offices_match($destination, $officeName)) {
+            return utilities_signatory_resolve_office($pdo, $officeName);
+        }
+    }
+
+    foreach (utilities_signatory_fetch_offices($pdo) as $officeName) {
+        if (utilities_signatory_offices_match($destination, $officeName)) {
+            return utilities_signatory_resolve_office($pdo, $officeName);
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Resolve receiver_udc and destination office when returning to a previous process.
+ *
+ * @return array{receiver_udc: string, office_from: string, office_to: string}
+ */
+function voucher_return_resolve_previous_sender_target(
+    object $pdo,
+    string $destination,
+    string $process_history,
+    string $previous_sender_udc,
+    string $returner_udc,
+    string $logged_user_office
+): array {
+    $destination = trim($destination);
+    $result = [
+        'receiver_udc' => '',
+        'office_from' => '',
+        'office_to' => '',
+    ];
+
+    $targetOffice = voucher_return_destination_matches_office($pdo, $destination);
+    if ($targetOffice !== '') {
+        $result['office_from'] = $targetOffice;
+        $result['office_to'] = $targetOffice;
+
+        $lines = voucher_tracking_parse_process_history_lines($process_history);
+        foreach (array_reverse($lines) as $line) {
+            if (stripos((string) ($line['action'] ?? ''), 'Forwarded') === false) {
+                continue;
+            }
+
+            $lineOffice = trim((string) ($line['office'] ?? ''));
+            $lineSection = trim((string) ($line['section'] ?? ''));
+            $officeMatches = voucher_tracking_offices_match($lineOffice, $targetOffice)
+                || voucher_tracking_offices_match($lineSection, $targetOffice)
+                || strcasecmp($lineSection, $destination) === 0;
+            if (!$officeMatches) {
+                continue;
+            }
+
+            $user = voucher_tracking_lookup_user_by_display_name($pdo, (string) ($line['name'] ?? ''));
+            if ($user === null) {
+                continue;
+            }
+
+            $udc = trim((string) ($user['udc'] ?? ''));
+            if ($udc === '') {
+                continue;
+            }
+
+            $validated = voucher_filter_udcs_by_user_group_office($pdo, $udc, $targetOffice);
+            $validated = voucher_udcs_excluding($validated !== '' ? $validated : $udc, $returner_udc);
+            if ($validated !== '') {
+                $result['receiver_udc'] = $validated;
+
+                return $result;
+            }
+        }
+
+        foreach (['Liaison Officer', 'Liaison'] as $liaisonDesignation) {
+            $resolved = voucher_return_resolve_receiver_udc($pdo, $liaisonDesignation, $targetOffice);
+            $resolved = voucher_udcs_excluding($resolved, $returner_udc);
+            if ($resolved !== '') {
+                $result['receiver_udc'] = $resolved;
+
+                return $result;
+            }
+        }
+
+        if ($previous_sender_udc !== '') {
+            $filtered = voucher_filter_udcs_by_user_group_office($pdo, $previous_sender_udc, $targetOffice);
+            $filtered = voucher_udcs_excluding($filtered, $returner_udc);
+            if ($filtered !== '') {
+                $result['receiver_udc'] = $filtered;
+            }
+        }
+
+        return $result;
+    }
+
+    $resolveOffice = trim($logged_user_office);
+    $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination, $resolveOffice);
+    if ($receiver_udc === '') {
+        $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination, '');
+    }
+    if ($receiver_udc === '' && $previous_sender_udc !== '') {
+        $receiver_udc = voucher_udcs_excluding($previous_sender_udc, $returner_udc);
+    }
+
+    $receiverOffice = voucher_tracking_lookup_office_by_udc($pdo, $receiver_udc);
+    if ($receiverOffice === '') {
+        $receiverOffice = voucher_resolve_office_for_designation_route($pdo, $destination, $logged_user_office);
+    }
+    if ($receiverOffice !== '') {
+        $result['office_from'] = $receiverOffice;
+        $result['office_to'] = $receiverOffice;
+    }
+    $result['receiver_udc'] = $receiver_udc;
+
+    return $result;
+}
+
 /**
  * Resolve receiver_udc for a return target (section/designation or UDC).
  */

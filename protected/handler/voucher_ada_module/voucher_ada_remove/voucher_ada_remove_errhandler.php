@@ -1,16 +1,9 @@
 <?php
 declare(strict_types=1);
 
-function check_voucher_remove_errors() {
-    if (isset($_SESSION['error_voucher_remove'])){
-        $errors = $_SESSION['error_voucher_remove'];
+require_once __DIR__ . '/../../../core/components/helpers/handler_session_err_helper.inc.php';
 
-        $err = "";
-        foreach ($errors as $error) {
-            $err .=  $error. '  ';
-        }
-        echo "<script>alert('Error:   $err')</script>";
-
-        unset($_SESSION['error_voucher_remove']);
-    }
+function check_voucher_remove_errors(): void
+{
+    handler_emit_session_errors('error_voucher_remove');
 }

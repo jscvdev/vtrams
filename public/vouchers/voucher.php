@@ -776,6 +776,7 @@ function session_contains_phrase($phrase)
                 padding: 10px 0 0;
                 margin-top: 0;
             }
+
         </style>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">

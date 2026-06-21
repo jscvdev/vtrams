@@ -19,6 +19,12 @@ function voucher_tracking_is_excluded_from_counts(?string $status): bool
     return voucher_tracking_normalize_active_status($status) === 'no';
 }
 
+/** True when voucher_tracking.active_status is returned (matches voucher_status.php). */
+function voucher_tracking_is_returned_active_status(?string $status): bool
+{
+    return voucher_tracking_normalize_active_status($status) === 'returned';
+}
+
 /**
  * SQL fragment for voucher_tracking listings that omit encoded/pending rows only.
  *
@@ -500,6 +506,37 @@ function voucher_forward_receiver_for_return_target(
         ];
     }
     return voucher_forward_receiver_udcs_for_designation($pdo, $designation, $office_to, $exclude_udc);
+}
+
+/**
+ * Resolve office from the first UDC in a comma-separated receiver list.
+ */
+function voucher_tracking_lookup_office_by_udc(object $pdo, string $udc_list): string
+{
+    $udcs = array_values(array_filter(array_map('trim', explode(',', $udc_list)), static fn(string $v): bool => $v !== ''));
+    if ($udcs === []) {
+        return '';
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT TRIM(office) AS office FROM user_group
+         WHERE udc = :udc AND TRIM(COALESCE(office, '')) <> ''
+         LIMIT 1"
+    );
+    foreach ($udcs as $udc) {
+        $stmt->bindValue(':udc', $udc, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            continue;
+        }
+        $office = trim((string) ($row['office'] ?? ''));
+        if ($office !== '') {
+            return $office;
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -1955,6 +1992,8 @@ function voucher_tracking_section_durations_from_actions(
     $open = [];
     $pendingForward = [];
     $totals = [];
+    /** @var int|null Timestamp of the most recent return (voucher redelivered for re-processing). */
+    $lastReturnTs = null;
 
     foreach ($actions as $row) {
         $section = voucher_tracking_dashboard_section_from_action_row($row, $pdo, $userCache);
@@ -1966,6 +2005,18 @@ function voucher_tracking_section_durations_from_actions(
         $kind = voucher_tracking_action_kind($row['action'] ?? '');
 
         if ($kind === 'receive') {
+            if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
+                if (isset($pendingForward[$section], $open[$section])) {
+                    voucher_tracking_add_section_duration(
+                        $totals,
+                        $section,
+                        $open[$section],
+                        $pendingForward[$section]
+                    );
+                    unset($pendingForward[$section]);
+                }
+            }
+
             voucher_tracking_complete_pending_forward_on_handoff(
                 $open,
                 $pendingForward,
@@ -1978,6 +2029,7 @@ function voucher_tracking_section_durations_from_actions(
                 $open[$section] = $ts;
                 unset($pendingForward[$section]);
             }
+            $lastReturnTs = null;
             continue;
         }
 
@@ -1995,17 +2047,30 @@ function voucher_tracking_section_durations_from_actions(
             }
         }
 
+        if ($kind === 'return') {
+            if ($section !== '' && voucher_tracking_is_dashboard_section($section) && isset($open[$section])) {
+                voucher_tracking_add_section_duration($totals, $section, $open[$section], $ts);
+            }
+            unset($open[$section], $pendingForward[$section]);
+            $lastReturnTs = $ts;
+            continue;
+        }
+
         if ($section === '' || !voucher_tracking_is_dashboard_section($section)) {
             continue;
         }
 
         if ($kind === 'forward') {
             if (!isset($open[$section])) {
-                continue;
+                // Return-to-receiving paths may skip a "Received by" log; start dwell at return time.
+                $open[$section] = ($lastReturnTs !== null && $lastReturnTs > 0 && $lastReturnTs <= $ts)
+                    ? $lastReturnTs
+                    : $ts;
             }
             if ($section !== $cashiersSection) {
                 $pendingForward[$section] = $ts;
             }
+            $lastReturnTs = null;
             continue;
         }
 
@@ -2015,7 +2080,7 @@ function voucher_tracking_section_durations_from_actions(
             continue;
         }
 
-        if ($kind === 'return' || $kind === 'archive') {
+        if ($kind === 'archive') {
             unset($open[$section], $pendingForward[$section]);
         }
     }

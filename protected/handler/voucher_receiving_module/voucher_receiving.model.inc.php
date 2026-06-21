@@ -348,7 +348,7 @@ function voucher_pending_to_sent(
 
 function update_received_voucher(object $pdo, string $processing_no, string $dv_no, string $ors_no, string $ada_check_no, string $action, string $datetime_action, string $combined_remarks) {
 
-    $query = "UPDATE voucher_tracking SET dv_no = :dv_no, ors_no = :ors_no, ada_check_no = :ada_check_no, voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks WHERE processing_no = :processing_no";
+    $query = "UPDATE voucher_tracking SET dv_no = :dv_no, ors_no = :ors_no, ada_check_no = :ada_check_no, voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, active_status = 'yes' WHERE processing_no = :processing_no";
 
     $statement = $pdo->prepare($query);
 
