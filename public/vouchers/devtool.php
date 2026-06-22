@@ -309,9 +309,9 @@ if (!$emp_tag_options) {
                         <td data-label=""><button class="btn-target btn success popupForm-edit_user" id="btn_edit" name="btn-edit" type="button">Edit</button></td>
                         <td data-label="Unblock">
                             <?php if ($isBlocked): ?>
-                                <a onclick="if(!confirm('Unblock this user and reset failed login attempts?')) return false;"
-                                    href="<?php echo '../../protected/handler/devtool_module/unblock_user_module/unblock_user_handler.inc.php?emp_id=' . htmlspecialchars((string) $row['emp_id'], ENT_QUOTES, 'UTF-8'); ?>"
-                                    class="btn warning">Unblock</a>
+                                <a href="#"
+                                    data-url="<?php echo '../../protected/handler/devtool_module/unblock_user_module/unblock_user_handler.inc.php?emp_id=' . htmlspecialchars((string) $row['emp_id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    class="btn warning devtool-unblock-btn">Unblock</a>
                             <?php else: ?>
                                 <span class="text-muted">—</span>
                             <?php endif; ?>
@@ -563,6 +563,25 @@ if (!$emp_tag_options) {
             if (!row) return;
             prepareEditUserForm(row);
         }, true);
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.devtool-unblock-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var url = btn.getAttribute('data-url');
+                if (!url) return;
+                if (typeof functionAlert !== 'function') {
+                    window.location.href = url;
+                    return;
+                }
+                functionAlert('Unblock this user and reset failed login attempts?', '', function() {
+                    window.location.href = url;
+                });
+            });
+        });
     });
 </script>
 

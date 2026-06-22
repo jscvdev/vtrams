@@ -8,6 +8,7 @@ include('../../protected/core/components/notifications/err_handler_custom_alert.
 require_once __DIR__ . '/../../protected/core/components/notifications/custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/checklist_config.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_voucher_type_helper.inc.php';
 
 include 'db_voucher.php';
 check_voucher_errors();
@@ -15,6 +16,8 @@ check_voucher_forward_errors();
 
 // Centralized voucher types for checklists and dropdowns (from checklist_config + scanned templates)
 $voucher_types_for_select = checklist_types_with_labels();
+utilities_voucher_type_ensure_schema($pdo);
+$voucher_type_client = utilities_voucher_type_client_payload($pdo);
 
 // Ensure logged user name is available
 if (empty($_SESSION['logged_user_emp_name']) && !empty($_SESSION['logged_user_emp_id'])) {
@@ -189,9 +192,12 @@ function session_contains_phrase($phrase)
                                 <span id="particulars-error" style="color: red; display: none;">Please edit the particulars before submitting.</span>
                             </div>
                             <script>
-                                const particularsMap = {};
+                                const voucherTypeClient = <?= json_encode($voucher_type_client, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+                                window.voucherTypeClient = voucherTypeClient;
+                                const particularsMap = voucherTypeClient.particularsMap || {};
+                                const voucherTypeSettingsMap = voucherTypeClient.settingsMap || {};
                                 const voucherTypeValues = <?= json_encode(array_keys($voucher_types_for_select)) ?>;
-                                const defaultParticularsGeneric = "For payment as per supporting documents hereto attached in the total amount of ......";
+                                const defaultParticularsGeneric = voucherTypeClient.defaultParticulars || "For payment as per supporting documents hereto attached in the total amount of ......";
                                 const selectEl = document.getElementById("type-select");
                                 const particularsEl = document.getElementById("particulars");
                                 const errorEl = document.getElementById("particulars-error");
@@ -342,7 +348,10 @@ function session_contains_phrase($phrase)
                                     updateParticularsWithENGP();
                                 });
 
-                                const typesNoParticularsEditRequired = voucherTypeValues;
+                                const typesNoParticularsEditRequired = voucherTypeValues.filter(function(typeKey) {
+                                    const cfg = voucherTypeSettingsMap[typeKey];
+                                    return cfg && cfg.requireParticularsEdit === false;
+                                });
                                 document.getElementById("popupForm2").addEventListener("submit", function(e) {
                                     if (particularsEl.value === defaultParticulars && !typesNoParticularsEditRequired.includes(selectedValue)) {
                                         e.preventDefault(); // prevent form submission
@@ -1318,14 +1327,18 @@ function session_contains_phrase($phrase)
     (function() {
         const loggedUserName = <?php echo json_encode($logged_user_name); ?>;
 
-        const LOCKED_PAYEE_TYPES = new Set([
-            'Traveling Expenses',
-            'PRE-Traveling Expenses',
-            // Stored legacy value (label is now "... Salary")
-            'Contractual Services or Job Order',
-            // In case a future template key uses the new wording
-            'Contractual Services or Job Order Salary',
-        ]);
+        const voucherTypeSettingsMapRef = (typeof voucherTypeSettingsMap !== 'undefined')
+            ? voucherTypeSettingsMap
+            : (window.voucherTypeClient && window.voucherTypeClient.settingsMap) || {};
+
+        function typeLockedFields(typeKey) {
+            const cfg = voucherTypeSettingsMapRef[String(typeKey || '').trim()];
+            return cfg && Array.isArray(cfg.lockedFields) ? cfg.lockedFields : [];
+        }
+
+        function isPayeeLockedType(typeKey) {
+            return typeLockedFields(typeKey).includes('payee');
+        }
 
         function setPayeeFieldLocked(payeeInput, locked) {
             if (locked) {
@@ -1347,7 +1360,7 @@ function session_contains_phrase($phrase)
 
             const preserveExistingPayee = options && options.preserveExistingPayee;
             const selectedType = String(typeSelect.value || '').trim();
-            const shouldLock = LOCKED_PAYEE_TYPES.has(selectedType);
+            const shouldLock = isPayeeLockedType(selectedType);
 
             if (shouldLock && loggedUserName) {
                 if (!preserveExistingPayee || !String(payeeInput.value || '').trim()) {
@@ -1383,12 +1396,49 @@ function session_contains_phrase($phrase)
 
         window.vtramsApplyEncodedPayeeLocking = applyEncodedPayeeLocking;
 
+        const VOUCHER_FIELD_LOCK_MAP = {
+            tin_employee_no: ['tin_employee_no'],
+            address: ['address'],
+            voucher_date: ['voucher_date'],
+            particulars: ['particulars'],
+            amount: ['amount'],
+            month_year: ['month-year'],
+            engp_quarter: ['engp-quarter'],
+            engp_year: ['engp-year'],
+            engp_area: ['engp-area'],
+            engp_commodity: ['engp-commodity'],
+            engp_location: ['engp-location'],
+        };
+
+        function applyConfiguredFieldLocks(typeSelect) {
+            if (!typeSelect) return;
+            const selectedType = String(typeSelect.value || '').trim();
+            const locked = new Set(typeLockedFields(selectedType));
+
+            Object.entries(VOUCHER_FIELD_LOCK_MAP).forEach(function(entry) {
+                const fieldKey = entry[0];
+                const ids = entry[1];
+                const isLocked = locked.has(fieldKey);
+                ids.forEach(function(id) {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.readOnly = isLocked;
+                });
+            });
+        }
+
+        function applyTypeFormLocks() {
+            const typeSelect = document.getElementById("type-select");
+            applyPayeeLocking();
+            applyConfiguredFieldLocks(typeSelect);
+        }
+
         function initPayeeLocking() {
             const typeSelect = document.getElementById("type-select");
             if (typeSelect) {
-                typeSelect.addEventListener("change", applyPayeeLocking);
+                typeSelect.addEventListener("change", applyTypeFormLocks);
             }
-            applyPayeeLocking();
+            applyTypeFormLocks();
         }
 
         // Init on page load
@@ -1406,7 +1456,7 @@ function session_contains_phrase($phrase)
         if (openPopupBtn || voucherDashboardBtn) {
             const triggerElement = openPopupBtn || voucherDashboardBtn;
             triggerElement.addEventListener('click', function() {
-                setTimeout(applyPayeeLocking, 100);
+                setTimeout(applyTypeFormLocks, 100);
             });
         }
 
@@ -1415,7 +1465,7 @@ function session_contains_phrase($phrase)
                 mutations.forEach(function(mutation) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
                         if (popupForm2.style.display === 'block') {
-                            setTimeout(applyPayeeLocking, 100);
+                            setTimeout(applyTypeFormLocks, 100);
                         }
                     }
                 });

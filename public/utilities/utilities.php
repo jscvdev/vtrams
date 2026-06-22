@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
-AuditHelper::logPageView('Utilities');
+AuditHelper::logPageView('Signatories');
 
 // Utilities: System Admin with ACL >= 999
 $target = explode(",", $_SESSION['logged_user_designation'] ?? '');
@@ -1031,7 +1031,7 @@ $emp_tag_default = utilities_emp_tag_default_value($pdo);
 
 <div class="main main--dashboard utl-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Utilities</h1>
+        <h1 class="voucher-dashboard-title">Signatories</h1>
     </header>
 
     <div class="voucher-card voucher-card--table">

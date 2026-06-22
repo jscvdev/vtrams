@@ -263,9 +263,16 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_system_utilities): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../utilities/utilities.php" class="sidebar__link">
-                                            <i class="ri-tools-line"></i>
-                                            <span class="sidebar__link-name">Utilities</span>
-                                            <span class="sidebar__link-floating">Utilities</span>
+                                            <i class="ri-quill-pen-line"></i>
+                                            <span class="sidebar__link-name">Signatories</span>
+                                            <span class="sidebar__link-floating">Signatories</span>
+                                        </a>
+                                    </div>
+                                    <div class="sidebar-link-container">
+                                        <a href="../utilities/types.php" class="sidebar__link">
+                                            <i class="ri-list-settings-line"></i>
+                                            <span class="sidebar__link-name">Types</span>
+                                            <span class="sidebar__link-floating">Types</span>
                                         </a>
                                     </div>
                                     <div class="sidebar-link-container">
