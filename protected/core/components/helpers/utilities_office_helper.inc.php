@@ -23,6 +23,7 @@ function utilities_office_ensure_schema(PDO $pdo): void
             office_name VARCHAR(255) NOT NULL,
             parent_office_id INT NULL,
             is_processing_office TINYINT(1) NOT NULL DEFAULT 0,
+            requires_liaison_first TINYINT(1) NOT NULL DEFAULT 0,
             sort_order INT NOT NULL DEFAULT 0,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -33,9 +34,26 @@ function utilities_office_ensure_schema(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
 
+    utilities_office_ensure_liaison_first_column($pdo);
+
     $count = (int) $pdo->query('SELECT COUNT(*) FROM system_offices')->fetchColumn();
     if ($count === 0) {
         utilities_office_seed_from_user_group($pdo);
+    }
+
+    utilities_office_bootstrap_cenro_liaison_routing($pdo);
+}
+
+function utilities_office_ensure_liaison_first_column(PDO $pdo): void
+{
+    $stmt = $pdo->query("SHOW COLUMNS FROM system_offices LIKE 'requires_liaison_first'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec(
+            'ALTER TABLE system_offices
+             ADD COLUMN requires_liaison_first TINYINT(1) NOT NULL DEFAULT 0
+             AFTER is_processing_office'
+        );
+        utilities_office_invalidate_cache();
     }
 }
 
@@ -89,7 +107,8 @@ function utilities_office_fetch_all(PDO $pdo, bool $activeOnly = false): array
         utilities_office_ensure_schema($pdo);
         $sql = '
             SELECT o.id, o.office_name, o.parent_office_id, o.is_processing_office,
-                   o.sort_order, o.is_active, p.office_name AS parent_office_name
+                   o.requires_liaison_first, o.sort_order, o.is_active,
+                   p.office_name AS parent_office_name
             FROM system_offices o
             LEFT JOIN system_offices p ON p.id = o.parent_office_id
         ';
@@ -233,13 +252,11 @@ function utilities_office_user_count(PDO $pdo, string $officeName): int
     return (int) $stmt->fetchColumn();
 }
 
-function utilities_office_register_for_liaison(PDO $pdo, string $officeName): void
+/**
+ * @return array{id: int, designated_office: string}|null
+ */
+function utilities_office_liaison_designation_limit_row(PDO $pdo): ?array
 {
-    $officeName = utilities_office_normalize_name($officeName);
-    if ($officeName === '') {
-        return;
-    }
-
     $stmt = $pdo->prepare(
         'SELECT id, designated_office FROM designation_limit
          WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))
@@ -247,27 +264,314 @@ function utilities_office_register_for_liaison(PDO $pdo, string $officeName): vo
     );
     $stmt->execute([':designation' => 'Liaison Officer']);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row) {
-        return;
+
+    return $row ?: null;
+}
+
+/**
+ * @return list<string>
+ */
+function utilities_office_liaison_registered_offices(PDO $pdo): array
+{
+    $row = utilities_office_liaison_designation_limit_row($pdo);
+    if ($row === null) {
+        return [];
     }
 
-    $offices = array_values(array_filter(
+    return array_values(array_filter(
         array_map('trim', explode(',', (string) ($row['designated_office'] ?? ''))),
-        static fn(string $office): bool => $office !== ''
+        static fn(string $office): bool => $office !== '' && strcasecmp($office, 'None') !== 0
     ));
+}
 
-    foreach ($offices as $listed) {
+function utilities_office_is_registered_for_liaison(PDO $pdo, string $officeName): bool
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return false;
+    }
+
+    foreach (utilities_office_liaison_registered_offices($pdo) as $listed) {
         if (utilities_signatory_offices_match($listed, $officeName)) {
-            return;
+            return true;
         }
     }
 
+    return false;
+}
+
+function utilities_office_register_for_liaison(PDO $pdo, string $officeName): void
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return;
+    }
+
+    $row = utilities_office_liaison_designation_limit_row($pdo);
+    if ($row === null) {
+        return;
+    }
+
+    if (utilities_office_is_registered_for_liaison($pdo, $officeName)) {
+        return;
+    }
+
+    $offices = utilities_office_liaison_registered_offices($pdo);
     $offices[] = $officeName;
     $update = $pdo->prepare('UPDATE designation_limit SET designated_office = :offices WHERE id = :id');
     $update->execute([
         ':offices' => implode(',', $offices),
         ':id' => (int) ($row['id'] ?? 0),
     ]);
+}
+
+function utilities_office_unregister_from_liaison(PDO $pdo, string $officeName): void
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return;
+    }
+
+    $row = utilities_office_liaison_designation_limit_row($pdo);
+    if ($row === null) {
+        return;
+    }
+
+    $remaining = [];
+    foreach (utilities_office_liaison_registered_offices($pdo) as $listed) {
+        if (!utilities_signatory_offices_match($listed, $officeName)) {
+            $remaining[] = $listed;
+        }
+    }
+
+    $update = $pdo->prepare('UPDATE designation_limit SET designated_office = :offices WHERE id = :id');
+    $update->execute([
+        ':offices' => implode(',', $remaining),
+        ':id' => (int) ($row['id'] ?? 0),
+    ]);
+}
+
+/**
+ * @return list<array{name: string, udc: string}>
+ */
+function utilities_office_liaison_assignees(PDO $pdo, string $officeName): array
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return [];
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT udc,
+                TRIM(CONCAT(COALESCE(emp_fn, ''), ' ', COALESCE(emp_mi, ''), ' ', COALESCE(emp_ln, ''))) AS emp_name
+         FROM user_group
+         WHERE LOWER(TRIM(office)) = LOWER(:office)
+           AND (
+                FIND_IN_SET('Liaison Officer', REPLACE(designation, ', ', ',')) > 0
+                OR designation = 'Liaison Officer'
+           )
+         ORDER BY emp_name ASC"
+    );
+    $stmt->execute([':office' => $officeName]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $assignees = [];
+    foreach ($rows as $row) {
+        $name = trim(preg_replace('/\s+/', ' ', (string) ($row['emp_name'] ?? '')) ?? '');
+        $udc = trim((string) ($row['udc'] ?? ''));
+        if ($name === '' && $udc === '') {
+            continue;
+        }
+        $assignees[] = [
+            'name' => $name !== '' ? $name : $udc,
+            'udc' => $udc,
+        ];
+    }
+
+    return $assignees;
+}
+
+function utilities_office_set_requires_liaison_first(PDO $pdo, int $officeId, bool $enabled): void
+{
+    if ($officeId <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare(
+        'UPDATE system_offices SET requires_liaison_first = :enabled WHERE id = :id'
+    );
+    $stmt->execute([
+        ':enabled' => $enabled ? 1 : 0,
+        ':id' => $officeId,
+    ]);
+    utilities_office_invalidate_cache();
+}
+
+function utilities_office_enable_liaison_routing(PDO $pdo, string $officeName, ?int $parentOfficeId = null): void
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return;
+    }
+
+    $record = utilities_office_find_by_name($pdo, $officeName);
+    if ($record === null) {
+        return;
+    }
+
+    $officeId = (int) ($record['id'] ?? 0);
+    if ($officeId <= 0) {
+        return;
+    }
+
+    if ($parentOfficeId !== null && $parentOfficeId > 0) {
+        $stmt = $pdo->prepare(
+            'UPDATE system_offices
+             SET requires_liaison_first = 1, parent_office_id = :parent_id
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            ':parent_id' => $parentOfficeId,
+            ':id' => $officeId,
+        ]);
+    } else {
+        utilities_office_set_requires_liaison_first($pdo, $officeId, true);
+    }
+
+    utilities_office_register_for_liaison($pdo, $officeName);
+    utilities_office_invalidate_cache();
+}
+
+function utilities_office_disable_liaison_routing(PDO $pdo, string $officeName): void
+{
+    $officeName = utilities_office_normalize_name($officeName);
+    if ($officeName === '') {
+        return;
+    }
+
+    $record = utilities_office_find_by_name($pdo, $officeName);
+    if ($record === null) {
+        return;
+    }
+
+    $officeId = (int) ($record['id'] ?? 0);
+    if ($officeId <= 0) {
+        return;
+    }
+
+    $processing = utilities_office_get_processing($pdo);
+    $processingId = $processing ? (int) ($processing['id'] ?? 0) : 0;
+    $parentId = (int) ($record['parent_office_id'] ?? 0);
+
+    if ($processingId > 0 && $parentId === $processingId) {
+        $stmt = $pdo->prepare(
+            'UPDATE system_offices
+             SET requires_liaison_first = 0, parent_office_id = NULL
+             WHERE id = :id'
+        );
+        $stmt->execute([':id' => $officeId]);
+    } else {
+        utilities_office_set_requires_liaison_first($pdo, $officeId, false);
+    }
+
+    utilities_office_unregister_from_liaison($pdo, $officeName);
+    utilities_office_invalidate_cache();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function utilities_office_fetch_liaison_routing_summary(PDO $pdo): array
+{
+    utilities_office_ensure_schema($pdo);
+
+    $summary = [];
+    foreach (utilities_office_fetch_all($pdo, true) as $row) {
+        if ((int) ($row['is_processing_office'] ?? 0) === 1) {
+            continue;
+        }
+
+        $name = utilities_office_normalize_name((string) ($row['office_name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+
+        $requiresLiaison = utilities_office_encoder_requires_liaison_first($pdo, $name);
+        $registered = utilities_office_is_registered_for_liaison($pdo, $name);
+        if (!$requiresLiaison && !$registered) {
+            continue;
+        }
+
+        $assignees = utilities_office_liaison_assignees($pdo, $name);
+        $summary[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'office_name' => $name,
+            'parent_office_name' => trim((string) ($row['parent_office_name'] ?? '')),
+            'requires_liaison_first' => (int) ($row['requires_liaison_first'] ?? 0) === 1,
+            'has_parent' => !empty($row['parent_office_id']),
+            'registered_in_designation_limit' => $registered,
+            'assignees' => $assignees,
+            'assignee_label' => $assignees !== []
+                ? implode(', ', array_map(static fn(array $a): string => (string) ($a['name'] ?? ''), $assignees))
+                : 'None assigned',
+        ];
+    }
+
+    usort($summary, static fn(array $a, array $b): int => strcasecmp(
+        (string) ($a['office_name'] ?? ''),
+        (string) ($b['office_name'] ?? '')
+    ));
+
+    return $summary;
+}
+
+/**
+ * Ensure CENRO sub-offices route encoders to their local Liaison Officer first.
+ */
+function utilities_office_bootstrap_cenro_liaison_routing(PDO $pdo): void
+{
+    $processing = utilities_office_get_processing($pdo);
+    if ($processing === null) {
+        return;
+    }
+
+    $processingId = (int) ($processing['id'] ?? 0);
+    if ($processingId <= 0) {
+        return;
+    }
+
+    foreach (['CENRO BORONGAN', 'CENRO DOLORES'] as $targetName) {
+        $record = utilities_office_find_by_name($pdo, $targetName);
+        if ($record === null) {
+            continue;
+        }
+
+        $officeId = (int) ($record['id'] ?? 0);
+        if ($officeId <= 0) {
+            continue;
+        }
+
+        $parentId = $record['parent_office_id'] ?? null;
+        $needsParent = $parentId === null || $parentId === '' || (int) $parentId <= 0;
+        $needsFlag = (int) ($record['requires_liaison_first'] ?? 0) !== 1;
+
+        if ($needsParent || $needsFlag) {
+            $stmt = $pdo->prepare(
+                'UPDATE system_offices
+                 SET requires_liaison_first = 1,
+                     parent_office_id = COALESCE(NULLIF(parent_office_id, 0), :parent_id)
+                 WHERE id = :id'
+            );
+            $stmt->execute([
+                ':parent_id' => $processingId,
+                ':id' => $officeId,
+            ]);
+            utilities_office_invalidate_cache();
+            $record = utilities_office_find_by_id($pdo, $officeId) ?? $record;
+        }
+
+        utilities_office_register_for_liaison($pdo, (string) ($record['office_name'] ?? $targetName));
+    }
 }
 
 function utilities_office_clear_processing_flag(PDO $pdo, int $exceptId = 0): void
@@ -292,6 +596,10 @@ function utilities_office_encoder_requires_liaison_first(PDO $pdo, string $encod
 
     if ((int) ($record['is_processing_office'] ?? 0) === 1) {
         return false;
+    }
+
+    if ((int) ($record['requires_liaison_first'] ?? 0) === 1) {
+        return true;
     }
 
     $parentId = $record['parent_office_id'] ?? null;

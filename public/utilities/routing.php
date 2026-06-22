@@ -101,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $parentId = (int) ($_POST['parent_office_id'] ?? 0);
                 $parentId = $parentId > 0 ? $parentId : null;
                 $isProcessing = isset($_POST['is_processing_office']) ? 1 : 0;
+                $requiresLiaison = isset($_POST['requires_liaison_first']) ? 1 : 0;
                 $sort = (int) ($_POST['sort_order'] ?? 0);
                 if ($officeName === '') {
                     $flash = ['type' => 'error', 'msg' => 'Office name is required.'];
@@ -114,18 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         utilities_office_clear_processing_flag($pdo);
                     }
                     $stmt = $pdo->prepare("
-                        INSERT INTO system_offices (office_name, parent_office_id, is_processing_office, sort_order, is_active)
-                        VALUES (:name, :parent_id, :processing, 0, 1)
+                        INSERT INTO system_offices (office_name, parent_office_id, is_processing_office, requires_liaison_first, sort_order, is_active)
+                        VALUES (:name, :parent_id, :processing, :requires_liaison, 0, 1)
                     ");
                     $stmt->execute([
                         ':name' => $officeName,
                         ':parent_id' => $parentId,
                         ':processing' => $isProcessing,
+                        ':requires_liaison' => ($requiresLiaison === 1 || ($parentId !== null && $isProcessing !== 1)) ? 1 : 0,
                     ]);
                     sort_order_place_at_position($pdo, 'system_offices', (int) $pdo->lastInsertId(), $sort);
                     $pdo->commit();
-                    if ($parentId !== null && $isProcessing !== 1) {
-                        utilities_office_register_for_liaison($pdo, $officeName);
+                    if ($isProcessing !== 1 && ($requiresLiaison === 1 || $parentId !== null)) {
+                        utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
                     }
                     utilities_office_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Office added. Assign Liaison Officer users to sub-offices in Devtool.'];
@@ -136,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $parentId = (int) ($_POST['parent_office_id'] ?? 0);
                 $parentId = $parentId > 0 ? $parentId : null;
                 $isProcessing = isset($_POST['is_processing_office']) ? 1 : 0;
+                $requiresLiaison = isset($_POST['requires_liaison_first']) ? 1 : 0;
                 $sort = (int) ($_POST['sort_order'] ?? 0);
                 $active = isset($_POST['is_active']) ? 1 : 0;
                 $existing = utilities_office_find_by_id($pdo, $id);
@@ -162,25 +165,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             SET office_name = :name,
                                 parent_office_id = :parent_id,
                                 is_processing_office = :processing,
+                                requires_liaison_first = :requires_liaison,
                                 sort_order = :sort,
                                 is_active = :active
                             WHERE id = :id
                         ");
+                        $effectiveRequiresLiaison = ($requiresLiaison === 1 || ($parentId !== null && $isProcessing !== 1)) ? 1 : 0;
                         $stmt->execute([
                             ':name' => $officeName,
                             ':parent_id' => $parentId,
                             ':processing' => $isProcessing,
+                            ':requires_liaison' => $effectiveRequiresLiaison,
                             ':sort' => $sort,
                             ':active' => $active,
                             ':id' => $id,
                         ]);
                         $pdo->commit();
-                        if ($parentId !== null && $isProcessing !== 1) {
-                            utilities_office_register_for_liaison($pdo, $officeName);
+                        if ($isProcessing !== 1 && $effectiveRequiresLiaison === 1) {
+                            utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
+                        } elseif ($effectiveRequiresLiaison !== 1 && $parentId === null) {
+                            utilities_office_disable_liaison_routing($pdo, $officeName);
                         }
                         utilities_office_invalidate_cache();
                         $flash = ['type' => 'success', 'msg' => 'Office updated.'];
                     }
+                }
+            } elseif ($action === 'liaison_routing_enable') {
+                $officeId = (int) ($_POST['office_id'] ?? 0);
+                $parentId = (int) ($_POST['parent_office_id'] ?? 0);
+                $parentId = $parentId > 0 ? $parentId : null;
+                $existing = utilities_office_find_by_id($pdo, $officeId);
+                if ($officeId <= 0 || $existing === null) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid office selected for liaison routing.'];
+                } elseif ((int) ($existing['is_processing_office'] ?? 0) === 1) {
+                    $flash = ['type' => 'error', 'msg' => 'The processing office does not use liaison-first routing.'];
+                } else {
+                    $officeName = (string) ($existing['office_name'] ?? '');
+                    if ($parentId === null) {
+                        $processing = utilities_office_get_processing($pdo);
+                        $parentId = $processing ? (int) ($processing['id'] ?? 0) : null;
+                        if ($parentId !== null && $parentId <= 0) {
+                            $parentId = null;
+                        }
+                    }
+                    utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
+                    $flash = ['type' => 'success', 'msg' => 'Liaison-first routing enabled for ' . $officeName . '. Encoders there will forward to the local Liaison Officer.'];
+                }
+            } elseif ($action === 'liaison_routing_disable') {
+                $officeId = (int) ($_POST['office_id'] ?? 0);
+                $existing = utilities_office_find_by_id($pdo, $officeId);
+                if ($officeId <= 0 || $existing === null) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid office selected.'];
+                } else {
+                    utilities_office_disable_liaison_routing($pdo, (string) ($existing['office_name'] ?? ''));
+                    $flash = ['type' => 'success', 'msg' => 'Liaison-first routing disabled for ' . (string) ($existing['office_name'] ?? 'office') . '.'];
                 }
             } elseif ($action === 'office_delete') {
                 $id = (int) ($_POST['id'] ?? 0);
@@ -225,6 +263,25 @@ $office_tree = utilities_office_build_tree($offices);
 $office_count = count($offices);
 $processing_office = utilities_office_get_processing($pdo);
 $processing_office_name = (string) ($processing_office['office_name'] ?? '');
+$processing_office_id = (int) ($processing_office['id'] ?? 0);
+$liaison_routing = utilities_office_fetch_liaison_routing_summary($pdo);
+$liaison_routing_count = count($liaison_routing);
+$liaison_candidate_offices = array_values(array_filter(
+    $offices,
+    static function (array $row): bool {
+        if ((int) ($row['is_processing_office'] ?? 0) === 1) {
+            return false;
+        }
+        if ((int) ($row['requires_liaison_first'] ?? 0) === 1) {
+            return false;
+        }
+        if (!empty($row['parent_office_id'])) {
+            return false;
+        }
+
+        return (int) ($row['is_active'] ?? 1) === 1;
+    }
+));
 
 /**
  * @param list<array<string, mixed>> $nodes
@@ -236,6 +293,7 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
         $name = (string) ($node['office_name'] ?? '');
         $parentId = (int) ($node['parent_office_id'] ?? 0);
         $isProcessing = (int) ($node['is_processing_office'] ?? 0) === 1;
+        $requiresLiaison = (int) ($node['requires_liaison_first'] ?? 0) === 1;
         $isActive = (int) ($node['is_active'] ?? 1) === 1;
         $sort = (int) ($node['sort_order'] ?? 0);
         $userCount = utilities_office_user_count($pdo, $name);
@@ -246,8 +304,11 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                 <div class="util-office-node__meta">
                     <?php if ($isProcessing): ?>
                         <span class="util-office-badge util-office-badge--processing">Processing office</span>
-                    <?php elseif ($parentId > 0): ?>
+                    <?php elseif ($parentId > 0 || $requiresLiaison): ?>
                         <span class="util-office-badge util-office-badge--sub">Sub-office</span>
+                    <?php endif; ?>
+                    <?php if ($requiresLiaison): ?>
+                        <span class="util-office-badge util-office-badge--liaison">Liaison routing</span>
                     <?php endif; ?>
                     <?php if (!$isActive): ?>
                         <span class="util-office-badge util-office-badge--inactive">Inactive</span>
@@ -277,6 +338,10 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                         <label class="chk" title="Main office where vouchers are processed (e.g. PENRO)">
                             <input type="checkbox" name="is_processing_office" <?= $isProcessing ? 'checked' : '' ?>>
                             <span>Processing</span>
+                        </label>
+                        <label class="chk" title="Encoders at this office forward vouchers to the local Liaison Officer first">
+                            <input type="checkbox" name="requires_liaison_first" <?= ($requiresLiaison || ($parentId > 0 && !$isProcessing)) ? 'checked' : '' ?>>
+                            <span>Liaison route</span>
                         </label>
                         <label class="chk">
                             <input type="checkbox" name="is_active" <?= $isActive ? 'checked' : '' ?>>
@@ -617,6 +682,39 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
         border: 1px solid #e2e8f0;
     }
 
+    .rt-page .util-office-badge--liaison {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+
+    .rt-page .util-liaison-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .rt-page .util-liaison-row__title {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        align-items: baseline;
+        margin-bottom: 0.35rem;
+    }
+
+    .rt-page .util-liaison-row__parent,
+    .rt-page .util-liaison-row__flow {
+        font-size: 0.8125rem;
+        color: var(--util-muted);
+        line-height: 1.5;
+    }
+
+    .rt-page .util-liaison-row__warn {
+        color: #b45309;
+        font-weight: 600;
+    }
+
     .rt-page .util-office-node__meta {
         display: flex;
         flex-wrap: wrap;
@@ -773,6 +871,101 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             </section>
 
             <section class="util-routing-section">
+            <p class="util-section-title">Liaison forwarding offices</p>
+            <p class="util-dv-desc">
+                Offices listed here send encoder vouchers to their local <strong>Liaison Officer</strong> first.
+                The Liaison Officer then forwards upstream to <strong>ICU</strong> at the processing office
+                (<?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'main PENRO', ENT_QUOTES, 'UTF-8') ?>).
+                Example: CENRO DOLORES and CENRO BORONGAN encoders &rarr; local Liaison Officer &rarr; ICU.
+            </p>
+
+            <div class="util-stats">
+                <div class="util-stat"><strong><?= (int) $liaison_routing_count ?></strong> liaison-routed office<?= $liaison_routing_count === 1 ? '' : 's' ?></div>
+            </div>
+
+            <div class="util-card">
+                <div class="util-card__head">
+                    <h3>Enable liaison-first routing</h3>
+                </div>
+                <div class="util-card__body">
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="liaison_routing_enable">
+                        <div class="field">
+                            <label for="liaison_office_id">Office</label>
+                            <select class="form-custom-input" name="office_id" id="liaison_office_id" required>
+                                <option value="" disabled selected>Select office</option>
+                                <?php foreach ($offices as $officeRow):
+                                    if ((int) ($officeRow['is_processing_office'] ?? 0) === 1) {
+                                        continue;
+                                    }
+                                    $officeId = (int) ($officeRow['id'] ?? 0);
+                                    $officeLabel = (string) ($officeRow['office_name'] ?? '');
+                                    if ($officeId <= 0 || $officeLabel === '') {
+                                        continue;
+                                    }
+                                ?>
+                                    <option value="<?= $officeId ?>">
+                                        <?= htmlspecialchars($officeLabel, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="liaison_parent_office_id">Parent office (optional)</label>
+                            <select class="form-custom-input" name="parent_office_id" id="liaison_parent_office_id">
+                                <option value="">Use processing office as parent</option>
+                                <?php foreach ($offices as $officeRow): ?>
+                                    <option value="<?= (int) ($officeRow['id'] ?? 0) ?>"<?= $processing_office_id === (int) ($officeRow['id'] ?? 0) ? ' selected' : '' ?>>
+                                        <?= htmlspecialchars((string) ($officeRow['office_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Enable liaison routing" aria-label="Enable liaison routing">+</button>
+                        </div>
+                    </form>
+
+                    <?php if ($liaison_routing === []): ?>
+                        <p class="util-empty">No liaison-routed offices yet. Enable routing for CENRO or other sub-offices above.</p>
+                    <?php else: ?>
+                        <?php foreach ($liaison_routing as $liaisonRow): ?>
+                            <div class="util-routing-block util-liaison-row">
+                                <div class="util-routing-block__main">
+                                    <div class="util-liaison-row__title">
+                                        <strong><?= htmlspecialchars((string) ($liaisonRow['office_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                                        <?php if ((string) ($liaisonRow['parent_office_name'] ?? '') !== ''): ?>
+                                            <span class="util-liaison-row__parent">
+                                                Parent: <?= htmlspecialchars((string) $liaisonRow['parent_office_name'], ENT_QUOTES, 'UTF-8') ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="util-liaison-row__flow">
+                                        Encoders &rarr; Liaison Officer
+                                        <?php if ((string) ($liaisonRow['assignee_label'] ?? '') !== 'None assigned'): ?>
+                                            (<?= htmlspecialchars((string) ($liaisonRow['assignee_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
+                                        <?php else: ?>
+                                            <span class="util-liaison-row__warn">No Liaison Officer assigned in Devtool</span>
+                                        <?php endif; ?>
+                                        &rarr; ICU at <?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'processing office', ENT_QUOTES, 'UTF-8') ?>
+                                    </div>
+                                </div>
+                                <form method="post" onsubmit="return confirm('Disable liaison-first routing for this office?');" class="util-row-actions">
+                                    <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="action" value="liaison_routing_disable">
+                                    <input type="hidden" name="office_id" value="<?= (int) ($liaisonRow['id'] ?? 0) ?>">
+                                    <button class="btn danger" type="submit">Disable</button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+            </section>
+
+            <section class="util-routing-section">
             <p class="util-section-title">Office hierarchy</p>
             <p class="util-dv-desc">
                 Register offices used in user accounts and define parent-child relationships for voucher forwarding.
@@ -827,6 +1020,13 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                             <label class="chk" for="add_is_processing_office">
                                 <input type="checkbox" name="is_processing_office" id="add_is_processing_office">
                                 <span>Processing office</span>
+                            </label>
+                        </div>
+                        <div class="field util-add-chk-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <label class="chk" for="add_requires_liaison_first">
+                                <input type="checkbox" name="requires_liaison_first" id="add_requires_liaison_first">
+                                <span>Liaison route</span>
                             </label>
                         </div>
                         <div class="field util-add-btn-field">

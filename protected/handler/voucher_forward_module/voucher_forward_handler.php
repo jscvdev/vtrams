@@ -188,20 +188,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                    } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
-                        $target_to = 'Liaison Officer';
-                        $liaisonOffice = voucher_encoder_liaison_route_office($pdo, $encoder_office);
-                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $liaisonOffice);
-                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+                    } elseif (voucher_user_has_designation($target, 'Liaison Officer')) {
+                        // Liaison officers forward upstream to ICU at the processing office,
+                        // even when their office normally routes encoders to another liaison first.
+                        $resolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
+                        $target_to = 'ICU';
+                        $office_to = $resolved['office_to'];
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                    } elseif (voucher_user_has_designation($target, 'Liaison Officer')) {
-                        $resolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
-                        $target_to = 'ICU';
-                        $office_to = $resolved['office_to'];
+                    } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
+                        $target_to = 'Liaison Officer';
+                        $liaisonOffice = voucher_encoder_liaison_route_office($pdo, $encoder_office);
+                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $liaisonOffice);
+                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];
                         if ($resolved['temp_errors']) {
