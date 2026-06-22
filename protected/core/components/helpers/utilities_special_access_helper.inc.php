@@ -16,6 +16,12 @@ function utilities_special_access_normalize_value(string $value): string
 
 function utilities_special_access_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS voucher_special_access (
             id INT AUTO_INCREMENT PRIMARY KEY,

@@ -15,6 +15,12 @@ function user_login_try_exec(PDO $pdo, string $sql): void
 
 function user_login_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     user_login_try_exec(
         $pdo,
         'ALTER TABLE `user_group` ADD COLUMN `is_blocked` TINYINT(1) NOT NULL DEFAULT 0 AFTER `access_level`'

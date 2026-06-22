@@ -54,6 +54,12 @@ function utilities_emp_tag_validate_uacs(string $rawUacs, bool $required = false
 
 function utilities_emp_tag_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS emp_tag_options (
             id INT AUTO_INCREMENT PRIMARY KEY,

@@ -244,6 +244,12 @@ function utilities_signatory_backfill_office(PDO $pdo, string $office): void
 
 function utilities_signatory_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ada_signatory_options (
             id INT AUTO_INCREMENT PRIMARY KEY,

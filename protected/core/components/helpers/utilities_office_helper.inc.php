@@ -17,6 +17,12 @@ function utilities_office_normalize_name(string $name): string
 
 function utilities_office_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS system_offices (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -530,6 +536,12 @@ function utilities_office_fetch_liaison_routing_summary(PDO $pdo): array
  */
 function utilities_office_bootstrap_cenro_liaison_routing(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $processing = utilities_office_get_processing($pdo);
     if ($processing === null) {
         return;

@@ -18,34 +18,49 @@ check_change_password_errors();
 
 require_once '../../protected/core/components/helpers/table_exists_helper.php';
 
-//VOUCHERS
-$fetch_voucher_data_query = "SELECT * FROM vouchers WHERE encoded_by = :encoded_by ORDER BY processing_no DESC";
-$fetch_voucher_data = $pdo->prepare($fetch_voucher_data_query);
-$fetch_voucher_data->bindParam(":encoded_by", $_SESSION['logged_user_emp_name']);
-$fetch_voucher_data->execute();
+// Sidebar badge counts only — avoid loading full voucher rows on every page.
+$header_udc_param = '%' . ($_SESSION['logged_user_udc'] ?? '') . '%';
+$header_encoded_by = (string) ($_SESSION['logged_user_emp_name'] ?? '');
+$header_office_to = (string) ($_SESSION['logged_user_office'] ?? '');
 
-//FORWARDING
-$fetch_voucher_receiving_data_query = "SELECT * FROM voucher_receiving WHERE receiver_udc LIKE :udc and office_to = :office_to ORDER BY processing_no DESC";
-$fetch_voucher_receiving_data = $pdo->prepare($fetch_voucher_receiving_data_query);
-$udc_param = '%' . $_SESSION["logged_user_udc"] . '%'; // Prepare the parameter with '%' wildcards
-$fetch_voucher_receiving_data->bindParam(":udc", $udc_param, PDO::PARAM_STR);
-$fetch_voucher_receiving_data->bindParam(":office_to", $_SESSION["logged_user_office"]);
-$fetch_voucher_receiving_data->execute();
+$header_voucher_pending_count = 0;
+$header_voucher_incoming_count = 0;
+$header_voucher_forwarding_count = 0;
+$header_voucher_sent_count = 0;
 
-//INCOMING
-$fetch_voucher_incoming_data_query = "SELECT * FROM voucher_incoming WHERE receiver_udc LIKE :udc and office_to = :office_to ORDER BY processing_no DESC";
-$fetch_voucher_incoming_data = $pdo->prepare($fetch_voucher_incoming_data_query);
-$udc_param = '%' . $_SESSION["logged_user_udc"] . '%'; // Prepare the parameter with '%' wildcards
-$fetch_voucher_incoming_data->bindParam(":udc", $udc_param, PDO::PARAM_STR);
-$fetch_voucher_incoming_data->bindParam(":office_to", $_SESSION["logged_user_office"]);
-$fetch_voucher_incoming_data->execute();
+if ($header_encoded_by !== '') {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM vouchers WHERE encoded_by = :encoded_by');
+    $stmt->bindValue(':encoded_by', $header_encoded_by, PDO::PARAM_STR);
+    $stmt->execute();
+    $header_voucher_pending_count = (int) $stmt->fetchColumn();
+}
 
-//SENT — match voucher_sent.php: show all vouchers the user sent, any destination office
-$fetch_voucher_sent_data_query = "SELECT * FROM voucher_sent WHERE sender_udc LIKE :udc ORDER BY processing_no DESC";
-$fetch_voucher_sent_data = $pdo->prepare($fetch_voucher_sent_data_query);
-$udc_param = '%' . $_SESSION["logged_user_udc"] . '%'; // Prepare the parameter with '%' wildcards
-$fetch_voucher_sent_data->bindParam(":udc", $udc_param, PDO::PARAM_STR);
-$fetch_voucher_sent_data->execute();
+if ($header_udc_param !== '%%' && $header_office_to !== '') {
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM voucher_incoming
+         WHERE receiver_udc LIKE :udc AND office_to = :office_to'
+    );
+    $stmt->bindValue(':udc', $header_udc_param, PDO::PARAM_STR);
+    $stmt->bindValue(':office_to', $header_office_to, PDO::PARAM_STR);
+    $stmt->execute();
+    $header_voucher_incoming_count = (int) $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM voucher_receiving
+         WHERE receiver_udc LIKE :udc AND office_to = :office_to'
+    );
+    $stmt->bindValue(':udc', $header_udc_param, PDO::PARAM_STR);
+    $stmt->bindValue(':office_to', $header_office_to, PDO::PARAM_STR);
+    $stmt->execute();
+    $header_voucher_forwarding_count = (int) $stmt->fetchColumn();
+}
+
+if ($header_udc_param !== '%%') {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM voucher_sent WHERE sender_udc LIKE :udc');
+    $stmt->bindValue(':udc', $header_udc_param, PDO::PARAM_STR);
+    $stmt->execute();
+    $header_voucher_sent_count = (int) $stmt->fetchColumn();
+}
 $target = explode(",", $_SESSION['logged_user_designation']);
 
 function generateToken()
@@ -517,7 +532,7 @@ $header_text = $pageTitleHelper->getHeaderText();
 
     <!-- NOTIFICATIONS (voucher only) -->
 
-    <?php $rowCount6 = $fetch_voucher_data->rowCount(); ?>
+    <?php $rowCount6 = $header_voucher_pending_count; ?>
     <?php if (!empty($rowCount6)) { ?>
         <script>
             // Create a style element
@@ -536,7 +551,7 @@ $header_text = $pageTitleHelper->getHeaderText();
     <?php } ?>
 
 
-    <?php $rowCount7 = $fetch_voucher_incoming_data->rowCount(); ?>
+    <?php $rowCount7 = $header_voucher_incoming_count; ?>
     <?php if (!empty($rowCount7)) { ?>
         <script>
             // Create a style element
@@ -556,7 +571,7 @@ $header_text = $pageTitleHelper->getHeaderText();
         </script>
     <?php } ?>
 
-    <?php $rowCount8 = $fetch_voucher_receiving_data->rowCount(); ?>
+    <?php $rowCount8 = $header_voucher_forwarding_count; ?>
     <?php if (!empty($rowCount8)) { ?>
         <script>
             // Create a style element
@@ -574,7 +589,7 @@ $header_text = $pageTitleHelper->getHeaderText();
         </script>
     <?php } ?>
 
-    <?php $rowCount9 = $fetch_voucher_sent_data->rowCount(); ?>
+    <?php $rowCount9 = $header_voucher_sent_count; ?>
     <?php if (!empty($rowCount9)) { ?>
         <script>
             var style = document.createElement('style');

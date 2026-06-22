@@ -16,6 +16,12 @@ function utilities_checklist_invalidate_cache(): void
 
 function utilities_checklist_ensure_schema(PDO $pdo): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS checklist_type_options (
             id INT AUTO_INCREMENT PRIMARY KEY,
