@@ -413,6 +413,24 @@ function utilities_office_set_requires_liaison_first(PDO $pdo, int $officeId, bo
     utilities_office_invalidate_cache();
 }
 
+/**
+ * True when an office hosts its own Liaison Officer (direct child of the processing office).
+ * Nested sub-offices (e.g. PAMO-GMRPLS under CENRO BORONGAN) route to the parent liaison instead.
+ */
+function utilities_office_is_liaison_host(PDO $pdo, ?int $parentOfficeId): bool
+{
+    if ($parentOfficeId === null || $parentOfficeId <= 0) {
+        return true;
+    }
+
+    $parent = utilities_office_find_by_id($pdo, $parentOfficeId);
+    if ($parent === null) {
+        return true;
+    }
+
+    return (int) ($parent['is_processing_office'] ?? 0) === 1;
+}
+
 function utilities_office_enable_liaison_routing(PDO $pdo, string $officeName, ?int $parentOfficeId = null): void
 {
     $officeName = utilities_office_normalize_name($officeName);
@@ -444,7 +462,12 @@ function utilities_office_enable_liaison_routing(PDO $pdo, string $officeName, ?
         utilities_office_set_requires_liaison_first($pdo, $officeId, true);
     }
 
-    utilities_office_register_for_liaison($pdo, $officeName);
+    if (utilities_office_is_liaison_host($pdo, $parentOfficeId)) {
+        utilities_office_register_for_liaison($pdo, $officeName);
+    } else {
+        utilities_office_unregister_from_liaison($pdo, $officeName);
+    }
+
     utilities_office_invalidate_cache();
 }
 
@@ -508,11 +531,19 @@ function utilities_office_fetch_liaison_routing_summary(PDO $pdo): array
             continue;
         }
 
-        $assignees = utilities_office_liaison_assignees($pdo, $name);
+        $liaisonOffice = utilities_office_encoder_liaison_office($pdo, $name);
+        $isNested = $liaisonOffice !== ''
+            && !utilities_signatory_offices_match($liaisonOffice, $name);
+        $assignees = utilities_office_liaison_assignees(
+            $pdo,
+            $isNested ? $liaisonOffice : $name
+        );
         $summary[] = [
             'id' => (int) ($row['id'] ?? 0),
             'office_name' => $name,
             'parent_office_name' => trim((string) ($row['parent_office_name'] ?? '')),
+            'liaison_office_name' => $isNested ? $liaisonOffice : $name,
+            'is_nested' => $isNested,
             'requires_liaison_first' => (int) ($row['requires_liaison_first'] ?? 0) === 1,
             'has_parent' => !empty($row['parent_office_id']),
             'registered_in_designation_limit' => $registered,
@@ -583,6 +614,64 @@ function utilities_office_bootstrap_cenro_liaison_routing(PDO $pdo): void
         }
 
         utilities_office_register_for_liaison($pdo, (string) ($record['office_name'] ?? $targetName));
+    }
+
+    utilities_office_bootstrap_nested_liaison_routing($pdo);
+}
+
+/**
+ * Nested sub-offices route encoders to the Liaison Officer at their parent sub-office.
+ */
+function utilities_office_bootstrap_nested_liaison_routing(PDO $pdo): void
+{
+    $nestedByParent = [
+        'CENRO BORONGAN' => ['PAMO-GMRPLS'],
+    ];
+
+    foreach ($nestedByParent as $parentName => $childNames) {
+        $parent = utilities_office_find_by_name($pdo, $parentName);
+        if ($parent === null) {
+            continue;
+        }
+
+        $parentId = (int) ($parent['id'] ?? 0);
+        if ($parentId <= 0) {
+            continue;
+        }
+
+        foreach ($childNames as $childName) {
+            $record = utilities_office_find_by_name($pdo, $childName);
+            if ($record === null) {
+                continue;
+            }
+
+            $officeId = (int) ($record['id'] ?? 0);
+            if ($officeId <= 0) {
+                continue;
+            }
+
+            $currentParentId = (int) ($record['parent_office_id'] ?? 0);
+            $needsParent = $currentParentId !== $parentId;
+            $needsFlag = (int) ($record['requires_liaison_first'] ?? 0) !== 1;
+
+            if ($needsParent || $needsFlag) {
+                $stmt = $pdo->prepare(
+                    'UPDATE system_offices
+                     SET requires_liaison_first = 1, parent_office_id = :parent_id
+                     WHERE id = :id'
+                );
+                $stmt->execute([
+                    ':parent_id' => $parentId,
+                    ':id' => $officeId,
+                ]);
+                utilities_office_invalidate_cache();
+            }
+
+            utilities_office_unregister_from_liaison(
+                $pdo,
+                (string) ($record['office_name'] ?? $childName)
+            );
+        }
     }
 }
 

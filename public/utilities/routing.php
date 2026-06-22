@@ -130,7 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
                     }
                     utilities_office_invalidate_cache();
-                    $flash = ['type' => 'success', 'msg' => 'Office added. Assign Liaison Officer users to sub-offices in Devtool.'];
+                    $flash = ['type' => 'success', 'msg' => utilities_office_is_liaison_host($pdo, $parentId)
+                        ? 'Office added. Assign Liaison Officer users to sub-offices in Devtool.'
+                        : 'Office added. Encoders there will forward to the Liaison Officer at the parent office.'];
                 }
             } elseif ($action === 'office_update') {
                 $id = (int) ($_POST['id'] ?? 0);
@@ -185,9 +187,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
                         } elseif ($effectiveRequiresLiaison !== 1 && $parentId === null) {
                             utilities_office_disable_liaison_routing($pdo, $officeName);
+                        } elseif ($effectiveRequiresLiaison !== 1 && $parentId !== null) {
+                            utilities_office_unregister_from_liaison($pdo, $officeName);
                         }
                         utilities_office_invalidate_cache();
-                        $flash = ['type' => 'success', 'msg' => 'Office updated.'];
+                        $flash = ['type' => 'success', 'msg' => utilities_office_is_liaison_host($pdo, $parentId)
+                            ? 'Office updated.'
+                            : 'Office updated. Encoders there will forward to the Liaison Officer at the parent office.'];
                     }
                 }
             } elseif ($action === 'liaison_routing_enable') {
@@ -209,7 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     utilities_office_enable_liaison_routing($pdo, $officeName, $parentId);
-                    $flash = ['type' => 'success', 'msg' => 'Liaison-first routing enabled for ' . $officeName . '. Encoders there will forward to the local Liaison Officer.'];
+                    $flash = ['type' => 'success', 'msg' => utilities_office_is_liaison_host($pdo, $parentId)
+                        ? 'Liaison-first routing enabled for ' . $officeName . '. Encoders there will forward to the local Liaison Officer.'
+                        : 'Liaison-first routing enabled for ' . $officeName . '. Encoders there will forward to the Liaison Officer at the parent office.'];
                 }
             } elseif ($action === 'liaison_routing_disable') {
                 $officeId = (int) ($_POST['office_id'] ?? 0);
@@ -873,10 +881,11 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             <section class="util-routing-section">
             <p class="util-section-title">Liaison forwarding offices</p>
             <p class="util-dv-desc">
-                Offices listed here send encoder vouchers to their local <strong>Liaison Officer</strong> first.
-                The Liaison Officer then forwards upstream to <strong>ICU</strong> at the processing office
+                Offices listed here send encoder vouchers to a <strong>Liaison Officer</strong> first.
+                Direct sub-offices (e.g. CENRO DOLORES, CENRO BORONGAN) use their local Liaison Officer, who then
+                forwards upstream to <strong>ICU</strong> at the processing office
                 (<?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'main PENRO', ENT_QUOTES, 'UTF-8') ?>).
-                Example: CENRO DOLORES and CENRO BORONGAN encoders &rarr; local Liaison Officer &rarr; ICU.
+                Nested sub-offices (e.g. PAMO-GMRPLS under CENRO BORONGAN) route to the parent office Liaison Officer first.
             </p>
 
             <div class="util-stats">
@@ -944,10 +953,13 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                                     </div>
                                     <div class="util-liaison-row__flow">
                                         Encoders &rarr; Liaison Officer
+                                        <?php if (!empty($liaisonRow['is_nested'])): ?>
+                                            at <?= htmlspecialchars((string) ($liaisonRow['liaison_office_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        <?php endif; ?>
                                         <?php if ((string) ($liaisonRow['assignee_label'] ?? '') !== 'None assigned'): ?>
                                             (<?= htmlspecialchars((string) ($liaisonRow['assignee_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)
                                         <?php else: ?>
-                                            <span class="util-liaison-row__warn">No Liaison Officer assigned in Devtool</span>
+                                            <span class="util-liaison-row__warn">No Liaison Officer assigned in Devtool<?= !empty($liaisonRow['is_nested']) ? ' at ' . htmlspecialchars((string) ($liaisonRow['liaison_office_name'] ?? 'parent office'), ENT_QUOTES, 'UTF-8') : '' ?></span>
                                         <?php endif; ?>
                                         &rarr; ICU at <?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'processing office', ENT_QUOTES, 'UTF-8') ?>
                                     </div>
@@ -976,7 +988,8 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             <div class="util-office-flow">
                 <strong>Forwarding flow:</strong>
                 Processing office (e.g. <?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'Main PENRO', ENT_QUOTES, 'UTF-8') ?>)
-                &rarr; sub-offices with Liaison Officers &rarr; sub-sub-offices send vouchers to the parent sub-office Liaison,
+                &rarr; sub-offices with Liaison Officers (e.g. CENRO BORONGAN) &rarr; nested sub-offices
+                (e.g. PAMO-GMRPLS) send vouchers to the parent sub-office Liaison Officer first,
                 who then forwards upstream to ICU at the processing office.
             </div>
 
