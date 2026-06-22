@@ -34,3 +34,33 @@ function handler_emit_session_errors(string $sessionKey, string $notifyType = 'e
 
     return true;
 }
+
+/**
+ * Redirect after a handler validation failure with a detailed top-right toast on the destination page.
+ *
+ * @param array<string, mixed> $errors
+ * @return never
+ */
+function handler_redirect_with_errors(
+    array $errors,
+    string $redirectCode,
+    string $prefix = 'Error: ',
+    string $type = 'error',
+    int $notifyMs = 6000
+): void {
+    $parts = [];
+    foreach ($errors as $error) {
+        $text = trim((string) $error);
+        if ($text !== '') {
+            $parts[] = $text;
+        }
+    }
+
+    $detail = implode(' ', $parts);
+    $message = trim($prefix . $detail);
+    if ($message === '' || $message === trim($prefix)) {
+        $message = 'Error: Request failed.';
+    }
+
+    handler_redirect_with_notify($message, $redirectCode, $type, $notifyMs);
+}

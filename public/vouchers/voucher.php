@@ -2246,6 +2246,7 @@ $forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJs
 ?>
 <script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
+<?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
 
 </html>

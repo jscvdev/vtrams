@@ -116,14 +116,12 @@ function update_returned_voucher(object $pdo, string $processing_no, string $act
     return $statement->rowCount() > 0;
 }
 
-function get_processing_no (object $pdo, $processing_no){
-    $query = "SELECT * FROM voucher_tracking WHERE processing_no = :processing_no";
-
+function get_processing_no(object $pdo, $processing_no): bool
+{
+    $query = 'SELECT 1 FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1';
     $statement = $pdo->prepare($query);
-
-    $statement->bindParam(":processing_no",$processing_no);
-
+    $statement->bindParam(':processing_no', $processing_no);
     $statement->execute();
 
-    return $statement->rowCount() > 0;
+    return (bool) $statement->fetchColumn();
 }

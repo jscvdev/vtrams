@@ -2,6 +2,7 @@
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
+    require_once '../../core/components/helpers/handler_session_err_helper.inc.php';
     require_once 'voucher_forward.model.inc.php';
     require_once 'voucher_forward.ctrl.inc.php';
     require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
@@ -134,9 +135,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $combined_remarks = "N/A";
                     }
 
-                    $encoder_office = $voucher_office_from;
-                    if ($encoder_office === '') {
-                        $encoder_office = trim(voucher_post_string($encoded_from ?? ''));
+                    // Resolve encoder office for routing (designation_limit uses office names, not sections).
+                    $encoder_office = trim($voucher_office_from);
+                    $loggedEncoderName = trim((string) ($_SESSION['logged_user_emp_name'] ?? ''));
+                    $postedEncoderName = trim((string) ($encoded_by ?? ''));
+                    if ($postedEncoderName !== '' && $loggedEncoderName !== '' && strcasecmp($postedEncoderName, $loggedEncoderName) === 0) {
+                        $encoder_office = $logged_user_office;
+                    } elseif ($encoder_office === '') {
+                        $encoder_office = trim((string) ($tracking_row['office_from'] ?? ''));
                     }
                     if ($encoder_office === '') {
                         $encoder_office = $logged_user_office;
@@ -283,16 +289,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     //CHECK ANY VALIDATION FAILS ELSE PROCEED TO EXECUTE DATABASE QUERY
                     if ($temp_dump) {
-                        $_SESSION['error_voucher_forward'] = $temp_dump;
-                        echo "<script>process_functionAlert('Forward failed!', '$redirect_code')</script>";
-                        $_SESSION['token'] = generateToken();
-                        die();
+                        handler_redirect_with_errors($temp_dump, $redirect_code, 'Forward failed: ');
                     } else {
                         if (!check_if_voucher_forwarded_exists($pdo, $processing_no)) {
-                            handler_emit_notify('Voucher not found for forwarding.', 'error', 5000);
-                            echo "<script>process_functionAlert('Forward failed!', '$redirect_code')</script>";
-                            $_SESSION['token'] = generateToken();
-                            die();
+                            handler_redirect_with_notify(
+                                'Forward failed: Voucher not found for forwarding.',
+                                $redirect_code,
+                                'error',
+                                6000
+                            );
                         }
 
                         // Get confirmed checklist JSON from POST (store raw JSON)
@@ -448,14 +453,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                     }
                 } else {
-                    // Determine redirect code
                     $redirect_code = 'voucher_pending_forward_redirect';
-                    echo "<script>process_functionAlert('Forward Error: Wrong module used!', '$redirect_code')</script>";
-                    $_SESSION['token'] = generateToken();
-                    die();
+                    handler_redirect_with_notify(
+                        'Forward failed: Wrong module used.',
+                        $redirect_code,
+                        'error',
+                        5000
+                    );
                 }
             } catch (PDOException $e) {
-                echo $e->getMessage();
+                $redirect_code = 'voucher_pending_forward_redirect';
+                handler_redirect_with_notify(
+                    handler_format_transaction_error('Forward failed.', $e),
+                    $redirect_code,
+                    'error',
+                    8000
+                );
             }
 
             $pdo = null;
@@ -464,14 +477,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['token'] = generateToken();
             die();
         } catch (PDOException $e) {
-            echo $e->getMessage();
+            handler_redirect_with_notify(
+                handler_format_transaction_error('Forward failed.', $e),
+                'voucher_pending_forward_redirect',
+                'error',
+                8000
+            );
         }
     } else {
-        // Invalid token
-        $redirect_code = 'voucher_pending_forward_redirect';
-        echo "<script>process_functionAlert('Invalid token!', '$redirect_code')</script>";
-        $_SESSION['token'] = generateToken();
-        die();
+        handler_redirect_with_notify(
+            'Forward failed: Invalid or expired form token. Refresh the page and try again.',
+            'voucher_pending_forward_redirect',
+            'error',
+            6000
+        );
     }
 } else {
     require_once __DIR__ . '/../../../core/components/redirects/redirect_config.inc.php';

@@ -114,9 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($temp_dump) {
-                    $_SESSION['error_dv_encode'] = $temp_dump;
-                    echo "<script>process_functionAlert('Edit failed!', 'voucher_edit_err')</script>";
-                    die();
+                    require_once __DIR__ . '/../../core/components/helpers/handler_session_err_helper.inc.php';
+                    handler_redirect_with_errors($temp_dump, 'voucher_edit_err', 'Edit failed: ');
                 } else {
                     vouchers_amount_ensure_string_column($pdo);
                     $dv_no = voucher_resolve_existing_dv_no($pdo, $processing_no, $dv_no);
