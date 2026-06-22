@@ -9,9 +9,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     require_once '../dbconnection.inc.php';
     require_once '../core/components/security/config_session.inc.php';
+    require_once '../core/components/helpers/user_login_security_helper.inc.php';
     require_once 'login.model.inc.php';
     require_once 'login_errhandler.inc.php';
     require_once 'login.ctrl.inc.php';
+
+    user_login_ensure_schema($pdo);
 
     $emp_id = htmlspecialchars($_POST['emp_id']);
     $password = htmlspecialchars($_POST['password']);
@@ -29,10 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (is_user_incorrect($result)) {
             $temp_dump["login_incorrect"] = "Incorrect login User";
-        }
-
-        if (!is_user_incorrect($result) && is_password_incorrect($password, $result["password"])) {
-            $temp_dump["login_incorrect"] = "Incorrect login Info/Password";
+        } elseif (user_login_is_blocked($result)) {
+            $temp_dump["login_incorrect"] = user_login_blocked_message();
+        } elseif (is_password_incorrect($password, $result["password"])) {
+            $attempts = user_login_record_failed_attempt($pdo, $emp_id);
+            $temp_dump["login_incorrect"] = user_login_failed_password_message($attempts);
         }
 
         if ($temp_dump) {
@@ -41,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             die();
         } else {
             //IF TEMP DUMP IS EMPTY PROCEED TO LOGIN
+            user_login_reset_attempts($pdo, $emp_id);
+
             $newSessionId = session_create_id();
             $sessionId = htmlspecialchars($newSessionId . "_" . $result['id']);
             session_id($sessionId);

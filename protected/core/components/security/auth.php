@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../../dbconnection.inc.php';
 // Reuse existing login module (validation + user fetching)
 require_once __DIR__ . '/../../../login_module/login.model.inc.php';
 require_once __DIR__ . '/../../../login_module/login.ctrl.inc.php';
+require_once __DIR__ . '/../helpers/user_login_security_helper.inc.php';
 
 // Audit helper for logging login events
 require_once __DIR__ . '/../helpers/audit_helper.inc.php';
@@ -34,20 +35,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     try {
+        user_login_ensure_schema($pdo);
+
         // Use login_module's model to get the user from user_group
         $result = get_user($pdo, $emp_id);
 
-        if (is_user_incorrect($result) || is_password_incorrect($password, $result["password"])) {
-            // Log failed login attempt
+        if (is_user_incorrect($result)) {
             AuditHelper::logActivity(
                 'login_failed',
                 "Failed login attempt for employee ID: {$emp_id}",
                 ['emp_id' => $emp_id]
             );
-
             echo json_encode(["status" => "error", "message" => "Invalid credentials"]);
             exit;
         }
+
+        if (user_login_is_blocked($result)) {
+            AuditHelper::logActivity(
+                'login_failed',
+                "Blocked account login attempt for employee ID: {$emp_id}",
+                ['emp_id' => $emp_id]
+            );
+            echo json_encode(["status" => "error", "message" => user_login_blocked_message()]);
+            exit;
+        }
+
+        if (is_password_incorrect($password, $result["password"])) {
+            $attempts = user_login_record_failed_attempt($pdo, $emp_id);
+            AuditHelper::logActivity(
+                'login_failed',
+                "Failed login attempt for employee ID: {$emp_id}",
+                ['emp_id' => $emp_id, 'failed_attempts' => $attempts]
+            );
+
+            echo json_encode([
+                "status" => "error",
+                "message" => user_login_failed_password_message($attempts),
+            ]);
+            exit;
+        }
+
+        user_login_reset_attempts($pdo, $emp_id);
 
         // Regenerate session ID for security; avoid resetting when session is already active
         session_regenerate_id(true);

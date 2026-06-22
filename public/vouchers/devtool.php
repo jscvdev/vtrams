@@ -94,6 +94,7 @@ try {
 
 require_once __DIR__ . '/../../protected/core/components/helpers/udc_generator_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/user_login_security_helper.inc.php';
 $nextUdc = '';
 try {
     $nextUdc = generate_unique_udc($pdo);
@@ -102,6 +103,7 @@ try {
 }
 
 utilities_emp_tag_ensure_schema($pdo);
+user_login_ensure_schema($pdo);
 $emp_tag_options = utilities_emp_tag_fetch_active($pdo);
 $default_emp_tag = utilities_emp_tag_default_value($pdo);
 if (!$emp_tag_options) {
@@ -277,8 +279,10 @@ if (!$emp_tag_options) {
                     <th>UDC</th>
                     <th>Tag</th>
                     <th>Access Level</th>
+                    <th>Status</th>
                     <th>Created At</th>
                     <th>Edit</th>
+                    <th>Unblock</th>
                     <th>Delete</th>
                 </thead>
                 <tr>
@@ -295,11 +299,23 @@ if (!$emp_tag_options) {
                         <td data-label="udc"><?php echo $row['udc']; ?></td>
                         <td data-label="emp_tag"><?php echo htmlspecialchars((string) ($row['emp_tag'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                         <td data-label="acl"><?php echo $row['access_level']; ?></td>
+                        <?php $isBlocked = (int) ($row['is_blocked'] ?? 0) === 1; ?>
+                        <td data-label="status"><?php echo $isBlocked ? 'Blocked' : 'Active'; ?></td>
+                        <td data-label="is_blocked" class="hidden"><?php echo $isBlocked ? '1' : '0'; ?></td>
                         <td data-label="created_at"><?php echo $row['created_at']; ?></td>
 
                         <td data-label="password" class="hidden"><?php echo $row['password']; ?></td>
 
                         <td data-label=""><button class="btn-target btn success popupForm-edit_user" id="btn_edit" name="btn-edit" type="button">Edit</button></td>
+                        <td data-label="Unblock">
+                            <?php if ($isBlocked): ?>
+                                <a onclick="if(!confirm('Unblock this user and reset failed login attempts?')) return false;"
+                                    href="<?php echo '../../protected/handler/devtool_module/unblock_user_module/unblock_user_handler.inc.php?emp_id=' . htmlspecialchars((string) $row['emp_id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    class="btn warning">Unblock</a>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Delete"><a onclick="if(!confirm('Are you sure to delete this user?')) return false;"
                                 href='<?php echo '../../protected/handler/devtool_module/delete_user_module/delete_user_handler.inc.php?deleteid=' . htmlspecialchars($row['emp_id']) . ''; ?>'
                                 class="btn danger">Delete</a></td>
