@@ -610,7 +610,7 @@ if ($showCashierArchiveCol) {
                                     </label>
                                     <label class="return-option-label" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="retract" style="margin-top: 3px;">
-                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset all data as if newly encoded (ORS/DV/ADA, COA, remarks, and process history cleared).</span></span>
+                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset data for re-use.</span></span>
                                     </label>
                                 </div>
                             </div>
@@ -760,17 +760,17 @@ if ($showCashierArchiveCol) {
             }
         </style>
         <?php if ($isLiaisonOfficer) : ?>
-        <div class="voucher-bulk-forward-bar is-visible" id="voucherBulkForwardBar">
-            <label>
-                <input type="checkbox" id="voucherBulkSelectAll" aria-label="Select all vouchers on this page">
-                Select all on page
-            </label>
-            <button type="button" class="voucher-bulk-forward-btn" id="voucherBulkForwardBtn">
-                <i class="ri-share-forward-line" aria-hidden="true"></i>
-                Forward Selected
-            </button>
-            <span class="voucher-bulk-forward-status" id="voucherBulkForwardStatus"></span>
-        </div>
+            <div class="voucher-bulk-forward-bar is-visible" id="voucherBulkForwardBar">
+                <label>
+                    <input type="checkbox" id="voucherBulkSelectAll" aria-label="Select all vouchers on this page">
+                    Select all on page
+                </label>
+                <button type="button" class="voucher-bulk-forward-btn" id="voucherBulkForwardBtn">
+                    <i class="ri-share-forward-line" aria-hidden="true"></i>
+                    Forward Selected
+                </button>
+                <span class="voucher-bulk-forward-status" id="voucherBulkForwardStatus"></span>
+            </div>
         <?php endif; ?>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
@@ -1245,7 +1245,9 @@ if ($showCashierArchiveCol) {
             bulkSelectAllEl.indeterminate = false;
             return;
         }
-        const checkedCount = boxes.filter(function(cb) { return cb.checked; }).length;
+        const checkedCount = boxes.filter(function(cb) {
+            return cb.checked;
+        }).length;
         bulkSelectAllEl.checked = checkedCount === boxes.length && boxes.length > 0;
         bulkSelectAllEl.indeterminate = false;
     }
@@ -1253,8 +1255,12 @@ if ($showCashierArchiveCol) {
     function selectedBulkProcessingNos() {
         if (!isLiaisonOfficer) return [];
         return Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-select:checked'))
-            .map(function(cb) { return String(cb.value || '').trim(); })
-            .filter(function(pn) { return pn !== ''; });
+            .map(function(cb) {
+                return String(cb.value || '').trim();
+            })
+            .filter(function(pn) {
+                return pn !== '';
+            });
     }
 
     function setBulkForwardStatus(message) {
@@ -1278,17 +1284,22 @@ if ($showCashierArchiveCol) {
             if (bulkForwardBtn) bulkForwardBtn.disabled = true;
             setBulkForwardStatus('Forwarding…');
             fetch(bulkForwardUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token: window.bulkForwardToken || bulkForwardToken,
-                    processing_nos: processingNos
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token: window.bulkForwardToken || bulkForwardToken,
+                        processing_nos: processingNos
+                    })
                 })
-            })
                 .then(function(r) {
                     return r.json().then(function(payload) {
-                        return { ok: r.ok, payload: payload };
+                        return {
+                            ok: r.ok,
+                            payload: payload
+                        };
                     });
                 })
                 .then(function(res) {
@@ -2045,9 +2056,9 @@ if ($showCashierArchiveCol) {
                 }
 
                 if (canEditAmount) {
-                    document.getElementById("form_title").textContent = canEditDetails
-                        ? "Edit Voucher"
-                        : "Edit Amount";
+                    document.getElementById("form_title").textContent = canEditDetails ?
+                        "Edit Voucher" :
+                        "Edit Amount";
 
                     if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                     if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
