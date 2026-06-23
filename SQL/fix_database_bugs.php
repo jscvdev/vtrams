@@ -4,6 +4,7 @@
  *   1) Ensure user_group login lockout columns (is_blocked, failed_login_attempts)
  *   2) Decode HTML entities: &amp; → & in all string/text columns (voucher tables + user_group)
  *   3) Normalize process_history section labels MSD / Accounting → ACCOUNTING (target employees)
+ *   4) Sync dv_entries editable voucher fields from voucher_tracking / voucher_archives
  *
  * Usage (CLI, from project root):
  *   php SQL/fix_database_bugs.php           # dry-run (preview only)
@@ -18,6 +19,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../protected/dbconnection.inc.php';
 require_once __DIR__ . '/../protected/core/components/helpers/user_login_security_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../protected/core/components/helpers/amount_helper.inc.php';
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
     die("Error: Database connection not available. Check protected/dbconnection.inc.php\n");
@@ -367,6 +370,250 @@ function run_process_history_fix(PDO $pdo, bool $apply, array $tables, array $ta
     return ['rows' => $grandRows, 'lines' => $grandLines];
 }
 
+/** @return array<string, list<string>> dv_entries column => source tables (matches voucher.php editable inputs) */
+function dv_sync_field_sources(): array
+{
+    return [
+        'payee' => ['voucher_tracking', 'voucher_archives'],
+        'address' => ['voucher_tracking', 'voucher_archives'],
+        'voucher_date' => ['voucher_tracking', 'voucher_archives'],
+        'tin_employee_no' => ['voucher_archives', 'voucher_tracking'],
+        'particulars' => ['voucher_tracking', 'voucher_archives'],
+        'amount' => ['voucher_tracking', 'voucher_archives'],
+        'voucher_type' => ['voucher_tracking', 'voucher_archives'],
+    ];
+}
+
+function column_exists(PDO $pdo, string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?'
+    );
+    $stmt->execute([$table, $column]);
+    $cache[$key] = (int) $stmt->fetchColumn() > 0;
+
+    return $cache[$key];
+}
+
+/** @param array<string, list<string>> $fieldSources @param array<string, array<string, bool>> $columnExists */
+function dv_sync_pick_source_value(
+    string $field,
+    array $fieldSources,
+    array $columnExists,
+    ?array $trackingRow,
+    ?array $archivesRow
+): string {
+    $candidates = [];
+    foreach ($fieldSources[$field] ?? [] as $table) {
+        if (!($columnExists[$table][$field] ?? false)) {
+            continue;
+        }
+        $row = $table === 'voucher_tracking' ? $trackingRow : $archivesRow;
+        if ($row === null) {
+            continue;
+        }
+        $candidates[] = trim((string) ($row[$field] ?? ''));
+    }
+
+    if ($candidates === []) {
+        return '';
+    }
+
+    return voucher_pick_field(...$candidates);
+}
+
+function dv_sync_normalize_compare_value(string $field, string $value): string
+{
+    if ($field === 'amount') {
+        return ensure_amount_two_decimals($value);
+    }
+
+    return trim($value);
+}
+
+function dv_sync_should_update_field(string $field, string $current, string $source): bool
+{
+    if ($source === '') {
+        return false;
+    }
+
+    return $current !== $source;
+}
+
+function run_dv_entries_sync_fix(PDO $pdo, bool $apply): array
+{
+    $updatedRows = 0;
+    $updatedFields = 0;
+    $skippedNoSource = 0;
+
+    out('');
+    out('Fix 4: sync dv_entries voucher.php fields from voucher_tracking / voucher_archives');
+    out('Fields: payee, address, voucher_date, tin_employee_no, particulars, amount, voucher_type');
+    out(str_repeat('-', 72));
+
+    if (!table_exists($pdo, 'dv_entries')) {
+        out('Skip dv_entries: table not found.');
+
+        return ['rows' => 0, 'fields' => 0, 'skipped' => 0];
+    }
+
+    $hasTracking = table_exists($pdo, 'voucher_tracking');
+    $hasArchives = table_exists($pdo, 'voucher_archives');
+    if (!$hasTracking && !$hasArchives) {
+        out('Skip: neither voucher_tracking nor voucher_archives found.');
+
+        return ['rows' => 0, 'fields' => 0, 'skipped' => 0];
+    }
+
+    $fieldSources = dv_sync_field_sources();
+    $columnExists = [
+        'voucher_tracking' => [],
+        'voucher_archives' => [],
+    ];
+    foreach ($fieldSources as $field => $sources) {
+        foreach ($sources as $table) {
+            if (!isset($columnExists[$table][$field])) {
+                $columnExists[$table][$field] = column_exists($pdo, $table, $field);
+            }
+        }
+    }
+
+    $deColumns = [];
+    foreach (array_keys($fieldSources) as $field) {
+        $deColumns[$field] = column_exists($pdo, 'dv_entries', $field);
+    }
+
+    $selectParts = ['de.id AS de_id', 'de.processing_no'];
+    foreach (array_keys($fieldSources) as $field) {
+        if ($deColumns[$field]) {
+            $selectParts[] = "de.`{$field}` AS de_{$field}";
+        }
+        if ($hasTracking && ($columnExists['voucher_tracking'][$field] ?? false)) {
+            $selectParts[] = "vt.`{$field}` AS vt_{$field}";
+        }
+        if ($hasArchives && ($columnExists['voucher_archives'][$field] ?? false)) {
+            $selectParts[] = "va.`{$field}` AS va_{$field}";
+        }
+    }
+
+    $joinTracking = $hasTracking ? 'LEFT JOIN voucher_tracking vt ON vt.processing_no = de.processing_no' : '';
+    $joinArchives = $hasArchives ? 'LEFT JOIN voucher_archives va ON va.processing_no = de.processing_no' : '';
+    $sql = 'SELECT ' . implode(', ', $selectParts) . '
+            FROM dv_entries de
+            ' . $joinTracking . '
+            ' . $joinArchives . '
+            ORDER BY de.processing_no';
+
+    $stmt = $pdo->query($sql);
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+    foreach ($rows as $row) {
+        $processingNo = trim((string) ($row['processing_no'] ?? ''));
+        if ($processingNo === '') {
+            continue;
+        }
+
+        $trackingRow = null;
+        $archivesRow = null;
+        if ($hasTracking) {
+            $trackingRow = [];
+            foreach (array_keys($fieldSources) as $field) {
+                $key = "vt_{$field}";
+                if (array_key_exists($key, $row)) {
+                    $trackingRow[$field] = $row[$key];
+                }
+            }
+            if ($trackingRow === []) {
+                $trackingRow = null;
+            } elseif (!array_filter($trackingRow, static fn($v): bool => trim((string) $v) !== '')) {
+                $trackingRow = null;
+            }
+        }
+        if ($hasArchives) {
+            $archivesRow = [];
+            foreach (array_keys($fieldSources) as $field) {
+                $key = "va_{$field}";
+                if (array_key_exists($key, $row)) {
+                    $archivesRow[$field] = $row[$key];
+                }
+            }
+            if ($archivesRow === []) {
+                $archivesRow = null;
+            } elseif (!array_filter($archivesRow, static fn($v): bool => trim((string) $v) !== '')) {
+                $archivesRow = null;
+            }
+        }
+
+        if ($trackingRow === null && $archivesRow === null) {
+            $skippedNoSource++;
+            continue;
+        }
+
+        $changes = [];
+        foreach ($fieldSources as $field => $sources) {
+            if (!$deColumns[$field]) {
+                continue;
+            }
+
+            $current = dv_sync_normalize_compare_value(
+                $field,
+                (string) ($row["de_{$field}"] ?? '')
+            );
+            $source = dv_sync_normalize_compare_value(
+                $field,
+                dv_sync_pick_source_value($field, $fieldSources, $columnExists, $trackingRow, $archivesRow)
+            );
+
+            if (!dv_sync_should_update_field($field, $current, $source)) {
+                continue;
+            }
+
+            $changes[$field] = $source;
+        }
+
+        if ($changes === []) {
+            continue;
+        }
+
+        $fieldList = implode(', ', array_keys($changes));
+        out("  dv_entries#{$row['de_id']} ({$processingNo}): " . $fieldList);
+        $updatedRows++;
+        $updatedFields += count($changes);
+
+        if ($apply) {
+            $setParts = [];
+            foreach ($changes as $field => $value) {
+                $setParts[] = "`{$field}` = :{$field}";
+            }
+            $update = $pdo->prepare(
+                'UPDATE dv_entries SET ' . implode(', ', $setParts) . ' WHERE id = :id'
+            );
+            foreach ($changes as $field => $value) {
+                $update->bindValue(':' . $field, $value, PDO::PARAM_STR);
+            }
+            $update->bindValue(':id', (int) $row['de_id'], PDO::PARAM_INT);
+            $update->execute();
+        }
+    }
+
+    out("dv_entries: {$updatedRows} row(s), {$updatedFields} field update(s)" . ($updatedRows ? '' : ' (no changes)'));
+    if ($skippedNoSource > 0) {
+        out("Skipped {$skippedNoSource} dv_entries row(s) with no matching tracking/archive data.");
+    }
+
+    return ['rows' => $updatedRows, 'fields' => $updatedFields, 'skipped' => $skippedNoSource];
+}
+
 if (!$isCli) {
     header('Content-Type: text/html; charset=utf-8');
     echo '<pre style="font-family:monospace">';
@@ -387,6 +634,7 @@ try {
     run_schema_fix($pdo, $apply);
     $ampStats = run_amp_fix($pdo, $apply, $ampTables, $ampSearch, $ampReplace);
     $historyStats = run_process_history_fix($pdo, $apply, $processHistoryTables, $targetNames);
+    $dvSyncStats = run_dv_entries_sync_fix($pdo, $apply);
 
     if ($apply) {
         $pdo->commit();
@@ -394,11 +642,13 @@ try {
         out('Done.');
         out('  &amp; fix: ' . $ampStats['cells'] . ' column(s), ' . $ampStats['rows'] . ' cell update(s)');
         out('  process_history: ' . $historyStats['rows'] . ' row(s), ' . $historyStats['lines'] . ' line(s)');
+        out('  dv_entries sync: ' . $dvSyncStats['rows'] . ' row(s), ' . $dvSyncStats['fields'] . ' field update(s)');
     } else {
         out(str_repeat('=', 72));
         out('Preview complete.');
         out('  &amp; fix: would update ' . $ampStats['cells'] . ' column(s), ' . $ampStats['rows'] . ' cell(s)');
         out('  process_history: would update ' . $historyStats['rows'] . ' row(s), ' . $historyStats['lines'] . ' line(s)');
+        out('  dv_entries sync: would update ' . $dvSyncStats['rows'] . ' row(s), ' . $dvSyncStats['fields'] . ' field(s)');
         out('Re-run with --apply (CLI) or ?apply=1 (browser) to save.');
     }
 } catch (Throwable $e) {
