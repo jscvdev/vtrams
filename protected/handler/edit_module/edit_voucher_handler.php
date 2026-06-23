@@ -3,6 +3,7 @@
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     $keyList = array(
         "processing_no",
@@ -52,8 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $office_from = '';
     }
 
-    $ors_no = "TBD";
-    $ada_check_no = "TBD";
+    $encoded_from = voucher_post_string($_POST['encoded_from'] ?? '');
+    $datetime_encoded = voucher_post_string($_POST['datetime_encoded'] ?? '');
+
+    $identifiers = voucher_fetch_identifiers($pdo, $processing_no);
+    $ors_no = voucher_pick_field($identifiers['ors_no'] ?? '', 'TBD');
+    $ada_check_no = voucher_pick_field($identifiers['ada_check_no'] ?? '', 'TBD');
+    if ($ors_no === '') {
+        $ors_no = 'TBD';
+    }
+    if ($ada_check_no === '') {
+        $ada_check_no = 'TBD';
+    }
     $office_to = "";
 
     try {
@@ -168,12 +179,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                         }
                         try {
-                            insert_dv_entry(
+                            sync_dv_entry_after_voucher_edit(
                                 $pdo,
                                 $processing_no,
-                                $dv_no,
-                                $ada_check_no,
-                                $ors_no,
                                 $payee,
                                 $address,
                                 $tin_employee_no,
@@ -181,13 +189,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $amount,
                                 $voucher_type,
                                 $particulars,
-                                $datetime_action,
-                                $action_from,
                                 $encoded_by,
-                                $office_from
+                                $office_from,
+                                $encoded_from,
+                                $datetime_encoded
                             );
                         } catch (Throwable $e) {
-                            error_log('dv_entries upsert after edit failed: ' . $e->getMessage());
+                            error_log('dv_entries sync after edit failed: ' . $e->getMessage());
                         }
                         voucher_log_user_action(
                             $pdo,

@@ -450,6 +450,111 @@ function sync_voucher_tracking_after_edit(
 }
 
 /**
+ * Keep dv_entries aligned when a pending voucher is edited (voucher.php Edit).
+ * Updates editable fields on an existing row; inserts when none exists yet.
+ */
+function sync_dv_entry_after_voucher_edit(
+    object $pdo,
+    string $processing_no,
+    string $payee,
+    string $address,
+    string $tin_employee_no,
+    string $voucher_date,
+    string $amount,
+    string $voucher_type,
+    string $particulars,
+    string $encoded_by,
+    string $office_from,
+    string $encoded_from = '',
+    string $datetime_encoded = ''
+): bool {
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return false;
+    }
+
+    ensure_dv_entries_table($pdo);
+    $amount = ensure_amount_two_decimals($amount);
+
+    $existsStmt = $pdo->prepare('SELECT 1 FROM dv_entries WHERE processing_no = :processing_no LIMIT 1');
+    $existsStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $existsStmt->execute();
+    $exists = (bool) $existsStmt->fetchColumn();
+
+    if ($exists) {
+        $sql = 'UPDATE dv_entries SET
+            payee = :payee,
+            address = :address,
+            tin_employee_no = :tin_employee_no,
+            amount = :amount,
+            voucher_type = :voucher_type,
+            voucher_date = :voucher_date,
+            particulars = :particulars,
+            encoded_by = :encoded_by,
+            office_from = :office_from
+            WHERE processing_no = :processing_no';
+
+        $statement = $pdo->prepare($sql);
+        $statement->bindValue(':payee', $payee, PDO::PARAM_STR);
+        $statement->bindValue(':address', $address, PDO::PARAM_STR);
+        $statement->bindValue(':tin_employee_no', $tin_employee_no, PDO::PARAM_STR);
+        $statement->bindValue(':amount', $amount, PDO::PARAM_STR);
+        $statement->bindValue(':voucher_type', $voucher_type, PDO::PARAM_STR);
+        $statement->bindValue(':voucher_date', $voucher_date, PDO::PARAM_STR);
+        $statement->bindValue(':particulars', $particulars, PDO::PARAM_STR);
+        $statement->bindValue(':encoded_by', $encoded_by, PDO::PARAM_STR);
+        $statement->bindValue(':office_from', $office_from, PDO::PARAM_STR);
+        $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $statement->execute();
+
+        return true;
+    }
+
+    $identifiers = voucher_fetch_identifiers($pdo, $processing_no);
+    $dv_no = voucher_resolve_existing_dv_no($pdo, $processing_no, '');
+    $ors_no = voucher_pick_field($identifiers['ors_no'] ?? '', 'TBD');
+    $ada_check_no = voucher_pick_field($identifiers['ada_check_no'] ?? '', 'TBD');
+    if ($ors_no === '') {
+        $ors_no = 'TBD';
+    }
+    if ($ada_check_no === '') {
+        $ada_check_no = 'TBD';
+    }
+
+    $final_encoded_from = trim($encoded_from);
+    if ($final_encoded_from === '') {
+        $final_encoded_from = trim((string) ($_SESSION['logged_user_section'] ?? ''));
+    }
+
+    $final_datetime_encoded = trim($datetime_encoded);
+    if ($final_datetime_encoded === '') {
+        date_default_timezone_set('Asia/Singapore');
+        $final_datetime_encoded = date('Y-m-d H:i:s');
+    }
+
+    return insert_dv_entry(
+        $pdo,
+        $processing_no,
+        $dv_no,
+        $ada_check_no,
+        $ors_no,
+        $payee,
+        $address,
+        $tin_employee_no,
+        $voucher_date,
+        $amount,
+        $voucher_type,
+        $particulars,
+        $final_datetime_encoded,
+        $final_encoded_from,
+        $encoded_by,
+        $office_from
+    );
+}
+
+/**
  * Mirror address, particulars, and voucher_date on voucher_tracking.
  */
 function sync_voucher_tracking_details(
