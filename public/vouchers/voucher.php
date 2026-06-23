@@ -36,6 +36,13 @@ if (empty($_SESSION['logged_user_emp_name']) && !empty($_SESSION['logged_user_em
 // Store logged user name for JavaScript
 $logged_user_name = htmlspecialchars($_SESSION['logged_user_emp_name'] ?? '', ENT_QUOTES, 'UTF-8');
 
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+utilities_office_ensure_schema($pdo);
+$logged_user_office_for_encode = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+$encoder_forwards_to_icu = $logged_user_office_for_encode !== ''
+    && voucher_forward_encoder_default_target($pdo, $logged_user_office_for_encode, '') === 'ICU';
+
 function session_contains_phrase($phrase)
 {
     foreach ($_SESSION as $key => $value) {
@@ -985,6 +992,11 @@ function session_contains_phrase($phrase)
                 }
             }
 
+            if (!needsTarget && window.__encoderForwardsToIcu) {
+                designation = '';
+                label = 'ICU';
+            }
+
             if (hidden) {
                 hidden.value = designation;
             }
@@ -992,7 +1004,9 @@ function session_contains_phrase($phrase)
                 display.value = label;
             }
             if (container) {
-                container.style.display = needsTarget && (designation || label) ? '' : 'none';
+                container.style.display = (needsTarget && (designation || label)) || (!needsTarget && window.__encoderForwardsToIcu)
+                    ? ''
+                    : 'none';
             }
         }
 
@@ -2289,6 +2303,7 @@ function session_contains_phrase($phrase)
 <script>
     // Expose logged user name to external scripts (safe JSON encoding)
     window.__loggedUserEmpName = <?php echo json_encode($_SESSION['logged_user_emp_name'] ?? $logged_user_name ?? ''); ?>;
+    window.__encoderForwardsToIcu = <?php echo json_encode($encoder_forwards_to_icu); ?>;
 </script>
 <?php
 $forwardSlipJsPath = __DIR__ . '/../../protected/js/forward_slip.js';

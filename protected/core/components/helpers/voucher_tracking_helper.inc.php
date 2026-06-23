@@ -1476,7 +1476,7 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
  * Default forward target for encoders based on designation_limit office registration.
  * CENRO / liaison-assigned offices are routed via voucher_encoder_forwards_to_liaison_first().
  * eNGP vouchers → Conservation & Development Section when registered for the office.
- * Other PENRO vouchers → Planning Section when registered.
+ * Other PENRO vouchers at the processing office → ICU when Planning Section is registered.
  */
 function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office, string $voucher_type = ''): string
 {
@@ -1498,7 +1498,7 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
     }
 
     if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')) {
-        return 'Planning Section';
+        return 'ICU';
     }
 
     return '';

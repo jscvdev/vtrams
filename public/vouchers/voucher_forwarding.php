@@ -408,8 +408,9 @@ if ($showCashierArchiveCol) {
                                     <?php else : ?>
                                         <option value="" disabled selected>Please Select</option>
                                         <?php if (in_array("ICU", $target, true)) : ?>
+                                            <option value='Budget Unit'>Budget Unit</option>
                                             <option value='Accounting Unit'>Accounting Unit</option>
-                                            <option value='Accountant III' class="processed">Chief Accountant</option>
+                                            <option value='Planning Section'>Planning Section</option>
                                         <?php elseif (in_array("Planning Section", $target)) : ?>
                                             <option value='Budget Unit'>Budget Unit</option>
                                             <?php if (!in_array("Planning Section Chief", $target)) : ?>
@@ -875,6 +876,7 @@ if ($showCashierArchiveCol) {
                             $rolePlanning      = in_array("Planning Section", $target);
                             $rolePlanningChief = in_array("Planning Section Chief", $target);
                             $roleOfficePenro   = in_array("Office of the PENRO", $target);
+                            $roleIcu           = in_array("ICU", $target, true);
                             ?>
 
                             <?php if ($showEditCol) : ?>
@@ -916,6 +918,8 @@ if ($showCashierArchiveCol) {
                                         }
                                     }
                                 }
+                            } elseif ($roleIcu && $treatAsSameOfficeWorkflow && !$upstreamRoutingComplete && $showForwardCol && !$roleCashiers) {
+                                $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
                             } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
                                     if ($processProcessed && $roleAccountantIII) {
@@ -1439,6 +1443,16 @@ if ($showCashierArchiveCol) {
 
     function applyForwardingDestinationOptions(voucherType, processHistory) {
         if (!docToSelect || isLiaisonOfficer) {
+            return;
+        }
+
+        if (targetArray2.includes('ICU')) {
+            docToSelect.innerHTML = '' +
+                '<option value="" disabled selected>Please Select</option>' +
+                '<option value="Budget Unit">Budget Unit</option>' +
+                '<option value="Accounting Unit">Accounting Unit</option>' +
+                '<option value="Planning Section">Planning Section</option>';
+            docToSelect.value = '';
             return;
         }
 
