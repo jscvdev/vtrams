@@ -471,6 +471,10 @@ if ($showCashierArchiveCol) {
                                 <label for="">Amount</label>
                                 <input type="text" name="string_amount" class="string_amount form-custom-input" id="string_amount" placeholder="Amount" required readonly>
                                 <input type="hidden" name="amount" class="amount" id="int_amount" value="1">
+                                <div class="label-input__container number-input original_charged_container" style="display: none; margin-top: 4px;">
+                                    <label for="">Original Amount</label>
+                                    <input type="text" name="original_string_amount" class="original_string_amount form-custom-input" id="original_string_amount" placeholder="Original Amount" readonly>
+                                </div>
                             </div>
                             <div class="label-input__container number-input charged_amount_container" style="display: none;">
                                 <label for="">Charged Amount (Edited)</label>
@@ -1610,6 +1614,9 @@ if ($showCashierArchiveCol) {
             var el = document.getElementById(id);
             if (el) {
                 el.readOnly = true;
+                if (id === 'address') {
+                    el.setAttribute('required', 'required');
+                }
             }
         });
         var particularsEl = document.getElementById('particulars');
@@ -1624,6 +1631,9 @@ if ($showCashierArchiveCol) {
             var el = document.getElementById(id);
             if (el) {
                 el.readOnly = false;
+                if (id === 'address') {
+                    el.removeAttribute('required');
+                }
             }
         });
         var particularsEl = document.getElementById('particulars');
@@ -1657,7 +1667,7 @@ if ($showCashierArchiveCol) {
             // Extract data from the row
             var processing_no = row.querySelector('[data-label="processing_no"]').textContent;
             var ors_no = row.querySelector('[data-label="ors_no"]').textContent;
-            var dv_no = row.querySelector('[data-label="dv_no"]').textContent;
+            var dv_no = (row.querySelector('[data-label="dv_no"]')?.textContent || '').trim();
             var ada_check_no = row.querySelector('[data-label="ada_check_no"]').textContent;
             var payee = row.querySelector('[data-label="payee"]').textContent;
             var address = row.querySelector('[data-label="address"]').textContent;
@@ -1986,6 +1996,18 @@ if ($showCashierArchiveCol) {
                     input.style.display = 'none';
                 });
 
+                var addressEl = document.getElementById('address');
+                if (addressEl) {
+                    addressEl.removeAttribute('required');
+                }
+                var dvInput = document.getElementById('dv_no');
+                if (dvInput) {
+                    dvInput.required = false;
+                    if (targetArray2.includes('Accounting Unit') || targetArray2.includes('Processor')) {
+                        dvInput.readOnly = false;
+                    }
+                }
+
                 const amountPrimaryBlock = document.querySelector('.amount_primary_block');
                 const originalContainer = document.querySelector('.original_charged_container');
                 const chargedContainer = document.querySelector('.charged_amount_container');
@@ -2046,6 +2068,31 @@ if ($showCashierArchiveCol) {
             }
         });
     });
+
+    (function() {
+        const form = document.getElementById('myForm_Forwarding');
+        if (!form) return;
+
+        form.addEventListener('submit', function() {
+            const actionButton = document.querySelector('.btn-dynamic');
+            const actionName = actionButton ? actionButton.getAttribute('name') : '';
+            if (actionName !== 'edit_voucher_amount') {
+                return;
+            }
+
+            const intAmount = document.getElementById('int_amount');
+            const chargedInput = document.getElementById('charged_string_amount');
+            if (chargedInput && intAmount && !chargedInput.disabled) {
+                syncAmountFields(chargedInput.value, intAmount);
+                return;
+            }
+
+            const stringInput = document.getElementById('string_amount');
+            if (stringInput && intAmount) {
+                syncAmountFields(stringInput.value, intAmount);
+            }
+        });
+    })();
 </script>
 
 <!-- History / Remarks Modal -->

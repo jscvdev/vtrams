@@ -107,8 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($canEditVoucherAmount) {
                         $variables_to_check['amount'] = $amount;
-                    } else {
-                        $variables_to_check['address'] = $address;
+                    } elseif ($canEditVoucherDetails) {
                         $variables_to_check['voucher_date'] = $voucher_date;
                     }
 
@@ -149,6 +148,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $action,
                                 $datetime_action
                             );
+                        }
+
+                        $canEditDvNo = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
+                            || voucher_user_has_designation($editAmountDesignations, 'Processor');
+                        if ($canEditDvNo) {
+                            $dvTrim = trim((string) $dv_no);
+                            if ($dvTrim !== '' && strtoupper($dvTrim) !== 'TBD') {
+                                update_voucher_dv_no($pdo, $dvTrim, $processing_no);
+                                voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dvTrim, $ada_check_no);
+                                $dv_no = $dvTrim;
+                            }
                         }
 
                         if ($canEditVoucherAmount) {
