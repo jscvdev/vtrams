@@ -83,6 +83,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $action_from = $_SESSION['logged_user_section'];
                 $action_by = $_SESSION['logged_user_emp_name'];
 
+                $trackingStatusForSync = $action;
+                $trackingRow = voucher_tracking_fetch_by_processing_no($pdo, $processing_no);
+                $returnedByForForward = voucher_tracking_resolve_returned_by(
+                    (string) ($trackingRow['voucher_status'] ?? ''),
+                    (string) ($trackingRow['process_history'] ?? '')
+                );
+                if ($returnedByForForward !== '') {
+                    // Keep return routing until the encoder re-forwards (edit should not reset Forward To).
+                    $trackingStatusForSync = 'Returned by: ' . $returnedByForForward;
+                }
+
                 $variables_to_check = [
                     'processing_no' => $processing_no,
                     'payee' => $payee,
@@ -154,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $amount,
                             $voucher_type,
                             $voucher_date,
-                            $action,
+                            $trackingStatusForSync,
                             $datetime_action
                         )) {
                             voucher_log_to_document_tracking(

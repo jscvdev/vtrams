@@ -997,6 +997,14 @@ function session_contains_phrase($phrase)
                 label = 'ICU';
             }
 
+            if (!needsTarget && row) {
+                var specialAccessTarget = String(row.special_access_forward_target || '').trim();
+                if (specialAccessTarget) {
+                    designation = specialAccessTarget;
+                    label = specialAccessTarget;
+                }
+            }
+
             if (hidden) {
                 hidden.value = designation;
             }
@@ -1004,9 +1012,9 @@ function session_contains_phrase($phrase)
                 display.value = label;
             }
             if (container) {
-                container.style.display = (needsTarget && (designation || label)) || (!needsTarget && window.__encoderForwardsToIcu)
-                    ? ''
-                    : 'none';
+                var showForwardTarget = (needsTarget && (designation || label))
+                    || (!needsTarget && label);
+                container.style.display = showForwardTarget ? '' : 'none';
             }
         }
 

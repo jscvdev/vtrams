@@ -130,8 +130,16 @@ try {
         $row['forward_return_designation'] = $returnTarget['designation'];
         $row['forward_return_label'] = $returnTarget['label'];
         $row['forward_return_office'] = $returnTarget['office'];
+        $row['special_access_forward_target'] = voucher_special_access_forward_target(
+            $pdo,
+            (string) ($row['voucher_type'] ?? '')
+        );
         $row['needs_return_forward_target'] = voucher_tracking_needs_return_forward(
-            ['active_status' => $row['active_status'], 'voucher_status' => $row['tracking_voucher_status']],
+            [
+                'active_status' => $row['active_status'],
+                'voucher_status' => $row['tracking_voucher_status'],
+                'process_history' => $row['tracking_process_history'] ?? '',
+            ],
             (string) ($row['tracking_voucher_status'] ?? ''),
             $encodedBy
         );

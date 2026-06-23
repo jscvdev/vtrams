@@ -337,6 +337,35 @@ function voucher_tracking_history_last_return_office(string $process_history): s
     return $lastOffice;
 }
 
+/** Name from the most recent "Returned by" line in process_history. */
+function voucher_tracking_parse_last_returned_by_from_history(string $process_history): string
+{
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    $lastReturnedBy = '';
+    foreach ($lines as $line) {
+        if (stripos((string) ($line['action'] ?? ''), 'Returned by') === false) {
+            continue;
+        }
+        $name = trim((string) ($line['name'] ?? ''));
+        if ($name !== '') {
+            $lastReturnedBy = $name;
+        }
+    }
+
+    return $lastReturnedBy;
+}
+
+/** Resolve who returned the voucher from voucher_status and/or process_history. */
+function voucher_tracking_resolve_returned_by(?string $voucher_status, string $process_history = ''): string
+{
+    $returnedBy = voucher_tracking_parse_returned_by($voucher_status);
+    if ($returnedBy !== '') {
+        return $returnedBy;
+    }
+
+    return voucher_tracking_parse_last_returned_by_from_history($process_history);
+}
+
 /**
  * Resolve forward target when re-forwarding a returned voucher.
  *
@@ -348,7 +377,7 @@ function voucher_tracking_return_forward_target(
     string $process_history = ''
 ): array {
     $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
-    $returnedBy = voucher_tracking_parse_returned_by($tracking_voucher_status);
+    $returnedBy = voucher_tracking_resolve_returned_by($tracking_voucher_status, $process_history);
     if ($returnedBy === '') {
         return $empty;
     }
@@ -440,12 +469,17 @@ function voucher_tracking_resolve_return_forward_target(
     string $process_history = ''
 ): array {
     $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
-    if (voucher_tracking_parse_returned_by($tracking_voucher_status) !== '') {
-        if (voucher_tracking_is_self_return($tracking_voucher_status, $logged_user_name)) {
+    $returnedBy = voucher_tracking_resolve_returned_by($tracking_voucher_status, $process_history);
+    if ($returnedBy !== '') {
+        if (voucher_tracking_is_self_return('Returned by: ' . $returnedBy, $logged_user_name)) {
             return $empty;
         }
 
-        return voucher_tracking_return_forward_target($pdo, $tracking_voucher_status, $process_history);
+        $statusForTarget = voucher_tracking_parse_returned_by($tracking_voucher_status) !== ''
+            ? (string) $tracking_voucher_status
+            : ('Returned by: ' . $returnedBy);
+
+        return voucher_tracking_return_forward_target($pdo, $statusForTarget, $process_history);
     }
 
     $encodedFrom = trim((string) $encoded_from);
@@ -1409,16 +1443,23 @@ function voucher_tracking_needs_return_forward(
         $status = (string) ($tracking_row['voucher_status'] ?? '');
     }
 
-    if (voucher_tracking_is_self_return($status, $logged_user_name)) {
-        return false;
+    $processHistory = trim((string) (($tracking_row ?? [])['process_history'] ?? ''));
+    $returnedBy = voucher_tracking_resolve_returned_by($status, $processHistory);
+
+    if ($returnedBy !== '') {
+        if (voucher_tracking_is_self_return('Returned by: ' . $returnedBy, $logged_user_name)) {
+            return false;
+        }
+
+        return true;
     }
 
-    $active = voucher_tracking_normalize_active_status((string) ($tracking_row['active_status'] ?? ''));
+    $active = voucher_tracking_normalize_active_status((string) (($tracking_row ?? [])['active_status'] ?? ''));
     if ($active === 'returned') {
         return true;
     }
 
-    return voucher_tracking_parse_returned_by($status) !== '';
+    return false;
 }
 
 /**
