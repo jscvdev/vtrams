@@ -223,6 +223,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $_SESSION['token'] = generateToken();
                             die();
                         } else {
+                            // Recall from Sent: route back to the user who forwarded it, not the original recipient.
+                            $returner_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
+                            $returner_office = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+                            if ($returner_udc !== '') {
+                                $previous_receiver_udc = trim((string) $receiver_udc);
+                                $receiver_udc = $returner_udc;
+                                if (
+                                    $previous_receiver_udc !== ''
+                                    && strcasecmp($previous_receiver_udc, $returner_udc) !== 0
+                                ) {
+                                    $sender_udc = $previous_receiver_udc;
+                                }
+                            }
+                            if ($returner_office !== '') {
+                                $office_to = $returner_office;
+                            }
+
                             voucher_sent_move_to_receiving(
                                 $pdo,
                                 $ors_no,
