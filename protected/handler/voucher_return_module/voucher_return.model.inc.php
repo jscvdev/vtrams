@@ -590,3 +590,258 @@ function voucher_update_return_remarks(object $pdo, string $processing_no, strin
     $statement->execute();
     return $statement->rowCount() > 0;
 }
+
+/**
+ * Load encoded-field snapshot for retract (prefer tracking, fallback to queue row).
+ *
+ * @return array<string, string>|null
+ */
+function voucher_retract_fetch_encode_snapshot(object $pdo, string $processing_no, string $retract_source): ?array
+{
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return null;
+    }
+
+    $snapshot = [];
+    $sourceTable = $retract_source === 'forwarding' ? 'voucher_receiving' : 'voucher_incoming';
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM {$sourceTable} WHERE processing_no = :processing_no LIMIT 1");
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            foreach ($row as $key => $value) {
+                if (is_string($key) && $value !== null && $value !== '') {
+                    $snapshot[$key] = trim((string) $value);
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        // Source row may be missing on retry paths.
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row)) {
+            $sourceAmount = (string) ($snapshot['amount'] ?? '');
+            foreach ($row as $key => $value) {
+                if (!is_string($key) || $value === null || $value === '') {
+                    continue;
+                }
+                if ($key === 'amount' && $sourceAmount !== '') {
+                    continue;
+                }
+                $snapshot[$key] = trim((string) $value);
+            }
+            if ($sourceAmount !== '') {
+                $snapshot['amount'] = $sourceAmount;
+            }
+        }
+    } catch (PDOException $e) {
+        return $snapshot !== [] ? $snapshot : null;
+    }
+
+    return $snapshot !== [] ? $snapshot : null;
+}
+
+function voucher_retract_source_exists(object $pdo, string $processing_no, string $retract_source): bool
+{
+    if ($retract_source === 'forwarding') {
+        return voucher_receiving_return_exists($pdo, $processing_no);
+    }
+
+    return voucher_incoming_return_exists($pdo, $processing_no);
+}
+
+function voucher_retract_clear_all_queues(object $pdo, string $processing_no): void
+{
+    incoming_voucher_sent_delete_from_incoming($pdo, $processing_no);
+    incoming_voucher_delete_from_sent($pdo, $processing_no);
+
+    if (!function_exists('voucher_delete_from_receiving')) {
+        require_once __DIR__ . '/../voucher_receiving_module/voucher_receiving.model.inc.php';
+    }
+    voucher_delete_from_receiving($pdo, $processing_no);
+
+    try {
+        $stmt = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+    } catch (PDOException $e) {
+        // voucher_temp may be absent on older installs.
+    }
+}
+
+function voucher_retract_insert_pending(object $pdo, array $fields): bool
+{
+    return voucher_incoming_sent_to_pending(
+        $pdo,
+        (string) ($fields['processing_no'] ?? ''),
+        'TBD',
+        'TBD',
+        'TBD',
+        (string) ($fields['payee'] ?? ''),
+        (string) ($fields['address'] ?? ''),
+        (string) ($fields['particulars'] ?? ''),
+        (string) ($fields['tin_employee_no'] ?? ''),
+        (string) ($fields['amount'] ?? ''),
+        (string) ($fields['voucher_type'] ?? ''),
+        (string) ($fields['voucher_date'] ?? ''),
+        (string) ($fields['encoded_by'] ?? ''),
+        (string) ($fields['encoded_from'] ?? ''),
+        (string) ($fields['datetime_encoded'] ?? ''),
+        null,
+        null,
+        null
+    );
+}
+
+function voucher_retract_reset_tracking(
+    object $pdo,
+    string $processing_no,
+    array $fields,
+    string $encoded_action,
+    string $datetime_status
+): bool {
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return false;
+    }
+
+    $office_from = voucher_pick_field(
+        (string) ($fields['encoded_from'] ?? ''),
+        (string) ($fields['office_from'] ?? '')
+    );
+    $amount = voucher_prepare_stored_amount($pdo, (string) ($fields['amount'] ?? ''));
+
+    $query = 'UPDATE voucher_tracking SET
+        ors_no = :ors_no,
+        ada_check_no = :ada_check_no,
+        ada_check_date = :ada_check_date,
+        dv_no = :dv_no,
+        payee = :payee,
+        address = :address,
+        particulars = :particulars,
+        amount = :amount,
+        voucher_type = :voucher_type,
+        voucher_date = :voucher_date,
+        voucher_status = :voucher_status,
+        status = :status,
+        datetime_status = :datetime_status,
+        encoded_by = :encoded_by,
+        office_to = :office_to,
+        office_from = :office_from,
+        remarks = :remarks,
+        coa_options = NULL,
+        coa_category = NULL,
+        coa_subsection = NULL,
+        active_status = :active_status,
+        process_history = NULL,
+        charged_amount = NULL
+        WHERE processing_no = :processing_no';
+
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':ors_no', 'TBD', PDO::PARAM_STR);
+    $statement->bindValue(':ada_check_no', 'TBD', PDO::PARAM_STR);
+    $statement->bindValue(':ada_check_date', 'TBD', PDO::PARAM_STR);
+    $statement->bindValue(':dv_no', 'TBD', PDO::PARAM_STR);
+    $statement->bindValue(':payee', (string) ($fields['payee'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':address', (string) ($fields['address'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':particulars', (string) ($fields['particulars'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':amount', $amount, PDO::PARAM_STR);
+    $statement->bindValue(':voucher_type', (string) ($fields['voucher_type'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':voucher_date', (string) ($fields['voucher_date'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':voucher_status', $encoded_action, PDO::PARAM_STR);
+    $statement->bindValue(':status', 'TBD', PDO::PARAM_STR);
+    $statement->bindValue(':datetime_status', $datetime_status, PDO::PARAM_STR);
+    $statement->bindValue(':encoded_by', (string) ($fields['encoded_by'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':office_to', '', PDO::PARAM_STR);
+    $statement->bindValue(':office_from', $office_from, PDO::PARAM_STR);
+    $statement->bindValue(':remarks', '', PDO::PARAM_STR);
+    $statement->bindValue(':active_status', 'no', PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}
+
+function voucher_retract_reset_dv_entry(object $pdo, string $processing_no, array $fields): void
+{
+    $processing_no = trim($processing_no);
+    if ($processing_no === '') {
+        return;
+    }
+
+    if (!function_exists('ensure_dv_entries_table')) {
+        require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
+    }
+
+    try {
+        ensure_dv_entries_table($pdo);
+        $existsStmt = $pdo->prepare('SELECT 1 FROM dv_entries WHERE processing_no = :processing_no LIMIT 1');
+        $existsStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $existsStmt->execute();
+        if (!(bool) $existsStmt->fetchColumn()) {
+            return;
+        }
+
+        $amount = voucher_prepare_stored_amount($pdo, (string) ($fields['amount'] ?? ''));
+        $office_from = voucher_pick_field(
+            (string) ($fields['encoded_from'] ?? ''),
+            (string) ($fields['office_from'] ?? '')
+        );
+
+        $stmt = $pdo->prepare(
+            'UPDATE dv_entries SET
+                ors_no = :ors_no,
+                dv_no = :dv_no,
+                ada_check_no = :ada_check_no,
+                payee = :payee,
+                address = :address,
+                tin_employee_no = :tin_employee_no,
+                amount = :amount,
+                voucher_type = :voucher_type,
+                voucher_date = :voucher_date,
+                particulars = :particulars,
+                encoded_by = :encoded_by,
+                office_from = :office_from,
+                encoded_from = :encoded_from,
+                return_remarks = NULL,
+                process_history = NULL
+             WHERE processing_no = :processing_no'
+        );
+        $stmt->bindValue(':ors_no', 'TBD', PDO::PARAM_STR);
+        $stmt->bindValue(':dv_no', 'TBD', PDO::PARAM_STR);
+        $stmt->bindValue(':ada_check_no', 'TBD', PDO::PARAM_STR);
+        $stmt->bindValue(':payee', (string) ($fields['payee'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':address', (string) ($fields['address'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':tin_employee_no', (string) ($fields['tin_employee_no'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':amount', $amount, PDO::PARAM_STR);
+        $stmt->bindValue(':voucher_type', (string) ($fields['voucher_type'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':voucher_date', (string) ($fields['voucher_date'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':particulars', (string) ($fields['particulars'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':encoded_by', (string) ($fields['encoded_by'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':office_from', $office_from, PDO::PARAM_STR);
+        $stmt->bindValue(':encoded_from', (string) ($fields['encoded_from'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+    } catch (PDOException $e) {
+        // dv_entries may be absent on older installs.
+    }
+}
+
+function voucher_retract_clear_voucher_return_remarks(object $pdo, string $processing_no): void
+{
+    try {
+        $stmt = $pdo->prepare('UPDATE vouchers SET return_remarks = NULL WHERE processing_no = :processing_no');
+        $stmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+        $stmt->execute();
+    } catch (PDOException $e) {
+        // return_remarks column may be absent on older installs.
+    }
+}

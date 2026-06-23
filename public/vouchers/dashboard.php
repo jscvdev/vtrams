@@ -154,6 +154,27 @@ if ($scriptName !== '') {
         max-height: 280px;
     }
 
+    .chart-container.chart-container--table {
+        height: auto;
+        min-height: auto;
+        align-items: stretch;
+        align-self: stretch;
+        overflow: visible;
+    }
+
+    .chart-container.chart-container--table h3 {
+        flex-shrink: 0;
+    }
+
+    .dashboard-content.dashboard-content--full {
+        align-items: stretch;
+    }
+
+    .dashboard-content.dashboard-content--full > div {
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+
     .chart-container h3 {
         margin-bottom: 10px;
         color: rgb(75 85 99 / 0.9);
@@ -307,6 +328,7 @@ if ($scriptName !== '') {
         width: 100%;
         border-collapse: collapse;
         font-size: 12px;
+        table-layout: fixed;
 
         th {
             color: rgb(75 85 99 / 0.7)
@@ -314,6 +336,20 @@ if ($scriptName !== '') {
 
         td {
             color: rgb(75 85 99 / 1)
+        }
+
+        th:first-child,
+        td:first-child {
+            width: 55%;
+            word-break: break-word;
+        }
+
+        th:nth-child(2),
+        td:nth-child(2),
+        th:nth-child(3),
+        td:nth-child(3) {
+            width: 22.5%;
+            white-space: nowrap;
         }
     }
 
@@ -463,8 +499,8 @@ if ($scriptName !== '') {
         </section>
 
         <!-- ✅ Modified Section: Percentage Table -->
-        <section class="dashboard-content new_label">
-            <div class="chart-container new_label" style="display:flex; flex-direction: column;">
+        <section class="dashboard-content new_label dashboard-content--full">
+            <div class="chart-container new_label chart-container--table">
                 <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Voucher Type Breakdown in Percentage</h3>
 
                 <table id="percentageTable">

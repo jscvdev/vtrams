@@ -539,6 +539,7 @@ if ($showCashierArchiveCol) {
                             <input type="hidden" name="return_destination" id="return_destination" value="">
                             <input type="hidden" name="return_target_section" id="return_target_section" value="">
                             <input type="hidden" name="return_source" id="return_source" value="forwarding">
+                            <input type="hidden" name="retract_source" id="retract_source" value="forwarding">
                             <div class="label-input__container hidden_input">
                                 <label for="">Priority</label>
                                 <input type="text" name="priority" class="priority form-custom-input" id="priority" value="">
@@ -571,6 +572,7 @@ if ($showCashierArchiveCol) {
                     <div class="footer-button__container">
                         <button class="btn transparent btn-dynamic" name="" type="submit"></button>
                         <button type="submit" name="return_voucher" id="hidden_return_submit" style="display:none;"></button>
+                        <button type="submit" name="retract_voucher" id="hidden_retract_submit" style="display:none;"></button>
                         <button class="btn secondary transparent" id="close_popup3" type="button">CANCEL</button>
                     </div>
                 </div>
@@ -605,6 +607,10 @@ if ($showCashierArchiveCol) {
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="encoder">
                                         <span>Return to encoder</span>
+                                    </label>
+                                    <label class="return-option-label" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="return_destination_popup" value="retract" style="margin-top: 3px;">
+                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset all data as if newly encoded (ORS/DV/ADA, COA, remarks, and process history cleared).</span></span>
                                     </label>
                                 </div>
                             </div>
@@ -3075,10 +3081,17 @@ if ($showCashierArchiveCol) {
             });
         }
 
+        function updateReturnConfirmLabel() {
+            var selected = document.querySelector('input[name="return_destination_popup"]:checked');
+            if (!confirmBtn) return;
+            confirmBtn.textContent = selected && selected.value === 'retract' ? 'Retract' : 'Return';
+        }
+
         function showPopup(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
             if (popup) popup.style.display = 'block';
             if (overlay) overlay.style.display = 'block';
             loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy);
+            updateReturnConfirmLabel();
         }
 
         function hidePopup() {
@@ -3093,6 +3106,7 @@ if ($showCashierArchiveCol) {
             if (returnOfficeSelect) returnOfficeSelect.selectedIndex = 0;
             var remarksField = document.getElementById('return_remarks_popup');
             if (remarksField) remarksField.value = '';
+            updateReturnConfirmLabel();
         }
 
         window.openReturnOptionsPopup = showPopup;
@@ -3103,7 +3117,17 @@ if ($showCashierArchiveCol) {
 
         var previousSenderRadio = document.querySelector('input[name="return_destination_popup"][value="previous_sender"]');
         var encoderRadio = document.querySelector('input[name="return_destination_popup"][value="encoder"]');
+        var retractRadio = document.querySelector('input[name="return_destination_popup"][value="retract"]');
         var returnOfficeContainer = document.getElementById('return_office_container');
+
+        document.querySelectorAll('input[name="return_destination_popup"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                if (returnOfficeContainer) {
+                    returnOfficeContainer.style.display = (previousSenderRadio && previousSenderRadio.checked) ? 'block' : 'none';
+                }
+                updateReturnConfirmLabel();
+            });
+        });
 
         if (previousSenderRadio && returnOfficeContainer) {
             previousSenderRadio.addEventListener('change', function() {
@@ -3112,6 +3136,11 @@ if ($showCashierArchiveCol) {
         }
         if (encoderRadio && returnOfficeContainer) {
             encoderRadio.addEventListener('change', function() {
+                if (this.checked) returnOfficeContainer.style.display = 'none';
+            });
+        }
+        if (retractRadio && returnOfficeContainer) {
+            retractRadio.addEventListener('change', function() {
                 if (this.checked) returnOfficeContainer.style.display = 'none';
             });
         }
@@ -3131,6 +3160,24 @@ if ($showCashierArchiveCol) {
                 var destinationInput = document.getElementById('return_destination');
                 var remarksInput = document.querySelector('#myForm_Forwarding .remarks');
                 var returnTargetEl = document.getElementById('return_target_section');
+                var form = document.getElementById('myForm_Forwarding');
+
+                if (destinationValue === 'retract') {
+                    if (remarksInput) {
+                        remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
+                    }
+                    if (form) {
+                        form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                        var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
+                        if (hiddenRetractSubmit) {
+                            hiddenRetractSubmit.click();
+                        } else {
+                            form.submit();
+                        }
+                    }
+                    hidePopup();
+                    return;
+                }
 
                 if (destinationInput) destinationInput.value = destinationValue;
                 if (remarksInput) {
@@ -3152,8 +3199,8 @@ if ($showCashierArchiveCol) {
                     }
                 }
 
-                var form = document.getElementById('myForm_Forwarding');
                 if (form) {
+                    form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                     var hiddenReturnSubmit = document.getElementById('hidden_return_submit');
                     if (hiddenReturnSubmit) {
                         hiddenReturnSubmit.click();

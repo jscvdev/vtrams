@@ -448,6 +448,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                             </div>
                             <input type="hidden" name="return_destination" id="return_destination" value="">
                             <input type="hidden" name="return_target_section" id="return_target_section" value="">
+                            <input type="hidden" name="retract_source" id="retract_source" value="incoming">
                             <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                         </div>
                     </div>
@@ -459,6 +460,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                         <?php endif; ?>
                         <!-- Hidden submit button used for return flow so that `return_voucher` is present in POST -->
                         <button type="submit" name="return_voucher" id="hidden_return_submit" style="display:none;"></button>
+                        <button type="submit" name="retract_voucher" id="hidden_retract_submit" style="display:none;"></button>
                         <button class="btn secondary transparent" id="close_popup3" type="button">CANCEL</button>
                     </div>
                 </div>
@@ -493,6 +495,10 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                                     <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="encoder">
                                         <span>Return to encoder</span>
+                                    </label>
+                                    <label class="return-option-label" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="return_destination_popup" value="retract" style="margin-top: 3px;">
+                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset all data as if newly encoded (ORS/DV/ADA, COA, remarks, and process history cleared).</span></span>
                                     </label>
                                 </div>
                             </div>
@@ -2205,11 +2211,18 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
             });
         }
 
+        function updateReturnConfirmLabel() {
+            const selected = document.querySelector('input[name="return_destination_popup"]:checked');
+            if (!confirmBtn) return;
+            confirmBtn.textContent = selected && selected.value === 'retract' ? 'Retract' : 'Return';
+        }
+
         function showPopup(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
             if (popup) popup.style.display = 'block';
             if (overlay) overlay.style.display = 'block';
             document.getElementById("confirm_return_options").setAttribute("name", "return_voucher");
             loadReturnOffices(processingNo, processHistory, officeFrom, encodedFrom, encodedBy);
+            updateReturnConfirmLabel();
         }
 
         function hidePopup() {
@@ -2232,6 +2245,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
 
             const remarksField = document.getElementById('return_remarks_popup');
             if (remarksField) remarksField.value = '';
+            updateReturnConfirmLabel();
         }
 
         // Expose to row click handler
@@ -2244,7 +2258,17 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
         // When "previous process" is selected, show the dropdown
         const previousSenderRadio = document.querySelector('input[name="return_destination_popup"][value="previous_sender"]');
         const encoderRadio = document.querySelector('input[name="return_destination_popup"][value="encoder"]');
+        const retractRadio = document.querySelector('input[name="return_destination_popup"][value="retract"]');
         const returnOfficeContainer = document.getElementById('return_office_container');
+
+        document.querySelectorAll('input[name="return_destination_popup"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                if (returnOfficeContainer) {
+                    returnOfficeContainer.style.display = (previousSenderRadio && previousSenderRadio.checked) ? 'block' : 'none';
+                }
+                updateReturnConfirmLabel();
+            });
+        });
 
         if (previousSenderRadio && returnOfficeContainer) {
             previousSenderRadio.addEventListener('change', function() {
@@ -2256,6 +2280,14 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
 
         if (encoderRadio && returnOfficeContainer) {
             encoderRadio.addEventListener('change', function() {
+                if (this.checked) {
+                    returnOfficeContainer.style.display = 'none';
+                }
+            });
+        }
+
+        if (retractRadio && returnOfficeContainer) {
+            retractRadio.addEventListener('change', function() {
                 if (this.checked) {
                     returnOfficeContainer.style.display = 'none';
                 }
@@ -2278,6 +2310,24 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                 const destinationInput = document.getElementById('return_destination');
                 const returnTargetEl = document.getElementById('return_target_section');
                 const remarksInput = document.querySelector('#myIncomingForm .remarks');
+                const form = document.getElementById('myIncomingForm');
+
+                if (destinationValue === 'retract') {
+                    if (remarksInput) {
+                        remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
+                    }
+                    if (form) {
+                        form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                        const hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
+                        if (hiddenRetractSubmit) {
+                            hiddenRetractSubmit.click();
+                        } else {
+                            form.submit();
+                        }
+                    }
+                    hidePopup();
+                    return;
+                }
 
                 if (destinationInput) destinationInput.value = destinationValue;
                 if (returnTargetEl) returnTargetEl.value = '';
@@ -2296,8 +2346,8 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                     remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
                 }
 
-                const form = document.getElementById('myIncomingForm');
                 if (form) {
+                    form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                     // Use a hidden submit button with name="return_voucher" so the handler
                     // sees $_REQUEST['return_voucher'] and does not treat this as a wrong module.
                     const hiddenReturnSubmit = document.getElementById('hidden_return_submit');
