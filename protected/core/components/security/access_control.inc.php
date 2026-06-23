@@ -153,7 +153,7 @@ class AccessControl
         return self::hasMinimumACL(7) && self::hasRole('Processor') || self::hasRole('Budget Unit')
             || self::hasRole('Accounting Unit') || self::hasRole('Cashiers Unit') || self::hasRole('Planning Section')
             || self::hasRole('Liaison Officer') || self::hasRole('System Admin') || self::hasRole('Office of the PENRO') ||
-            self::hasRole('Accountant III') || self::hasRole('ICU') || self::hasRole('Personnel & General Services Unit');
+            self::hasRole('Accountant III') || self::hasRole('ICU');
     }
 
     /**

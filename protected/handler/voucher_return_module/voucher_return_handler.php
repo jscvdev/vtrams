@@ -5,6 +5,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'voucher_return.model.inc.php';
     require_once 'voucher_return.ctrl.inc.php';
     require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/utilities_return_previous_helper.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -103,6 +104,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $remarks = "";
         }
 
+        $return_previous_validation_error = '';
+
         if (!empty($return_destination) && $return_destination === 'encoder') {
             // Re-insert into vouchers on return; production DBs may lack AUTO_INCREMENT on id.
             vouchers_ensure_ors_no_column($pdo);
@@ -135,26 +138,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? $return_target_section
                     : (($document_to ?? '') !== '' ? $document_to : '')
             ));
-            $previous_sender_udc = trim((string) ($sender_udc ?? ''));
-            $returner_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
-            $sender_udc = $returner_udc !== '' ? $returner_udc : $sender_udc;
-            $process_history = voucher_return_fetch_process_history($pdo, $processing_no, $return_source);
-            $previousTarget = voucher_return_resolve_previous_sender_target(
-                $pdo,
-                $destination_designation,
-                $process_history,
-                $previous_sender_udc,
-                $returner_udc,
-                $logged_user_office
-            );
-            if (($previousTarget['receiver_udc'] ?? '') !== '') {
-                $receiver_udc = (string) $previousTarget['receiver_udc'];
-            }
-            if (($previousTarget['office_from'] ?? '') !== '') {
-                $office_from = (string) $previousTarget['office_from'];
-            }
-            if (($previousTarget['office_to'] ?? '') !== '') {
-                $office_to = (string) $previousTarget['office_to'];
+            if ($destination_designation === '' || !utilities_return_previous_destination_is_allowed($pdo, $destination_designation)) {
+                $return_previous_validation_error = 'The selected previous process is not allowed for return.';
+            } else {
+                $previous_sender_udc = trim((string) ($sender_udc ?? ''));
+                $returner_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
+                $sender_udc = $returner_udc !== '' ? $returner_udc : $sender_udc;
+                $process_history = voucher_return_fetch_process_history($pdo, $processing_no, $return_source);
+                $previousTarget = voucher_return_resolve_previous_sender_target(
+                    $pdo,
+                    $destination_designation,
+                    $process_history,
+                    $previous_sender_udc,
+                    $returner_udc,
+                    $logged_user_office
+                );
+                if (($previousTarget['receiver_udc'] ?? '') !== '') {
+                    $receiver_udc = (string) $previousTarget['receiver_udc'];
+                }
+                if (($previousTarget['office_from'] ?? '') !== '') {
+                    $office_from = (string) $previousTarget['office_from'];
+                }
+                if (($previousTarget['office_to'] ?? '') !== '') {
+                    $office_to = (string) $previousTarget['office_to'];
+                }
             }
         }
 
@@ -234,6 +241,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } elseif (voucher_incoming_check_if_returned_exists($pdo, $processing_no)) {
                         $temp_dump['voucher_exists'] = 'Voucher is already returned!';
+                    }
+
+                    if ($return_previous_validation_error !== '') {
+                        $temp_dump['return_destination'] = $return_previous_validation_error;
                     }
 
                     //CHECK ANY VALIDATION FAILS ELSE PROCEED TO EXECUTE DATABASE QUERY

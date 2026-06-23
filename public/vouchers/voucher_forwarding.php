@@ -18,6 +18,9 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
+utilities_return_previous_ensure_schema($pdo);
+$return_previous_allowed_units = utilities_return_previous_active_designations($pdo);
 $dashboard_voucher_types = checklist_types_with_labels();
 $voucher_type_filter = isset($_GET['voucher_type']) && $_GET['voucher_type'] !== 'all' ? trim((string) $_GET['voucher_type']) : 'all';
 
@@ -590,7 +593,7 @@ if ($showCashierArchiveCol) {
                             <div class="label-input__container">
                                 <label for="">Return to</label>
                                 <div class="return-destination-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
-                                    <label class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <label id="return_previous_sender_option" class="return-option-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="previous_sender">
                                         <span>Return to previous process</span>
                                     </label>
@@ -2896,12 +2899,14 @@ if ($showCashierArchiveCol) {
         const confirmBtn = document.getElementById('confirm_return_options');
 
         var currentUserName = '<?php echo htmlspecialchars($_SESSION["logged_user_emp_name"] ?? "", ENT_QUOTES); ?>';
+        var returnPreviousAllowedUnits = <?php echo json_encode(array_values($return_previous_allowed_units), JSON_UNESCAPED_UNICODE); ?>;
 
         var sectionMap = {
             'BUDGET': 'Budget Unit',
             'BUDGET UNIT': 'Budget Unit',
             'ACCOUNTING': 'Accounting Unit',
             'ACCOUNTING UNIT': 'Accounting Unit',
+            'ACCOUNTANT III': 'Accountant III',
             'PLANNING': 'Planning Section',
             'PLANNING SECTION': 'Planning Section',
             'CONSERVATION & DEVELOPMENT': 'Conservation & Development Section',
@@ -2914,6 +2919,25 @@ if ($showCashierArchiveCol) {
             'OFFICE OF THE PENRO': 'Office of the PENRO',
             'ICU': 'ICU'
         };
+
+        function isReturnPreviousUnitAllowed(unitLabel) {
+            if (!unitLabel) return false;
+            var normalized = normalizeUnitLabel(unitLabel);
+            var candidates = [String(unitLabel).trim(), normalized];
+            if (String(unitLabel).trim().toUpperCase() === 'ACCOUNTANT III') {
+                candidates.push('Accountant III');
+            }
+            for (var i = 0; i < returnPreviousAllowedUnits.length; i++) {
+                var allowed = String(returnPreviousAllowedUnits[i] || '').trim();
+                if (!allowed) continue;
+                for (var j = 0; j < candidates.length; j++) {
+                    if (candidates[j] && candidates[j].toLowerCase() === allowed.toLowerCase()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
 
         function normalizeUnitLabel(raw) {
             if (!raw) return '';
@@ -3028,11 +3052,19 @@ if ($showCashierArchiveCol) {
             // Same unit is allowed when another employee handled that history step.
             // parseProcessHistory skips lines where the current user or encoder was the employee.
             var offices = parseProcessHistory(processHistory || '', encodedBy);
+            offices = offices.filter(function(office) {
+                return isReturnPreviousUnitAllowed(office);
+            });
             if (offices.length === 0 && officeFrom) {
                 var fallbackUnit = normalizeUnitLabel(officeFrom);
-                if (fallbackUnit) {
+                if (fallbackUnit && isReturnPreviousUnitAllowed(fallbackUnit)) {
                     offices = [fallbackUnit];
                 }
+            }
+
+            var previousSenderOption = document.getElementById('return_previous_sender_option');
+            if (previousSenderOption) {
+                previousSenderOption.style.display = offices.length > 0 ? 'flex' : 'none';
             }
 
             offices.forEach(function(office) {
@@ -3089,7 +3121,7 @@ if ($showCashierArchiveCol) {
                 var selected = document.querySelector('input[name="return_destination_popup"]:checked');
                 if (!selected) {
                     if (typeof showNotify === 'function') {
-                        showNotify('Please select where to return the voucher (previous process or encoder).', 'error', 3000);
+                        showNotify('Please select where to return the voucher.', 'error', 3000);
                     }
                     return;
                 }

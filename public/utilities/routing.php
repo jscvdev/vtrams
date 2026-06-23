@@ -2,6 +2,7 @@
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_special_access_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
 require_once __DIR__ . '/../vouchers/checklist_config.php';
@@ -14,6 +15,7 @@ if (!AccessControl::canAccessSystemUtilities()) {
 }
 
 utilities_special_access_ensure_schema($pdo);
+utilities_return_previous_ensure_schema($pdo);
 utilities_office_ensure_schema($pdo);
 
 $voucher_types = checklist_types_with_labels();
@@ -95,6 +97,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([':id' => $id]);
                     utilities_special_access_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Routing rule deleted.'];
+                }
+            } elseif ($action === 'return_previous_add') {
+                $designation = utilities_return_previous_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                if ($designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Designation is required.'];
+                } elseif (!in_array($designation, utilities_return_previous_configurable_destinations($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        INSERT INTO voucher_return_previous_units (designation, sort_order, is_active)
+                        VALUES (:designation, 0, 1)
+                    ");
+                    $stmt->execute([':designation' => $designation]);
+                    sort_order_place_at_position($pdo, 'voucher_return_previous_units', (int) $pdo->lastInsertId(), $sort);
+                    $pdo->commit();
+                    utilities_return_previous_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Return-to-previous unit added.'];
+                }
+            } elseif ($action === 'return_previous_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $designation = utilities_return_previous_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id <= 0 || $designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                } elseif (!in_array($designation, utilities_return_previous_configurable_destinations($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    sort_order_handle_update($pdo, 'voucher_return_previous_units', $id, $sort);
+                    $stmt = $pdo->prepare("
+                        UPDATE voucher_return_previous_units
+                        SET designation = :designation,
+                            sort_order = :sort,
+                            is_active = :active
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':designation' => $designation,
+                        ':sort' => $sort,
+                        ':active' => $active,
+                        ':id' => $id,
+                    ]);
+                    $pdo->commit();
+                    utilities_return_previous_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Return-to-previous unit updated.'];
+                }
+            } elseif ($action === 'return_previous_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id <= 0) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                } else {
+                    $stmt = $pdo->prepare('DELETE FROM voucher_return_previous_units WHERE id = :id');
+                    $stmt->execute([':id' => $id]);
+                    utilities_return_previous_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Return-to-previous unit removed.'];
                 }
             } elseif ($action === 'office_add') {
                 $officeName = utilities_office_normalize_name((string) ($_POST['office_name'] ?? ''));
@@ -263,6 +323,16 @@ $active_count = 0;
 foreach ($rules as $rule) {
     if ((int) ($rule['is_active'] ?? 1) === 1) {
         $active_count++;
+    }
+}
+
+$return_previous_units = utilities_return_previous_fetch_all($pdo);
+$return_previous_destinations = utilities_return_previous_configurable_destinations($pdo);
+$return_previous_count = count($return_previous_units);
+$return_previous_active_count = 0;
+foreach ($return_previous_units as $returnPreviousUnit) {
+    if ((int) ($returnPreviousUnit['is_active'] ?? 1) === 1) {
+        $return_previous_active_count++;
     }
 }
 
@@ -868,6 +938,91 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                                         <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="rule_delete">
                                         <input type="hidden" name="id" value="<?= $ruleId ?>">
+                                        <button class="btn danger" type="submit">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            </section>
+
+            <section class="util-routing-section">
+            <p class="util-section-title">Return to previous process</p>
+            <p class="util-dv-desc">
+                Limit which processing units appear when a user chooses <strong>Return to previous process</strong>
+                on Incoming or Forwarding. Only history steps whose unit matches an active entry below are offered
+                (e.g. Planning, ICU, Budget, Accounting, Accountant III, Office of the PENRO, Cashiers).
+            </p>
+
+            <div class="util-stats">
+                <div class="util-stat"><strong><?= (int) $return_previous_count ?></strong> configured unit<?= $return_previous_count === 1 ? '' : 's' ?></div>
+                <div class="util-stat"><strong><?= (int) $return_previous_active_count ?></strong> active</div>
+            </div>
+
+            <div class="util-card">
+                <div class="util-card__head">
+                    <h3>Add return-to-previous unit</h3>
+                </div>
+                <div class="util-card__body">
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="return_previous_add">
+                        <div class="field">
+                            <label for="add_return_previous_designation">Designation / unit</label>
+                            <select class="form-custom-input" name="designation" id="add_return_previous_designation" required>
+                                <option value="" disabled selected>Select unit</option>
+                                <?php foreach ($return_previous_destinations as $destination): ?>
+                                    <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width:110px;">
+                            <label for="add_return_previous_sort_order">Sort</label>
+                            <input class="form-custom-input" type="number" name="sort_order" id="add_return_previous_sort_order" value="0">
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Add return-to-previous unit" aria-label="Add return-to-previous unit">+</button>
+                        </div>
+                    </form>
+
+                    <?php if (!$return_previous_units): ?>
+                        <p class="util-empty">No return-to-previous units configured yet. Add one above.</p>
+                    <?php endif; ?>
+
+                    <?php foreach ($return_previous_units as $returnPreviousUnit):
+                        $returnPreviousId = (int) ($returnPreviousUnit['id'] ?? 0);
+                        $storedDesignation = (string) ($returnPreviousUnit['designation'] ?? '');
+                    ?>
+                        <div class="util-routing-block">
+                            <div class="util-routing-block__main">
+                                <div class="util-inline util-inline--edit-row">
+                                    <form method="post" class="util-inline util-inline--edit-row" style="flex:1; min-width:0;">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="return_previous_update">
+                                        <input type="hidden" name="id" value="<?= $returnPreviousId ?>">
+                                        <select class="form-custom-input" name="designation" required>
+                                            <?php foreach ($return_previous_destinations as $destination): ?>
+                                                <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= $storedDesignation === $destination ? ' selected' : '' ?>>
+                                                    <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input class="form-custom-input" type="number" name="sort_order" value="<?= (int) ($returnPreviousUnit['sort_order'] ?? 0) ?>">
+                                        <label class="chk">
+                                            <input type="checkbox" name="is_active" <?= ((int) ($returnPreviousUnit['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                            <span>Active</span>
+                                        </label>
+                                        <button class="btn success" type="submit">Save</button>
+                                    </form>
+                                    <form method="post" onsubmit="return confirm('Remove this return-to-previous unit?');" class="util-row-actions">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="return_previous_delete">
+                                        <input type="hidden" name="id" value="<?= $returnPreviousId ?>">
                                         <button class="btn danger" type="submit">Delete</button>
                                     </form>
                                 </div>
