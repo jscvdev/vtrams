@@ -106,20 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $action_by  = $_SESSION['logged_user_emp_name'];
                     $action_from = $_SESSION['logged_user_section'];
 
-                    if (!empty($combined_remarks) && $combined_remarks != "N/A") {
-                        // Prepare the text to remove, handling the optional comma
-                        $remove_text = trim($sender_remarks);
-                        if (!empty($remove_text)) {
-                            // Create a pattern to match with or without a preceding comma
-                            $pattern = '/(?:, )?' . preg_quote($remove_text, '/') . '/';
-
-                            // Remove the text from $combined_remarks
-                            $combined_remarks = preg_replace($pattern, '', $combined_remarks);
-                        }
-                    } else {
-                        $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
-                    }
-
+                    // Self-recall from Sent: no return remarks on the voucher row or tracking.
+                    $combined_remarks = '';
+                    $sender_remarks = '';
+                    $remarks = '';
 
                     $variables_to_check = [
                         'processing_no' => $processing_no,
@@ -185,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             voucher_remove_incoming_from_sent($pdo, $processing_no);
                             voucher_remove_from_sent($pdo, $processing_no);
-                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, 'no');
+                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, '', 'no', false);
                             voucher_log_user_action(
                                 $pdo,
                                 $processing_no,
@@ -267,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             voucher_remove_incoming_from_sent($pdo, $processing_no);
                             voucher_remove_from_sent($pdo, $processing_no);
-                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, 'returned');
+                            voucher_sent_update_document_tracking($pdo, $processing_no, $action, $datetime_action, '', 'returned', false);
                             voucher_log_user_action(
                                 $pdo,
                                 $processing_no,

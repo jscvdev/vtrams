@@ -73,8 +73,9 @@ string $receiver_udc, string $encoded_by, string $encoded_from, string $datetime
     $statement->bindParam(":forwarded_by",$encoded_by);
     $statement->bindParam(":transmit",$transmit);
     $statement->bindParam(":process_status",$process_status);
-    $statement->bindParam(":remarks",$combined_remarks);
-    $statement->bindParam(":sender_remarks",$combined_remarks);
+    $empty_remarks = '';
+    $statement->bindParam(":remarks", $empty_remarks);
+    $statement->bindParam(":sender_remarks", $empty_remarks);
     $statement->bindParam(":supporting_documents",$supporting_documents);
 
     $statement->execute();
@@ -108,18 +109,24 @@ function voucher_sent_to_pending(object $pdo, string $processing_no, string $dv_
     return $statement->rowCount() > 0;
 }
 
-function voucher_sent_log_to_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks, string $active_status = 'returned') {
+function voucher_sent_log_to_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $remarks, string $active_status = 'returned', bool $update_remarks = true) {
     if (!in_array($active_status, ['no', 'yes', 'returned'], true)) {
         $active_status = 'returned';
     }
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, active_status = :active_status WHERE processing_no = :processing_no";
+    if ($update_remarks) {
+        $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, remarks = :remarks, active_status = :active_status WHERE processing_no = :processing_no";
+    } else {
+        $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, active_status = :active_status WHERE processing_no = :processing_no";
+    }
 
     $statement = $pdo->prepare($query);
 
     $statement->bindParam(":voucher_status",$action);
     $statement->bindParam(":datetime_status",$datetime_action);
     $statement->bindParam(":processing_no",$processing_no);
-    $statement->bindParam(":remarks",$remarks);
+    if ($update_remarks) {
+        $statement->bindParam(":remarks",$remarks);
+    }
     $statement->bindParam(":active_status",$active_status);
 
     $statement->execute();
