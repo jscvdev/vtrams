@@ -422,7 +422,7 @@ if ($showCashierArchiveCol) {
                                         <?php elseif (in_array("Conservation & Development Section", $target)) : ?>
                                             <option value='Accounting Unit'>Accounting Unit</option>
                                         <?php elseif (in_array("Budget Unit", $target)) : ?>
-                                            <option value='ICU'>ICU</option>
+                                            <option value='Accounting Unit'>Accounting Unit</option>
                                             <?php if (!in_array("Budget Officer", $target)) : ?>
                                                 <option value='Budget Officer' class="Budget_Officer">Budget Officer</option>
                                             <?php endif ?>
