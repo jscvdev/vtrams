@@ -1380,12 +1380,122 @@ function voucher_type_requires_dv_no_always(string $voucher_type): bool
     return false;
 }
 
+/** Whether a user_group UDC is registered for a designation in designation_limit. */
+function voucher_tracking_designation_limit_includes_udc(object $pdo, string $udc, string $designation): bool
+{
+    $udc = trim($udc);
+    $designation = trim($designation);
+    if ($udc === '' || $designation === '') {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT designated_udc FROM designation_limit
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))
+         LIMIT 1'
+    );
+    $stmt->bindValue(':designation', $designation, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) {
+        return false;
+    }
+
+    foreach (array_map('trim', explode(',', (string) ($row['designated_udc'] ?? ''))) as $candidate) {
+        if ($candidate !== '' && strcasecmp($candidate, $udc) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Resolve whether a process_history actor holds a designation using user_group + designation_limit
+ * (not the section/unit stored on the history line).
+ */
+function voucher_tracking_history_actor_has_designation(object $pdo, string $displayName, string $designation): bool
+{
+    $user = voucher_tracking_lookup_user_by_display_name($pdo, $displayName);
+    if ($user === null) {
+        return false;
+    }
+
+    $udc = trim((string) ($user['udc'] ?? ''));
+    if ($udc === '') {
+        return false;
+    }
+
+    return voucher_tracking_designation_limit_includes_udc($pdo, $udc, $designation);
+}
+
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_has_designation_action(
+    object $pdo,
+    array $lines,
+    string $actionNeedle,
+    string $designation
+): bool {
+    foreach ($lines as $line) {
+        if (stripos((string) ($line['action'] ?? ''), $actionNeedle) === false) {
+            continue;
+        }
+        if (voucher_tracking_history_actor_has_designation($pdo, (string) ($line['name'] ?? ''), $designation)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Cross-office vouchers forwarded by ICU then received by a downstream processing unit
+ * (e.g. Budget Unit) require DV at accounting receive.
+ *
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_cross_office_icu_routed_to_processing_unit(object $pdo, array $lines): bool
+{
+    $downstreamDesignations = [
+        'Budget Unit',
+        'Planning Section',
+        'Conservation & Development Section',
+    ];
+
+    $seenIcuForward = false;
+    foreach ($lines as $line) {
+        $action = (string) ($line['action'] ?? '');
+        if (stripos($action, 'Forwarded by') !== false) {
+            if (voucher_tracking_history_actor_has_designation($pdo, (string) ($line['name'] ?? ''), 'ICU')) {
+                $seenIcuForward = true;
+            }
+            continue;
+        }
+
+        if (!$seenIcuForward || stripos($action, 'Received by') === false) {
+            continue;
+        }
+
+        foreach ($downstreamDesignations as $designation) {
+            if (voucher_tracking_history_actor_has_designation($pdo, (string) ($line['name'] ?? ''), $designation)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /**
  * Accounting receive requires DV No. based on process_history:
  * - Always for selected e-NGP types.
- * - Otherwise once Planning Section has received the voucher (any origin office).
+ * - Same processing office: after Planning Section receives (user_group + designation_limit).
+ * - Other offices: after ICU forwards and a downstream processing unit receives.
  */
 function voucher_incoming_requires_dv_no(
+    object $pdo,
     string $voucher_type,
     string $process_history,
     string $logged_user_office = ''
@@ -1399,7 +1509,14 @@ function voucher_incoming_requires_dv_no(
         return false;
     }
 
-    return voucher_tracking_history_has_planning_receive($lines);
+    $sameOffice = $logged_user_office !== ''
+        && voucher_history_origin_matches_logged_office($process_history, $logged_user_office);
+
+    if ($sameOffice) {
+        return voucher_tracking_history_has_designation_action($pdo, $lines, 'Received by', 'Planning Section');
+    }
+
+    return voucher_tracking_cross_office_icu_routed_to_processing_unit($pdo, $lines);
 }
 
 /** Whether process_history shows the voucher was encoded in the logged user's office. */

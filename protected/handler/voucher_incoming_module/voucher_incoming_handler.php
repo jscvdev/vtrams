@@ -166,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($isAccountingReceive) {
                         if (
                             voucher_incoming_requires_dv_no(
+                                $pdo,
                                 $voucher_type,
                                 $processHistoryForStatus,
                                 voucher_logged_user_office()

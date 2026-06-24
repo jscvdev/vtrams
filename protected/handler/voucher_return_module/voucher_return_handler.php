@@ -98,7 +98,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         voucher_apply_exact_amount($amount);
 
         $logged_user_office = voucher_logged_user_office();
-        $office_from = $logged_user_office;
+        $action_log_office = $logged_user_office;
+        $originOffices = voucher_return_load_origin_offices(
+            $pdo,
+            $processing_no,
+            $return_source,
+            $office_from,
+            $encoded_from
+        );
+        $office_from = $originOffices['office_from'];
+        $encoded_from = $originOffices['encoded_from'];
 
         if (empty($remarks)) {
             $remarks = "";
@@ -155,9 +164,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 if (($previousTarget['receiver_udc'] ?? '') !== '') {
                     $receiver_udc = (string) $previousTarget['receiver_udc'];
-                }
-                if (($previousTarget['office_from'] ?? '') !== '') {
-                    $office_from = (string) $previousTarget['office_from'];
                 }
                 if (($previousTarget['office_to'] ?? '') !== '') {
                     $office_to = (string) $previousTarget['office_to'];
@@ -451,7 +457,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $action_by,
                             $action_from,
                             $datetime_action,
-                            $office_from,
+                            $action_log_office,
                             $office_to,
                             $encoded_by,
                             $combined_remarks
@@ -463,6 +469,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'dv_no' => $dv_no,
                             'payee' => $payee,
                             'office_from' => $office_from,
+                            'encoded_from' => $encoded_from,
+                            'returned_from_office' => $action_log_office,
                             'office_to' => $office_to,
                             'document_to' => $document_to ?? null,
                             'action_by' => $action_by

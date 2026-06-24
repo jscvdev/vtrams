@@ -425,6 +425,88 @@ function utilities_fetch_ada_signatory_bundle(PDO $pdo, string $office): array
     ];
 }
 
+/**
+ * ADA signatory bundles keyed by normalized office for client-side lookup.
+ *
+ * @return array<string, array{options: array<string, list<string>>, defaults: array<string, string>}>
+ */
+function utilities_fetch_ada_signatory_bundles_indexed(PDO $pdo): array
+{
+    utilities_signatory_ensure_schema($pdo);
+
+    $officeCandidates = [];
+    try {
+        $stmt = $pdo->query(
+            "SELECT DISTINCT TRIM(office) AS office
+             FROM ada_signatory_options
+             WHERE COALESCE(is_active, 1) = 1"
+        );
+        if ($stmt) {
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $office) {
+                $officeCandidates[] = (string) $office;
+            }
+        }
+    } catch (Throwable) {
+        // Best-effort only.
+    }
+
+    foreach (utilities_signatory_fetch_offices($pdo) as $office) {
+        $officeCandidates[] = (string) $office;
+    }
+
+    $defaultOffice = utilities_signatory_default_office();
+    if ($defaultOffice !== '') {
+        $officeCandidates[] = $defaultOffice;
+    }
+
+    $indexed = [];
+    foreach ($officeCandidates as $candidateOffice) {
+        $bundle = utilities_fetch_ada_signatory_bundle($pdo, (string) $candidateOffice);
+        if (($bundle['options'] ?? []) === []) {
+            continue;
+        }
+
+        $payload = [
+            'options' => $bundle['options'],
+            'defaults' => $bundle['defaults'],
+        ];
+
+        $keys = [
+            utilities_signatory_normalize_office((string) ($bundle['office'] ?? '')),
+            utilities_signatory_normalize_office((string) $candidateOffice),
+        ];
+
+        foreach ($keys as $key) {
+            if ($key === '') {
+                $indexed['__default__'] = $payload;
+                continue;
+            }
+            $indexed[$key] = $payload;
+        }
+    }
+
+    if ($indexed === []) {
+        $fallback = utilities_fetch_ada_signatory_bundle($pdo, $defaultOffice);
+        $indexed['__default__'] = [
+            'options' => $fallback['options'],
+            'defaults' => $fallback['defaults'],
+        ];
+    }
+
+    return $indexed;
+}
+
+/** Resolve ADA signatory office from voucher routing (prefer office_from, then encoded_from). */
+function utilities_resolve_voucher_signatory_office(string $officeFrom, string $encodedFrom): string
+{
+    $officeFrom = utilities_signatory_normalize_office($officeFrom);
+    if ($officeFrom !== '') {
+        return $officeFrom;
+    }
+
+    return utilities_signatory_normalize_office($encodedFrom);
+}
+
 function utilities_ada_signatory_set_default(PDO $pdo, int $id, string $optionType, string $office): void
 {
     $optionType = trim($optionType);

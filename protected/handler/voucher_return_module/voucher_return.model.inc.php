@@ -120,6 +120,61 @@ function voucher_return_returner_encoded_from(): string
     return $parts[0] ?? '';
 }
 
+/**
+ * Keep voucher origin offices from the row; never substitute the returner's office.
+ *
+ * @return array{office_from: string, encoded_from: string}
+ */
+function voucher_return_resolve_preserved_offices(string $posted_office_from, string $posted_encoded_from): array
+{
+    $encoded_from = trim($posted_encoded_from);
+    $office_from = voucher_pick_field(trim($posted_office_from), $encoded_from);
+
+    if ($encoded_from === '' && $office_from !== '') {
+        $encoded_from = $office_from;
+    }
+
+    return [
+        'office_from' => $office_from,
+        'encoded_from' => $encoded_from,
+    ];
+}
+
+/**
+ * Preserve origin offices from POST, falling back to queue/tracking snapshot (not returner session).
+ *
+ * @return array{office_from: string, encoded_from: string}
+ */
+function voucher_return_load_origin_offices(
+    object $pdo,
+    string $processing_no,
+    string $return_source,
+    string $posted_office_from,
+    string $posted_encoded_from
+): array {
+    $preserved = voucher_return_resolve_preserved_offices($posted_office_from, $posted_encoded_from);
+    if ($preserved['office_from'] !== '' && $preserved['encoded_from'] !== '') {
+        return $preserved;
+    }
+
+    $snapshot = voucher_return_fetch_encoder_return_snapshot($pdo, $processing_no, $return_source);
+    $office_from = voucher_pick_field(
+        $preserved['office_from'],
+        (string) ($snapshot['office_from'] ?? ''),
+        (string) ($snapshot['encoded_from'] ?? '')
+    );
+    $encoded_from = voucher_pick_field(
+        $preserved['encoded_from'],
+        (string) ($snapshot['encoded_from'] ?? ''),
+        $office_from
+    );
+
+    return [
+        'office_from' => $office_from,
+        'encoded_from' => $encoded_from,
+    ];
+}
+
 /** @deprecated Use voucher_field_is_placeholder() */
 function voucher_return_field_is_placeholder(string $value): bool
 {
@@ -140,7 +195,11 @@ function voucher_return_pick_field(string ...$candidates): string
 function voucher_return_fetch_encoder_return_snapshot(object $pdo, string $processing_no, string $return_source): array
 {
     $snapshot = [];
-    $sourceTable = $return_source === 'forwarding' ? 'voucher_receiving' : 'voucher_incoming';
+    $sourceTable = match ($return_source) {
+        'forwarding' => 'voucher_receiving',
+        'sent' => 'voucher_sent',
+        default => 'voucher_incoming',
+    };
 
     try {
         $stmt = $pdo->prepare("SELECT * FROM {$sourceTable} WHERE processing_no = :processing_no LIMIT 1");

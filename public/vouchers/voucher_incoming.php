@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 utilities_return_previous_ensure_schema($pdo);
 $return_previous_allowed_units = utilities_return_previous_active_designations($pdo);
 $dashboard_voucher_types = checklist_types_with_labels();
@@ -115,6 +116,10 @@ $target = array_values(array_filter(array_map(
 )));
 $isLiaisonOfficer = in_array('Liaison Officer', $target, true);
 $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
+$incoming_logged_user_office = voucher_logged_user_office();
+$incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
+    || in_array('Processor', $target, true)
+    || in_array('Accountant III', $target, true);
 
 ?>
 <!--=============== MAIN ===============!-->
@@ -687,8 +692,21 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                 <tbody>
                     <?php
                     while ($row = $fetch_voucher_incoming_data->fetch(PDO::FETCH_ASSOC)) {
+                        $incoming_process_history = voucher_incoming_load_process_history(
+                            $pdo,
+                            (string) ($row['processing_no'] ?? ''),
+                            (string) ($row['process_history'] ?? '')
+                        );
+                        $incoming_requires_dv = $incoming_is_accounting_role
+                            ? voucher_incoming_requires_dv_no(
+                                $pdo,
+                                (string) ($row['voucher_type'] ?? ''),
+                                $incoming_process_history,
+                                $incoming_logged_user_office
+                            )
+                            : false;
                     ?>
-                        <tr>
+                        <tr<?= $incoming_requires_dv ? ' data-requires-dv="1"' : '' ?>>
                             <?php if ($isLiaisonOfficer) : ?>
                                 <td class="voucher-bulk-select-cell" data-label="">
                                     <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -756,7 +774,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                             <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars($row['coa_options']) : ''; ?></td>
                             <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars($row['coa_category']) : ''; ?></td>
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars($row['coa_subsection']) : ''; ?></td>
-                            <td data-label="process_history" class="hidden"><?php echo isset($row['process_history']) ? htmlspecialchars($row['process_history']) : ''; ?></td>
+                            <td data-label="process_history" class="hidden"><?php echo htmlspecialchars($incoming_process_history, ENT_QUOTES, 'UTF-8'); ?></td>
 
                             <td data-label="history">
                                 <button class="btn tertiary" name="btn-history" type="button">View</button>
@@ -1385,20 +1403,19 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
             || value.localeCompare('e-NGP Seedling Production & MP', undefined, { sensitivity: 'accent' }) === 0;
     }
 
-    function incomingRequiresDvNo(voucherType, processHistory) {
+    function incomingRequiresDvNo(voucherType, processHistory, row) {
+        if (row && row.getAttribute('data-requires-dv') === '1') {
+            return true;
+        }
+
         if (incomingVoucherTypeRequiresDvAlways(voucherType)) {
             return true;
         }
 
-        var lines = parseIncomingProcessHistoryLines(processHistory);
-        if (!lines.length) {
-            return false;
-        }
-
-        return incomingHistoryHasPlanningReceive(lines);
+        return false;
     }
 
-    function applyIncomingDvNoRules(voucherType, processHistory) {
+    function applyIncomingDvNoRules(voucherType, processHistory, row) {
         const isAccountingRole = targetArray2.includes("Accounting Unit")
             || targetArray2.includes("Processor")
             || targetArray2.includes("Accountant III");
@@ -1407,7 +1424,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
             return;
         }
 
-        const requiresDv = incomingRequiresDvNo(voucherType, processHistory);
+        const requiresDv = incomingRequiresDvNo(voucherType, processHistory, row);
         dvInput.required = requiresDv;
         dvInput.readOnly = !requiresDv;
         dvInput.style.border = requiresDv ? "1px solid red" : "";
@@ -1843,7 +1860,7 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
                 document.querySelector(".btn-dynamic").setAttribute("name", "receive_voucher");
                 document.querySelector(".btn-dynamic").classList.remove("warning");
                 document.querySelector(".btn-dynamic").classList.add("success");
-                applyIncomingDvNoRules(voucher_type, process_history);
+                applyIncomingDvNoRules(voucher_type, process_history, row);
             } else if (name === "btn-return") {
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("dv_no").required = false;
@@ -1881,12 +1898,10 @@ $bulkReceiveToken = (string) ($_SESSION['token'] ?? '');
             const isAccountingRole = targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor") || targetArray2.includes("Accountant III");
 
             if (actionName === 'receive_voucher' && isAccountingRole) {
-                const voucherType = document.getElementById('voucher_type')?.value || '';
-                const processHistory = document.getElementById('process_history')?.value || '';
-                if (!incomingRequiresDvNo(voucherType, processHistory)) {
+                const dvInput = document.getElementById('dv_no');
+                if (!dvInput || !dvInput.required) {
                     return;
                 }
-                const dvInput = document.getElementById('dv_no');
                 const dvValue = dvInput ? String(dvInput.value || '').trim() : '';
                 if (dvValue === '' || dvValue.toUpperCase() === 'TBD') {
                     e.preventDefault();

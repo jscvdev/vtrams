@@ -157,16 +157,19 @@ $showEditCol = (
 
 $ada_options = [];
 $ada_option_defaults = [];
+$ada_signatory_bundles_indexed = [];
 if ($showCashierArchiveCol) {
     try {
         require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
         utilities_signatory_ensure_schema($pdo);
+        $ada_signatory_bundles_indexed = utilities_fetch_ada_signatory_bundles_indexed($pdo);
         $adaBundle = utilities_fetch_ada_signatory_bundle($pdo, utilities_signatory_default_office());
         $ada_options = $adaBundle['options'];
         $ada_option_defaults = $adaBundle['defaults'];
     } catch (Throwable $e) {
         $ada_options = [];
         $ada_option_defaults = [];
+        $ada_signatory_bundles_indexed = [];
     }
 }
 ?>
@@ -2443,6 +2446,108 @@ if ($showCashierArchiveCol) {
                                                 $ada_option_defaults,
                                                 JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
                                             ) ?>;
+            var fwdAdaSignatoryBundles = <?= json_encode(
+                                                $ada_signatory_bundles_indexed,
+                                                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                                            ) ?>;
+
+            function fwdNormalizeAdaOfficeKey(value) {
+                return String(value || '').trim().replace(/\s+/g, ' ');
+            }
+
+            function fwdResolveAdaOfficeKey(officeFrom, encodedFrom) {
+                var officeFromKey = fwdNormalizeAdaOfficeKey(officeFrom);
+                if (officeFromKey !== '') {
+                    return officeFromKey;
+                }
+                return fwdNormalizeAdaOfficeKey(encodedFrom);
+            }
+
+            function fwdFindAdaSignatoryBundle(officeFrom, encodedFrom) {
+                var targetKey = fwdResolveAdaOfficeKey(officeFrom, encodedFrom);
+                var bundles = fwdAdaSignatoryBundles || {};
+                var keys = Object.keys(bundles);
+                var fallback = bundles.__default__ || {
+                    options: {},
+                    defaults: fwdAdaSignatoryDefaults || {}
+                };
+
+                if (targetKey === '') {
+                    return fallback;
+                }
+
+                for (var i = 0; i < keys.length; i++) {
+                    var key = keys[i];
+                    if (key === '__default__') {
+                        continue;
+                    }
+                    if (key.toLowerCase() === targetKey.toLowerCase()) {
+                        return bundles[key];
+                    }
+                }
+
+                return fallback;
+            }
+
+            function fwdRebuildAdaSignatorySelect(select, optionValues, defaultValue) {
+                if (!select) return;
+                var values = Array.isArray(optionValues) ? optionValues : [];
+                var hasDefault = defaultValue !== '' && values.indexOf(defaultValue) !== -1;
+                select.innerHTML = '';
+
+                var placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.disabled = true;
+                placeholder.selected = !hasDefault;
+                placeholder.textContent = 'Please Select:';
+                select.appendChild(placeholder);
+
+                if (!values.length) {
+                    var emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.disabled = true;
+                    emptyOpt.textContent = '(No options configured — ask System Admin)';
+                    select.appendChild(emptyOpt);
+                    return;
+                }
+
+                values.forEach(function(value) {
+                    var opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = value;
+                    if (hasDefault && value === defaultValue) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+            }
+
+            function fwdApplyAdaSignatoryForOffice(officeFrom, encodedFrom) {
+                var form = document.getElementById('myForm_ArchiveProcessing');
+                if (!form) return;
+
+                var bundle = fwdFindAdaSignatoryBundle(officeFrom, encodedFrom);
+                var options = (bundle && bundle.options) ? bundle.options : {};
+                var defaults = (bundle && bundle.defaults) ? bundle.defaults : (fwdAdaSignatoryDefaults || {});
+
+                ['certified_correct', 'approved_by', 'agency_authorized_signatory'].forEach(function(name) {
+                    var select = form.querySelector('select[name="' + name + '"]');
+                    fwdRebuildAdaSignatorySelect(select, options[name] || [], defaults[name] || '');
+                });
+            }
+
+            function fwdApplyAdaSignatoryDefaults() {
+                var fwdForm = document.getElementById('myForm_Forwarding');
+                var officeFrom = '';
+                var encodedFrom = '';
+                if (fwdForm) {
+                    var officeFromEl = fwdForm.querySelector('[name="office_from"]');
+                    var encodedFromEl = fwdForm.querySelector('[name="encoded_from"]');
+                    officeFrom = officeFromEl ? String(officeFromEl.value || '').trim() : '';
+                    encodedFrom = encodedFromEl ? String(encodedFromEl.value || '').trim() : '';
+                }
+                fwdApplyAdaSignatoryForOffice(officeFrom, encodedFrom);
+            }
 
             function fwdIsInvalidAdaCheckNo(value) {
                 var v = String(value || '').trim();
@@ -2463,27 +2568,6 @@ if ($showCashierArchiveCol) {
                 var processAdaCheckNo = document.getElementById('fwd_ada_check_no');
                 if (!payAdaCheckNo || !processAdaCheckNo) return;
                 processAdaCheckNo.value = String(payAdaCheckNo.value || '').trim();
-            }
-
-            function fwdApplyAdaSignatoryDefaults() {
-                var form = document.getElementById('myForm_ArchiveProcessing');
-                if (!form) return;
-
-                ['certified_correct', 'approved_by', 'agency_authorized_signatory'].forEach(function(name) {
-                    var select = form.querySelector('select[name="' + name + '"]');
-                    if (!select) return;
-
-                    var defaultValue = fwdAdaSignatoryDefaults[name] || '';
-                    var hasDefault = defaultValue !== '' && Array.from(select.options).some(function(option) {
-                        return option.value === defaultValue;
-                    });
-
-                    if (hasDefault) {
-                        select.value = defaultValue;
-                    } else {
-                        select.selectedIndex = 0;
-                    }
-                });
             }
 
             function fwdCollectForwardingVoucherRow() {

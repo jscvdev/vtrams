@@ -4,6 +4,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once '../requires_modules/voucher_required.php'; // ALL REQUIRED FOR PDO DB INTERACTION
     require_once 'voucher_sent.model.inc.php';
     require_once 'voucher_sent.ctrl.inc.php';
+    require_once __DIR__ . '/../voucher_return_module/voucher_return.model.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -79,11 +80,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         voucher_apply_exact_amount($amount);
 
-        if (isset($_SESSION['logged_user_office'])) {
-            $office_from = $_SESSION['logged_user_office'];
-        } else {
-            $office_from = '';
-        }
+        $logged_user_office = voucher_logged_user_office();
+        $action_log_office = $logged_user_office;
+        $originOffices = voucher_return_load_origin_offices(
+            $pdo,
+            $processing_no,
+            'sent',
+            $office_from,
+            $encoded_from
+        );
+        $office_from = $originOffices['office_from'];
+        $encoded_from = $originOffices['encoded_from'];
 
         $remarks = "";
 
@@ -193,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $action_by,
                                 $action_from,
                                 $datetime_action,
-                                $office_from,
+                                $action_log_office,
                                 $office_to,
                                 $encoded_by,
                                 $remarks
@@ -205,6 +212,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'dv_no' => $dv_no,
                                 'payee' => $payee,
                                 'office_from' => $office_from,
+                                'encoded_from' => $encoded_from,
+                                'returned_from_office' => $action_log_office,
                                 'office_to' => $office_to,
                                 'document_to' => $document_to ?? null,
                                 'action_by' => $action_by
@@ -275,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $action_by,
                                 $action_from,
                                 $datetime_action,
-                                $office_from,
+                                $action_log_office,
                                 $office_to,
                                 $encoded_by,
                                 $remarks
@@ -287,6 +296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'dv_no' => $dv_no,
                                 'payee' => $payee,
                                 'office_from' => $office_from,
+                                'encoded_from' => $encoded_from,
+                                'returned_from_office' => $action_log_office,
                                 'office_to' => $office_to,
                                 'document_to' => $document_to ?? null,
                                 'action_by' => $action_by
