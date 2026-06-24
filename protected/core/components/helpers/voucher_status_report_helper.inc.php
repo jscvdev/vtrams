@@ -25,24 +25,97 @@ function voucher_status_report_scope(PDO $pdo, string $loggedOffice): array
         $processingOfficeId = (int) ($processing['id'] ?? 0);
     }
 
-    $subOffices = [];
-    foreach (utilities_office_fetch_all($pdo, true) as $row) {
-        if ((int) ($row['is_processing_office'] ?? 0) === 1) {
-            continue;
-        }
-        $parentId = (int) ($row['parent_office_id'] ?? 0);
-        if ($processingOfficeId > 0 && $parentId === $processingOfficeId) {
-            $name = utilities_office_normalize_name((string) ($row['office_name'] ?? ''));
-            if ($name !== '') {
-                $subOffices[] = $name;
-            }
-        }
-    }
+    $subOffices = $processingOfficeId > 0
+        ? utilities_office_descendant_names($pdo, $processingOfficeId)
+        : [];
 
     return [
         'processing_office' => $processingOffice,
         'sub_offices' => array_values(array_unique($subOffices)),
         'processing_office_id' => $processingOfficeId,
+    ];
+}
+
+/**
+ * @return array{sql: string, params: array<string, string>}
+ */
+function voucher_office_build_where_clause(string $columnRef, array $offices, string $paramPrefix = 'vq_office'): array
+{
+    $offices = array_values(array_filter(array_map('trim', $offices), static fn(string $office): bool => $office !== ''));
+    if ($offices === []) {
+        return ['sql' => ' AND 1=0', 'params' => []];
+    }
+
+    if (count($offices) === 1) {
+        return [
+            'sql' => ' AND LOWER(TRIM(' . $columnRef . ')) = LOWER(TRIM(:' . $paramPrefix . '0))',
+            'params' => [':' . $paramPrefix . '0' => $offices[0]],
+        ];
+    }
+
+    $parts = [];
+    $params = [];
+    foreach ($offices as $i => $office) {
+        $ph = ':' . $paramPrefix . $i;
+        $parts[] = 'LOWER(TRIM(' . $columnRef . ')) = LOWER(TRIM(' . $ph . '))';
+        $params[$ph] = $office;
+    }
+
+    return [
+        'sql' => ' AND (' . implode(' OR ', $parts) . ')',
+        'params' => $params,
+    ];
+}
+
+/**
+ * @return array{
+ *   is_main_processing_view: bool,
+ *   selectable_offices: list<string>,
+ *   query_offices: list<string>,
+ *   selected_office: string,
+ *   processing_office: string
+ * }
+ */
+function voucher_office_query_context(PDO $pdo, string $loggedOffice, string $rawOfficeFilter = ''): array
+{
+    $scope = voucher_status_report_scope($pdo, $loggedOffice);
+    $processingOffice = (string) ($scope['processing_office'] ?? '');
+    $loggedOffice = trim($loggedOffice);
+    $isMain = $processingOffice !== ''
+        && voucher_tracking_offices_match($loggedOffice, $processingOffice);
+
+    $selectableOffices = $isMain
+        ? array_values(array_unique(array_merge([$processingOffice], (array) ($scope['sub_offices'] ?? []))))
+        : ($loggedOffice !== '' ? [$loggedOffice] : []);
+
+    $queryOffices = $selectableOffices;
+    $selectedOffice = 'all';
+    $rawOfficeFilter = trim($rawOfficeFilter);
+
+    if (!$isMain) {
+        return [
+            'is_main_processing_view' => false,
+            'selectable_offices' => $selectableOffices,
+            'query_offices' => $selectableOffices,
+            'selected_office' => $loggedOffice,
+            'processing_office' => $processingOffice,
+        ];
+    }
+
+    if ($rawOfficeFilter !== '' && strcasecmp($rawOfficeFilter, 'all') !== 0) {
+        $resolved = utilities_signatory_resolve_office($pdo, $rawOfficeFilter);
+        if ($resolved !== '' && voucher_status_report_office_in_list($resolved, $selectableOffices)) {
+            $queryOffices = [$resolved];
+            $selectedOffice = $resolved;
+        }
+    }
+
+    return [
+        'is_main_processing_view' => true,
+        'selectable_offices' => $selectableOffices,
+        'query_offices' => $queryOffices,
+        'selected_office' => $selectedOffice,
+        'processing_office' => $processingOffice,
     ];
 }
 

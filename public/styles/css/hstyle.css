@@ -1408,6 +1408,49 @@ tr {
     min-width: 280px;
 }
 
+.voucher-card--filter .voucher-overview-filter-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 10px;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-chips {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-office-select {
+    flex: 0 1 240px;
+    min-width: 160px;
+    max-width: 300px;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-office-select select {
+    width: 100%;
+    box-sizing: border-box;
+    background: #F8F9FA;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-height: 42px;
+    color: #444;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-office-select select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-search {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .voucher-card-title {
     font-size: 1.25rem;
     font-weight: 600;

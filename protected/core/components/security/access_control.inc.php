@@ -142,6 +142,82 @@ class AccessControl
     }
 
     /**
+     * Voucher Status and System Logs (Tracking) overview pages.
+     */
+    public static function canAccessVoucherOverviewPages(): bool
+    {
+        if (self::hasMinimumACL(6)) {
+            return true;
+        }
+
+        return self::hasAnyDesignation([
+            'Budget Unit',
+            'Cashiers Unit',
+            'Accounting Unit',
+            'Accountant III',
+            'Processor',
+            'Conservation & Development Section',
+            'CDS',
+        ]);
+    }
+
+    /**
+     * Incoming, Forwarded (sent), and related voucher workflow pages.
+     */
+    public static function canAccessVoucherWorkflowPages(): bool
+    {
+        if (self::hasMinimumACL(3)) {
+            return true;
+        }
+
+        return self::hasAnyDesignation([
+            'ICU',
+            'Planning Section',
+            'Budget Unit',
+            'Accounting Unit',
+            'Office of the PENRO',
+            'Cashiers Unit',
+            'Processor',
+            'Liaison Officer',
+            'Accountant III',
+        ]);
+    }
+
+    /**
+     * Incoming and Processing (forwarding) pages.
+     */
+    public static function canAccessVoucherProcessingPages(): bool
+    {
+        return self::canAccessVoucherWorkflowPages() && self::canAccessExtended();
+    }
+
+    /**
+     * Processed / voucher archives page.
+     */
+    public static function canAccessVoucherArchives(): bool
+    {
+        return self::hasMinimumACL(8) || self::hasRole('Cashiers Unit');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function fileCustomAccessMethods(): array
+    {
+        return [
+            'dashboard.php' => 'canAccessOverviewReports',
+            'voucher_status.php' => 'canAccessVoucherOverviewPages',
+            'voucher_system_logs.php' => 'canAccessVoucherOverviewPages',
+            'voucher_status_report.php' => 'canAccessOverviewReports',
+            'voucher_incoming.php' => 'canAccessVoucherProcessingPages',
+            'voucher_forwarding.php' => 'canAccessVoucherProcessingPages',
+            'voucher_sent.php' => 'canAccessVoucherWorkflowPages',
+            'voucher_archives.php' => 'canAccessVoucherArchives',
+            'voucher_performance.php' => 'canAccessExtended',
+        ];
+    }
+
+    /**
      * Dashboard and Performance overview pages.
      */
     public static function canAccessOverviewReports(): bool
@@ -231,6 +307,16 @@ class AccessControl
             if (!self::hasAnyDesignation($requiredDesignations)) {
                 return false;
             }
+        }
+
+        $customMethods = self::fileCustomAccessMethods();
+        if (isset($customMethods[$fileName])) {
+            $method = $customMethods[$fileName];
+            if (is_callable([self::class, $method])) {
+                return (bool) call_user_func([self::class, $method]);
+            }
+
+            return false;
         }
 
         return true;

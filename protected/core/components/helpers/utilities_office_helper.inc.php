@@ -245,6 +245,30 @@ function utilities_office_descendant_ids(PDO $pdo, int $officeId): array
     return $descendants;
 }
 
+/**
+ * @return list<string>
+ */
+function utilities_office_descendant_names(PDO $pdo, int $officeId): array
+{
+    if ($officeId <= 0) {
+        return [];
+    }
+
+    $names = [];
+    foreach (utilities_office_descendant_ids($pdo, $officeId) as $descendantId) {
+        $record = utilities_office_find_by_id($pdo, $descendantId);
+        if ($record === null) {
+            continue;
+        }
+        $name = utilities_office_normalize_name((string) ($record['office_name'] ?? ''));
+        if ($name !== '') {
+            $names[] = $name;
+        }
+    }
+
+    return array_values(array_unique($names));
+}
+
 function utilities_office_user_count(PDO $pdo, string $officeName): int
 {
     $officeName = utilities_office_normalize_name($officeName);

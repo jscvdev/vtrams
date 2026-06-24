@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../protected/core/components/notifications/notificat
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_status_report_helper.inc.php';
 require_once __DIR__ . '/../../protected/handler/voucher_module/voucher.model.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 AuditHelper::logPageView('Voucher System Logs');
@@ -12,11 +13,16 @@ AuditHelper::logPageView('Voucher System Logs');
 vouchers_amount_ensure_string_column($pdo);
 
 $rawSearch = (string) ($_GET['searchTerm'] ?? '');
+$rawOfficeFilter = trim((string) ($_GET['office'] ?? ''));
+$loggedOffice = trim((string) ($_SESSION['logged_user_office'] ?? ''));
+$officeQueryContext = voucher_office_query_context($pdo, $loggedOffice, $rawOfficeFilter);
+$officeWhere = voucher_office_build_where_clause('val.office_from', (array) ($officeQueryContext['query_offices'] ?? []), 'vslog_office');
+$officeSql = $officeWhere['sql'];
+$officeParams = $officeWhere['params'];
 $q = filterInput($rawSearch);
 $invalidSearch = (trim($rawSearch) !== '' && $q === '');
 $rowsPerPage = clamp_int($_GET['rowsPerPage'] ?? null, 1, 50, 50);
 $maxBrowse = 100;
-$office = (string) ($_SESSION['logged_user_office'] ?? '');
 
 $searchParams = [];
 $searchSql = '';
@@ -35,13 +41,15 @@ if (!$invalidSearch && $q !== '') {
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs val WHERE val.office_from = :office_from' . str_replace(
+    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs val WHERE 1=1' . $officeSql . str_replace(
         ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
         ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
         $searchSql
     );
     $voucher_action_logs_statementCount = $pdo->prepare($countSql);
-    $voucher_action_logs_statementCount->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
+    foreach ($officeParams as $key => $value) {
+        $voucher_action_logs_statementCount->bindValue($key, $value, PDO::PARAM_STR);
+    }
     foreach ($searchParams as $key => $pair) {
         $voucher_action_logs_statementCount->bindValue($key, $pair[0], $pair[1]);
     }
@@ -60,13 +68,15 @@ $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)
 // Each log row keeps its own amount snapshot; do not join vouchers (current amount).
 $fetch_voucher_action_logs_query = 'SELECT val.*, CAST(val.amount AS CHAR) AS amount_log
     FROM voucher_action_logs val
-    WHERE val.office_from = :office_from' . str_replace(
+    WHERE 1=1' . $officeSql . str_replace(
     ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
     ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
     $searchSql
 ) . ' ORDER BY val.id DESC LIMIT :lim OFFSET :off';
 $fetch_voucher_action_logs = $pdo->prepare($fetch_voucher_action_logs_query);
-$fetch_voucher_action_logs->bindParam(':office_from', $_SESSION['logged_user_office'], PDO::PARAM_STR);
+foreach ($officeParams as $key => $value) {
+    $fetch_voucher_action_logs->bindValue($key, $value, PDO::PARAM_STR);
+}
 foreach ($searchParams as $key => $pair) {
     $fetch_voucher_action_logs->bindValue($key, $pair[0], $pair[1]);
 }
@@ -76,6 +86,9 @@ $fetch_voucher_action_logs->execute();
 
 $totalRows = $displayTotal;
 $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : '';
+$qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($officeQueryContext['selected_office'] ?? 'all') !== 'all'
+    ? ('&office=' . rawurlencode((string) $officeQueryContext['selected_office']))
+    : '';
 
 ?>
 <!--=============== MAIN ===============!-->
@@ -83,35 +96,27 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">System Logs</h1>
     </header>
-    <style>
-        #systemLogsFilterForm {
-            display: flex;
-            align-items: center;
-            flex-wrap: nowrap !important;
-            width: 100%;
-            gap: 10px;
-        }
-
-        #systemLogsFilterForm .filter-chips {
-            flex: 0 0 auto;
-            flex-wrap: nowrap !important;
-        }
-
-        #systemLogsFilterForm .filter-search {
-            flex: 1 1 auto;
-            min-width: 0 !important;
-        }
-    </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
             <div class="filter-left">
-                <form method="GET" action="" id="systemLogsFilterForm" class="filter-toolbar-form" onsubmit="return false;">
+                <form method="GET" action="" id="systemLogsFilterForm" class="filter-toolbar-form voucher-overview-filter-form" onsubmit="return false;">
                     <div class="filter-chips" aria-label="Filter tools">
-                        <a class="filter-icon-btn" href="voucher_system_logs.php" aria-label="Home">
-                        </a>
-                        <button type="button" class="filter-icon-btn" aria-label="Copy">
-                        </button>
+                        <a class="filter-icon-btn" href="voucher_system_logs.php" aria-label="Home"></a>
+                        <button type="button" class="filter-icon-btn" aria-label="Copy"></button>
                     </div>
+                    <?php if (!empty($officeQueryContext['is_main_processing_view'])) : ?>
+                        <div class="filter-office-select">
+                            <label class="hidden" for="officeFilter">Office</label>
+                            <select id="officeFilter" name="office" aria-label="Filter by office">
+                                <option value="all"<?= ($officeQueryContext['selected_office'] ?? 'all') === 'all' ? ' selected' : '' ?>>All Offices</option>
+                                <?php foreach ((array) ($officeQueryContext['selectable_offices'] ?? []) as $officeName) : ?>
+                                    <option value="<?= htmlspecialchars((string) $officeName, ENT_QUOTES, 'UTF-8') ?>"<?= ($officeQueryContext['selected_office'] ?? 'all') !== 'all' && voucher_status_report_office_in_list((string) ($officeQueryContext['selected_office'] ?? ''), [(string) $officeName]) ? ' selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $officeName, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
                     <div class="filter-search">
                         <input type="text" id="filterInput" name="searchTerm" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search by payee, processing no., action, etc" autocomplete="off">
                     </div>
@@ -201,7 +206,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                             <button class="pagination_btn_modern" type="button" disabled>Next</button>
                         <?php else: ?>
                             <?php if ($currentPage > 1): ?>
-                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage - 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch; ?>">Previous</a>
+                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage - 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice; ?>">Previous</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Previous</button>
                             <?php endif; ?>
@@ -218,23 +223,23 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                                 if ($totalPages <= 7) {
                                     for ($i = 1; $i <= $totalPages; $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $i . '</a>';
                                     }
                                 } else {
-                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="?page=1&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . '">1</a>';
+                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="?page=1&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">1</a>';
                                     if ($startPage > 2) echo '<span class="pagination_ellipsis">...</span>';
                                     for ($i = max(2, $startPage); $i <= min($totalPages - 1, $endPage2); $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $i . '</a>';
                                     }
                                     if ($endPage2 < $totalPages - 1) echo '<span class="pagination_ellipsis">...</span>';
-                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="?page=' . $totalPages . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . '">' . $totalPages . '</a>';
+                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="?page=' . $totalPages . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $totalPages . '</a>';
                                 }
                                 ?>
                             </div>
 
                             <?php if ($currentPage < $totalPages): ?>
-                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage + 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch; ?>">Next</a>
+                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage + 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice; ?>">Next</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Next</button>
                             <?php endif; ?>
@@ -266,6 +271,20 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
                 u.searchParams.set('searchTerm', v);
             }
             window.location.href = u.toString();
+        }
+        var officeFilter = document.getElementById('officeFilter');
+        if (officeFilter) {
+            officeFilter.addEventListener('change', function() {
+                var u = new URL(window.location.href);
+                u.searchParams.set('page', '1');
+                u.searchParams.set('rowsPerPage', '50');
+                if (officeFilter.value && officeFilter.value !== 'all') {
+                    u.searchParams.set('office', officeFilter.value);
+                } else {
+                    u.searchParams.delete('office');
+                }
+                window.location.href = u.toString();
+            });
         }
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {

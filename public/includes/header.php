@@ -220,16 +220,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                             </div>
                         <?php endif; ?>
                         <?php
-                        $can_view_voucher_overview_pages = (
-                            $_SESSION["acl"] >= 6
-                            || in_array("Budget Unit", $target)
-                            || in_array("Cashiers Unit", $target)
-                            || in_array("Accounting Unit", $target)
-                            || in_array("Accountant III", $target)
-                            || in_array("Processor", $target)
-                            || in_array("Conservation & Development Section", $target)
-                            || in_array("CDS", $target)
-                        );
+                        $can_view_voucher_overview_pages = AccessControl::canAccessVoucherOverviewPages();
                         $can_view_dashboard = AccessControl::canAccessOverviewReports();
                         $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
                         $can_view_designations = $can_view_system_utilities;
@@ -357,13 +348,8 @@ $header_text = $pageTitleHelper->getHeaderText();
                                         <span class='sidebar__link-floating'>Encoded</span>
                                     </a>
                                 </div>
-                                <?php
-                                if (
-                                    $_SESSION['acl'] >= 3 or in_array("ICU", $target) or in_array("Planning Section", $target)
-                                    or in_array("Budget Unit", $target) or in_array("Accounting Unit", $target)
-                                    or in_array("Office of the PENRO", $target) or in_array("Cashiers Unit", $target) or in_array("Processor", $target)
-                                ) : ?>
-                                    <?php if ($can_view_processing): ?>
+                                <?php if (AccessControl::canAccessVoucherWorkflowPages()) : ?>
+                                    <?php if ($can_view_processing) : ?>
                                         <div class="sidebar-link-container">
                                             <a href='../vouchers/voucher_incoming.php' class='sidebar__link'>
                                                 <i class='ri-file-list-3-line sidebar__link_incoming' id='vouchers_incoming'></i>
@@ -386,7 +372,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             <span class='sidebar__link-floating'>Forwarded</span>
                                         </a>
                                     </div>
-                                    <?php if ($_SESSION["acl"] >= 8 or in_array("Cashiers Unit", $target)): ?>
+                                    <?php if (AccessControl::canAccessVoucherArchives()) : ?>
                                         <div class="sidebar-link-container">
                                             <a href="../vouchers/voucher_archives.php" class="sidebar__link">
                                                 <i class="ri-search-line"></i>

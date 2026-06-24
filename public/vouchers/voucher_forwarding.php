@@ -1513,9 +1513,13 @@ if ($showCashierArchiveCol) {
     } else if (targetArray2.includes("Accounting Unit") || targetArray2.includes("Processor")) {
         document.getElementById("dv_no").required = true;
         document.querySelector(".dv_no").readOnly = false;
-    } else if (targetArray2.includes("Cashiers Unit")) {
-        document.getElementById("ada_check_no").required = true;
-        document.querySelector(".ada_check_no").readOnly = false;
+    } else if (targetArray2.includes("Cashiers Unit") || targetArray2.includes("Cashier")) {
+        const adaInput = document.getElementById("ada_check_no");
+        if (adaInput) {
+            adaInput.required = true;
+            adaInput.readOnly = false;
+            adaInput.style.border = "2px solid red";
+        }
     }
 
     // Prevent forwarding for Budget Unit / Budget Officer when ORS No. is empty or "TBD"
@@ -2971,7 +2975,7 @@ if ($showCashierArchiveCol) {
                         <div class="form-container">
                             <div class="label-input__container">
                                 <label for="">ADA/Check No:</label>
-                                <input type="text" class="form-custom-input" name="ada_check_no" id="fwd_ada_check_no" required>
+                                <input type="text" class="form-custom-input" name="ada_check_no" id="fwd_ada_check_no" required style="border: 2px solid red;">
                             </div>
                             <div class="label-input__container">
                                 <label for="">Date:</label>
