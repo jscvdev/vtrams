@@ -1491,7 +1491,7 @@ function voucher_tracking_cross_office_icu_routed_to_processing_unit(object $pdo
 /**
  * Accounting receive requires DV No. based on process_history:
  * - Always for selected e-NGP types.
- * - Same processing office: after Planning Section receives (user_group + designation_limit).
+ * - Same processing office: after upstream routing is complete (Planning or Budget receive, or special-access routing to accounting).
  * - Other offices: after ICU forwards and a downstream processing unit receives.
  */
 function voucher_incoming_requires_dv_no(
@@ -1513,7 +1513,7 @@ function voucher_incoming_requires_dv_no(
         && voucher_history_origin_matches_logged_office($process_history, $logged_user_office);
 
     if ($sameOffice) {
-        return voucher_tracking_history_has_designation_action($pdo, $lines, 'Received by', 'Planning Section');
+        return voucher_forwarding_upstream_routing_complete($pdo, $voucher_type, $process_history);
     }
 
     return voucher_tracking_cross_office_icu_routed_to_processing_unit($pdo, $lines);
