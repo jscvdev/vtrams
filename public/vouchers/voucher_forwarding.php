@@ -1470,8 +1470,8 @@ if ($showCashierArchiveCol) {
             docToSelect.innerHTML = '' +
                 '<option value="" disabled selected>Please Select</option>' +
                 '<option value="Budget Unit">Budget Unit</option>' +
-                '<option value="Accounting Unit">Accounting Unit</option>' +
-                '<option value="Planning Section">Planning Section</option>';
+                '<option value="Planning Section">Planning Section</option>' +
+                '<option value="Accountant III">Chief Accountant</option>';
             docToSelect.value = '';
             return;
         }
