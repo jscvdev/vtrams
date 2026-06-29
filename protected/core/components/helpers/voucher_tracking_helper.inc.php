@@ -367,6 +367,65 @@ function voucher_tracking_resolve_returned_by(?string $voucher_status, string $p
 }
 
 /**
+ * Resolve who returned the voucher for encoder re-forward routing.
+ * Skips encoder self-recalls (e.g. Sent queue) and uses the latest processing-unit return.
+ */
+function voucher_tracking_resolve_returned_by_for_encoder_reforward(
+    ?string $tracking_voucher_status,
+    string $process_history = '',
+    ?string $encoder_name = null
+): string {
+    $encoder = trim((string) ($encoder_name ?? ($_SESSION['logged_user_emp_name'] ?? '')));
+
+    $fromStatus = voucher_tracking_parse_returned_by($tracking_voucher_status);
+    if ($fromStatus !== '' && !voucher_tracking_is_self_return('Returned by: ' . $fromStatus, $encoder)) {
+        return $fromStatus;
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = $lines[$i];
+        if (stripos((string) ($line['action'] ?? ''), 'Returned by') === false) {
+            continue;
+        }
+        $name = trim((string) ($line['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        if ($encoder !== '' && strcasecmp($name, $encoder) === 0) {
+            continue;
+        }
+
+        return $name;
+    }
+
+    return '';
+}
+
+/** Office recorded on the most recent return line for a specific returner. */
+function voucher_tracking_history_return_office_for_returner(string $process_history, string $returned_by): string
+{
+    $returned_by = trim($returned_by);
+    if ($returned_by === '') {
+        return '';
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = $lines[$i];
+        if (stripos((string) ($line['action'] ?? ''), 'Returned by') === false) {
+            continue;
+        }
+        $name = trim((string) ($line['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $returned_by) === 0) {
+            return trim((string) ($line['office'] ?? ''));
+        }
+    }
+
+    return '';
+}
+
+/**
  * Resolve forward target when re-forwarding a returned voucher.
  *
  * @return array{designation: string, label: string, returned_by: string, udc: string, office: string}
@@ -374,10 +433,13 @@ function voucher_tracking_resolve_returned_by(?string $voucher_status, string $p
 function voucher_tracking_return_forward_target(
     object $pdo,
     ?string $tracking_voucher_status,
-    string $process_history = ''
+    string $process_history = '',
+    ?string $encoder_name = null
 ): array {
     $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
-    $returnedBy = voucher_tracking_resolve_returned_by($tracking_voucher_status, $process_history);
+    $returnedBy = $encoder_name !== null
+        ? voucher_tracking_resolve_returned_by_for_encoder_reforward($tracking_voucher_status, $process_history, $encoder_name)
+        : voucher_tracking_resolve_returned_by($tracking_voucher_status, $process_history);
     if ($returnedBy === '') {
         return $empty;
     }
@@ -395,6 +457,9 @@ function voucher_tracking_return_forward_target(
         }
     }
 
+    if ($office === '') {
+        $office = voucher_tracking_history_return_office_for_returner($process_history, $returnedBy);
+    }
     if ($office === '' && trim($process_history) !== '') {
         $office = voucher_tracking_history_last_return_office($process_history);
     }
@@ -469,17 +534,18 @@ function voucher_tracking_resolve_return_forward_target(
     string $process_history = ''
 ): array {
     $empty = ['designation' => '', 'label' => '', 'returned_by' => '', 'udc' => '', 'office' => ''];
-    $returnedBy = voucher_tracking_resolve_returned_by($tracking_voucher_status, $process_history);
+    $returnedBy = voucher_tracking_resolve_returned_by_for_encoder_reforward(
+        $tracking_voucher_status,
+        $process_history,
+        $logged_user_name
+    );
     if ($returnedBy !== '') {
-        if (voucher_tracking_is_self_return('Returned by: ' . $returnedBy, $logged_user_name)) {
-            return $empty;
-        }
-
-        $statusForTarget = voucher_tracking_parse_returned_by($tracking_voucher_status) !== ''
-            ? (string) $tracking_voucher_status
-            : ('Returned by: ' . $returnedBy);
-
-        return voucher_tracking_return_forward_target($pdo, $statusForTarget, $process_history);
+        return voucher_tracking_return_forward_target(
+            $pdo,
+            'Returned by: ' . $returnedBy,
+            $process_history,
+            $logged_user_name
+        );
     }
 
     $encodedFrom = trim((string) $encoded_from);
@@ -510,9 +576,15 @@ function voucher_forward_receiver_for_return_target(
     string $forward_designation,
     string $office_to,
     string $exclude_udc = '',
-    string $process_history = ''
+    string $process_history = '',
+    ?string $encoder_name = null
 ): array {
-    $returnTarget = voucher_tracking_return_forward_target($pdo, $tracking_voucher_status, $process_history);
+    $returnTarget = voucher_tracking_return_forward_target(
+        $pdo,
+        $tracking_voucher_status,
+        $process_history,
+        $encoder_name
+    );
     $returnOffice = trim((string) ($returnTarget['office'] ?? ''));
     if ($returnOffice !== '') {
         $office_to = $returnOffice;
@@ -1561,13 +1633,9 @@ function voucher_tracking_needs_return_forward(
     }
 
     $processHistory = trim((string) (($tracking_row ?? [])['process_history'] ?? ''));
-    $returnedBy = voucher_tracking_resolve_returned_by($status, $processHistory);
+    $returnedBy = voucher_tracking_resolve_returned_by_for_encoder_reforward($status, $processHistory, $logged_user_name);
 
     if ($returnedBy !== '') {
-        if (voucher_tracking_is_self_return('Returned by: ' . $returnedBy, $logged_user_name)) {
-            return false;
-        }
-
         return true;
     }
 

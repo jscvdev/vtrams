@@ -169,7 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $forward_return_designation,
                             $office_to,
                             $sender_udc,
-                            $process_history
+                            $process_history,
+                            $loggedEncoderName
                         );
                         $receiver_udc = $resolved['receiver_udc'];
                         $forwarded_to = $resolved['forwarded_to'];

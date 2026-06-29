@@ -205,7 +205,34 @@ function voucher_status_report_is_paid(PDO $pdo, array $row): bool
 
 function voucher_status_report_is_returned(array $row): bool
 {
-    return voucher_tracking_is_returned_active_status((string) ($row['active_status'] ?? ''));
+    if (voucher_tracking_is_returned_active_status((string) ($row['active_status'] ?? ''))) {
+        return true;
+    }
+
+    return voucher_tracking_parse_returned_by((string) ($row['voucher_status'] ?? '')) !== '';
+}
+
+/** Whether a voucher_tracking row belongs on the transmitted status report. */
+function voucher_status_report_row_is_in_scope(array $row): bool
+{
+    $active = voucher_tracking_normalize_active_status((string) ($row['active_status'] ?? ''));
+    if ($active !== 'no') {
+        return true;
+    }
+
+    return voucher_status_report_is_returned($row);
+}
+
+/** SQL fragment for status report rows (includes returned-to-encoder vouchers). */
+function voucher_status_report_include_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return " AND (
+        {$alias}.active_status <> 'no'
+        OR {$alias}.voucher_status LIKE 'Returned by:%'
+        OR {$alias}.active_status = 'returned'
+    )";
 }
 
 /**
@@ -215,7 +242,7 @@ function voucher_status_report_is_returned(array $row): bool
  */
 function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope): ?array
 {
-    if (voucher_tracking_is_excluded_from_counts((string) ($row['active_status'] ?? ''))) {
+    if (!voucher_status_report_row_is_in_scope($row)) {
         return null;
     }
 
@@ -241,7 +268,10 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
     }
 
     $isPaid = voucher_status_report_is_paid($pdo, $row);
-    $isReturned = voucher_status_report_is_returned($row) && !$isPaid;
+    $isReturned = voucher_status_report_is_returned($row);
+    if ($isReturned) {
+        $isPaid = false;
+    }
     if ($isPaid) {
         $statusLabel = 'Paid';
     } elseif ($isReturned) {
@@ -312,7 +342,7 @@ function voucher_status_report_filter_by_status(array $entries, string $statusFi
  */
 function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $officeFilter = null, int $limit = 0): array
 {
-    $sql = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+    $sql = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_status_report_include_sql('vt');
     $params = [];
 
     $officeFilter = trim((string) ($officeFilter ?? ''));

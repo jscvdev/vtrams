@@ -85,9 +85,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $trackingStatusForSync = $action;
                 $trackingRow = voucher_tracking_fetch_by_processing_no($pdo, $processing_no);
-                $returnedByForForward = voucher_tracking_resolve_returned_by(
+                $returnedByForForward = voucher_tracking_resolve_returned_by_for_encoder_reforward(
                     (string) ($trackingRow['voucher_status'] ?? ''),
-                    (string) ($trackingRow['process_history'] ?? '')
+                    (string) ($trackingRow['process_history'] ?? ''),
+                    (string) ($_SESSION['logged_user_emp_name'] ?? '')
                 );
                 if ($returnedByForForward !== '') {
                     // Keep return routing until the encoder re-forwards (edit should not reset Forward To).
