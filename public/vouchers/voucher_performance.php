@@ -259,7 +259,8 @@ AuditHelper::logPageView('Performance');
         .header,
         .filter_options,
         .print-btn,
-        .no-print {
+        .no-print,
+        .dashboard-content {
             display: none !important;
         }
 
@@ -271,10 +272,132 @@ AuditHelper::logPageView('Performance');
             background: white !important;
         }
 
-        .print-title {
-            font-size: 18px;
-            margin-bottom: 16px;
+        .print-only {
+            display: block !important;
         }
+
+        .perf-print-header {
+            display: block !important;
+        }
+
+        .perf-table th,
+        .perf-table td {
+            border: none;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 7px 10px;
+            font-size: 11px;
+        }
+
+        .perf-table th {
+            border-bottom: 2px solid #111827;
+            background: transparent !important;
+        }
+    }
+
+    .print-only,
+    .perf-print-header {
+        display: none;
+    }
+
+    .perf-print-banner {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 20px;
+        border: 2px solid #111827;
+        border-radius: 10px;
+        background: #fff;
+        margin-bottom: 14px;
+    }
+
+    .perf-print-banner__eyebrow {
+        margin: 0 0 4px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+
+    .perf-print-banner h2 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.2;
+        color: #111827;
+    }
+
+    .perf-print-banner__subtitle {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: #4b5563;
+    }
+
+    .perf-print-banner__meta {
+        display: grid;
+        gap: 8px;
+        min-width: 210px;
+    }
+
+    .perf-print-banner__meta div {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 4px;
+    }
+
+    .perf-print-banner__meta span {
+        color: #6b7280;
+    }
+
+    .perf-print-banner__meta strong {
+        color: #111827;
+        font-weight: 700;
+    }
+
+    .perf-print-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .perf-print-summary__item {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #f9fafb;
+    }
+
+    .perf-print-summary__item span {
+        display: block;
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 4px;
+    }
+
+    .perf-print-summary__item strong {
+        font-size: 18px;
+        color: #111827;
+    }
+
+    .perf-print-summary__item small {
+        display: block;
+        font-size: 11px;
+        color: #4b5563;
+        margin-top: 4px;
+    }
+
+    .stat-amount {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+
+    .perf-total-row td {
+        font-weight: 700;
+        background: #f9fafb;
+        border-top: 2px solid #e5e7eb;
     }
 </style>
 
@@ -302,8 +425,20 @@ AuditHelper::logPageView('Performance');
                     <?php for ($m = 1; $m <= 12; $m++) echo '<option value="' . str_pad((string)$m, 2, '0', STR_PAD_LEFT) . '">' . date('M', mktime(0, 0, 0, $m, 1)) . '</option>'; ?>
                 </select>
             </div>
+            <div>
+                <label>Action:</label>
+                <select id="actionTypeFilter">
+                    <option value="all">All Actions</option>
+                    <option value="Forwarded">Forwarded</option>
+                    <option value="Processed">Processed</option>
+                    <option value="Returned">Returned</option>
+                    <option value="Received">Received</option>
+                    <option value="Transmitted">Transmitted</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
             <button id="applyFiltersBtn">Apply</button>
-            <button class="print-btn" id="printDailyBtn">Daily Printout (Taken-Action)</button>
+            <button class="print-btn" id="printDailyBtn">Print Report</button>
             <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
                 <label for="perfTableSearch" style="font-size:14px;">Table search</label>
                 <input type="text" id="perfTableSearch" placeholder="Processing no., payee, action…" style="padding:6px;border-radius:5px;border:1px solid #ddd;min-width:200px;" autocomplete="off">
@@ -325,6 +460,23 @@ AuditHelper::logPageView('Performance');
             </div>
         </section>
 
+        <div class="perf-print-header print-only" id="perfPrintHeader">
+            <div class="perf-print-banner">
+                <div>
+                    <p class="perf-print-banner__eyebrow">Voucher Tracking</p>
+                    <h2>Performance Report</h2>
+                    <p class="perf-print-banner__subtitle">Taken-Action Summary</p>
+                </div>
+                <div class="perf-print-banner__meta">
+                    <div><span>Date</span><strong id="perfPrintDate">—</strong></div>
+                    <div><span>Action</span><strong id="perfPrintAction">All</strong></div>
+                    <div><span>Rows</span><strong id="perfPrintRows">0</strong></div>
+                    <div><span>Generated</span><strong id="perfPrintGenerated">—</strong></div>
+                </div>
+            </div>
+            <div class="perf-print-summary" id="perfPrintSummary"></div>
+        </div>
+
         <section class="table-container">
             <h3 style="margin-bottom:12px;">Taken-Action</h3>
             <table class="perf-table" id="perfTable">
@@ -333,12 +485,20 @@ AuditHelper::logPageView('Performance');
                         <th>Processing No</th>
                         <th>DV No</th>
                         <th>Payee</th>
+                        <th style="text-align:right;">Amount</th>
                         <th>Action Type</th>
                         <th>Action By</th>
                         <th>Date/Time</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
+                <tfoot id="perfTableFoot" style="display:none;">
+                    <tr class="perf-total-row">
+                        <td colspan="3">Total</td>
+                        <td style="text-align:right;" id="perfTableTotalAmount">—</td>
+                        <td colspan="3" id="perfTableTotalCount"></td>
+                    </tr>
+                </tfoot>
             </table>
             <div class="no-data" id="noDataMsg" style="display:none;">No data for selected filters.</div>
             <div class="no-print perf-table-pager" id="perfTablePager">
@@ -381,10 +541,24 @@ AuditHelper::logPageView('Performance');
             const d = document.getElementById('dateFilter').value;
             const y = document.getElementById('yearFilter').value;
             const m = document.getElementById('monthFilter').value;
+            const a = document.getElementById('actionTypeFilter').value;
             if (d) p.date = d;
             if (y !== 'all') p.year = y;
             if (m !== 'all') p.month = m;
+            if (a !== 'all') p.action_type = a;
             return new URLSearchParams(p).toString();
+        }
+
+        function formatFilterLabel() {
+            const d = document.getElementById('dateFilter').value;
+            const y = document.getElementById('yearFilter').value;
+            const m = document.getElementById('monthFilter').value;
+            const a = document.getElementById('actionTypeFilter').value;
+            if (d) return d;
+            const parts = [];
+            if (m !== 'all') parts.push(m);
+            if (y !== 'all') parts.push(y);
+            return parts.length ? parts.join('/') : 'All dates';
         }
 
         function fetchData(cb) {
@@ -410,6 +584,8 @@ AuditHelper::logPageView('Performance');
                     console.error(err);
                     cb({
                         overall: {},
+                        overall_amount: {},
+                        total_amount: '0.00',
                         daily: {},
                         table: [],
                         table_meta: { page: 1, per_page: 50, total: 0, total_pages: 1 },
@@ -418,7 +594,7 @@ AuditHelper::logPageView('Performance');
                 });
         }
 
-        function renderStats(overall) {
+        function renderStats(overall, overallAmount, totalAmount) {
             const order = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted', 'Other'];
             const icons = {
                 Forwarded: 'ri-send-plane-line',
@@ -430,11 +606,26 @@ AuditHelper::logPageView('Performance');
             };
             const html = order.map(t => {
                 const v = overall[t] || 0;
+                const amt = (overallAmount && overallAmount[t]) ? overallAmount[t] : '';
                 const c = actionColors[t] || actionColors.Other;
                 const iconClass = icons[t] || icons.Other;
-                return `<div class="modern-stat-card"><div class="stat-icon" style="background:${c}"><i class="${iconClass}" style="font-size:1.25rem;"></i></div><div class="stat-text"><span class="stat-label">${t}</span><span class="stat-value">${v}</span></div></div>`;
+                const amtHtml = amt ? `<span class="stat-amount">₱${amt}</span>` : '';
+                return `<div class="modern-stat-card"><div class="stat-icon" style="background:${c}"><i class="${iconClass}" style="font-size:1.25rem;"></i></div><div class="stat-text"><span class="stat-label">${t}</span><span class="stat-value">${v}</span>${amtHtml}</div></div>`;
             }).join('');
-            document.getElementById('statsCards').innerHTML = html;
+            const totalCard = `<div class="modern-stat-card"><div class="stat-icon" style="background:rgba(17,24,39,0.12)"><i class="ri-money-dollar-circle-line" style="font-size:1.25rem;"></i></div><div class="stat-text"><span class="stat-label">Total Amount</span><span class="stat-value">${totalAmount ? '₱' + totalAmount : '—'}</span></div></div>`;
+            document.getElementById('statsCards').innerHTML = html + totalCard;
+        }
+
+        function renderPrintSummary(overall, overallAmount, totalAmount) {
+            const el = document.getElementById('perfPrintSummary');
+            if (!el) return;
+            const order = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted'];
+            const items = order.filter(t => (overall[t] || 0) > 0).map(t => {
+                const amt = (overallAmount && overallAmount[t]) ? `₱${overallAmount[t]}` : '';
+                return `<div class="perf-print-summary__item"><span>${t}</span><strong>${overall[t] || 0}</strong>${amt ? `<small>${amt}</small>` : ''}</div>`;
+            }).join('');
+            const totalItem = `<div class="perf-print-summary__item"><span>Total Amount</span><strong>${totalAmount ? '₱' + totalAmount : '—'}</strong></div>`;
+            el.innerHTML = items + totalItem;
         }
 
         function renderActionChart(overall) {
@@ -490,8 +681,11 @@ AuditHelper::logPageView('Performance');
             });
         }
 
-        function renderTable(rows, meta) {
+        function renderTable(rows, meta, totalAmount) {
             const tbody = document.querySelector('#perfTable tbody');
+            const tfoot = document.getElementById('perfTableFoot');
+            const totalAmtEl = document.getElementById('perfTableTotalAmount');
+            const totalCountEl = document.getElementById('perfTableTotalCount');
             const noData = document.getElementById('noDataMsg');
             const pager = document.getElementById('perfTablePager');
             const prev = document.getElementById('perfTablePrev');
@@ -505,6 +699,7 @@ AuditHelper::logPageView('Performance');
             tableTotalPages = tp;
             if (rows.length === 0) {
                 noData.style.display = 'block';
+                if (tfoot) tfoot.style.display = 'none';
                 if (pager && prev && next && pinfo) {
                     pager.style.display = 'flex';
                     prev.disabled = true;
@@ -520,9 +715,14 @@ AuditHelper::logPageView('Performance');
             noData.style.display = 'none';
             rows.forEach(r => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${r.processing_no || '-'}</td><td>${r.dv_no || '-'}</td><td>${r.payee || '-'}</td><td>${r.action_type || '-'}</td><td>${r.action_by || '-'}</td><td>${r.datetime_action || '-'}</td>`;
+                tr.innerHTML = `<td>${r.processing_no || '-'}</td><td>${r.dv_no || '-'}</td><td>${r.payee || '-'}</td><td style="text-align:right;">${r.amount ? '₱' + r.amount : '—'}</td><td>${r.action_type || '-'}</td><td>${r.action_by || '-'}</td><td>${r.datetime_action || '-'}</td>`;
                 tbody.appendChild(tr);
             });
+            if (tfoot && totalAmtEl && totalCountEl) {
+                tfoot.style.display = '';
+                totalAmtEl.textContent = totalAmount ? '₱' + totalAmount : '—';
+                totalCountEl.textContent = tot + ' voucher' + (tot === 1 ? '' : 's');
+            }
             if (pager && prev && next && pinfo) {
                 const end = Math.min(p * per, tot);
                 pinfo.classList.remove('perf-table-pager__info--empty');
@@ -533,51 +733,97 @@ AuditHelper::logPageView('Performance');
             }
         }
 
+        let lastOverall = {};
+        let lastOverallAmount = {};
+        let lastTotalAmount = '';
+
         function refresh() {
             tablePage = 1;
             if (perfSearch) tableQ = String(perfSearch.value || '');
             fetchData(data => {
-                renderStats(data.overall || {});
-                renderActionChart(data.overall || {});
+                lastOverall = data.overall || {};
+                lastOverallAmount = data.overall_amount || {};
+                lastTotalAmount = data.total_amount || '';
+                renderStats(lastOverall, lastOverallAmount, lastTotalAmount);
+                renderPrintSummary(lastOverall, lastOverallAmount, lastTotalAmount);
+                renderActionChart(lastOverall);
                 renderDailyChart(data.daily || {});
-                renderTable(data.table || [], data.table_meta || {});
+                renderTable(data.table || [], data.table_meta || {}, lastTotalAmount);
             });
         }
 
         function refreshTableOnly() {
             fetchData(data => {
-                renderTable(data.table || [], data.table_meta || {});
+                lastTotalAmount = data.total_amount || '';
+                renderTable(data.table || [], data.table_meta || {}, lastTotalAmount);
             });
         }
 
         document.getElementById('applyFiltersBtn').addEventListener('click', refresh);
         document.getElementById('printDailyBtn').addEventListener('click', function() {
             const d = document.getElementById('dateFilter').value;
-            if (!d) {
-                showNotify('Select a date first for daily printout.', 'warning', 3000);
-                return;
-            }
-            const p = new URLSearchParams({
-                date: d,
-                full_table: '1'
-            });
+            const actionSel = document.getElementById('actionTypeFilter');
+            const actionLabel = actionSel && actionSel.value !== 'all' ? actionSel.value : 'All';
+            const generated = new Date().toLocaleString();
+            const p = new URLSearchParams(getParams());
+            p.set('full_table', '1');
             fetch(base + '?' + p.toString())
                 .then(r => r.json())
                 .then(data => {
                     const rows = data.table || [];
                     const overall = data.overall || {};
+                    const overallAmount = data.overall_amount || {};
+                    const totalAmount = data.total_amount || '';
+                    if (rows.length === 0) {
+                        if (typeof showNotify === 'function') showNotify('No data to print for selected filters.', 'warning', 3000);
+                        return;
+                    }
                     const printWindow = window.open('', '_blank');
+                    const dateLabel = d || formatFilterLabel();
+                    const summaryItems = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted'].filter(t => (overall[t] || 0) > 0).map(t => {
+                        const amt = overallAmount[t] ? ` · ₱${overallAmount[t]}` : '';
+                        return `<div class="summary-item"><span>${t}</span><strong>${overall[t] || 0}${amt}</strong></div>`;
+                    }).join('');
                     printWindow.document.write(`
-<!DOCTYPE html><html><head><title>Daily Taken-Action Report - ${d}</title>
-<style>body{font-family:sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{padding:8px;border:1px solid #ddd;} th{background:#f5f5f5;}
-.summary{margin-bottom:20px;}</style></head><body>
-<h1 class="print-title">Daily Taken-Action Report</h1>
-<p><strong>Date:</strong> ${d}</p>
-<div class="summary"><strong>Summary:</strong> Forwarded: ${overall.Forwarded||0}, Processed: ${overall.Processed||0}, Returned: ${overall.Returned||0}, Received: ${overall.Received||0}, Transmitted: ${overall.Transmitted||0}</div>
-<table><thead><tr><th>Processing No</th><th>DV No</th><th>Payee</th><th>Action Type</th><th>Action By</th><th>Date/Time</th></tr></thead><tbody>
-${rows.map(r=>`<tr><td>${r.processing_no||'-'}</td><td>${r.dv_no||'-'}</td><td>${r.payee||'-'}</td><td>${r.action_type||'-'}</td><td>${r.action_by||'-'}</td><td>${r.datetime_action||'-'}</td></tr>`).join('')}
-</tbody></table>
-<p style="margin-top:20px;font-size:12px;color:#666;">Each voucher counted once. PENRO Disbursement Voucher System - Performance Report</p>
+<!DOCTYPE html><html><head><title>Performance Report</title>
+<style>
+@page { size: A4 landscape; margin: 12mm; }
+body{font-family:"Segoe UI",Arial,sans-serif;padding:20px;color:#111827;}
+.banner{display:flex;justify-content:space-between;gap:20px;padding:18px 20px;border:2px solid #111827;border-radius:10px;margin-bottom:14px;}
+.banner__eyebrow{margin:0 0 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6b7280;}
+.banner h1{margin:0;font-size:22px;}
+.banner__subtitle{margin:6px 0 0;font-size:13px;color:#4b5563;}
+.banner__meta{display:grid;gap:8px;min-width:210px;font-size:12px;}
+.banner__meta div{display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding-bottom:4px;}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px;}
+.summary-item{border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;background:#f9fafb;}
+.summary-item span{display:block;font-size:11px;color:#6b7280;margin-bottom:4px;}
+.summary-item strong{font-size:18px;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{border-bottom:2px solid #111827;padding:8px 10px;text-align:left;}
+td{border-bottom:1px solid #e5e7eb;padding:7px 10px;}
+tfoot td{font-weight:700;background:#f9fafb;border-top:2px solid #e5e7eb;}
+.footer{margin-top:16px;font-size:11px;color:#6b7280;text-align:right;}
+</style></head><body>
+<div class="banner">
+  <div>
+    <p class="banner__eyebrow">Voucher Tracking</p>
+    <h1>Performance Report</h1>
+    <p class="banner__subtitle">Taken-Action Summary</p>
+  </div>
+  <div class="banner__meta">
+    <div><span>Date</span><strong>${dateLabel}</strong></div>
+    <div><span>Action</span><strong>${actionLabel}</strong></div>
+    <div><span>Rows</span><strong>${rows.length}</strong></div>
+    <div><span>Generated</span><strong>${generated}</strong></div>
+  </div>
+</div>
+<div class="summary">${summaryItems}<div class="summary-item"><span>Total Amount</span><strong>${totalAmount ? '₱' + totalAmount : '—'}</strong></div></div>
+<h3 style="margin:0 0 10px;font-size:15px;">Voucher Listing</h3>
+<table><thead><tr><th>Processing No</th><th>DV No</th><th>Payee</th><th style="text-align:right;">Amount</th><th>Action Type</th><th>Action By</th><th>Date/Time</th></tr></thead><tbody>
+${rows.map(r=>`<tr><td>${r.processing_no||'-'}</td><td>${r.dv_no||'-'}</td><td>${r.payee||'-'}</td><td style="text-align:right;">${r.amount?'₱'+r.amount:'—'}</td><td>${r.action_type||'-'}</td><td>${r.action_by||'-'}</td><td>${r.datetime_action||'-'}</td></tr>`).join('')}
+</tbody><tfoot><tr><td colspan="3">Total</td><td style="text-align:right;">${totalAmount?'₱'+totalAmount:'—'}</td><td colspan="3">${rows.length} voucher${rows.length===1?'':'s'}</td></tr></tfoot></table>
+<p class="footer">End of report · ${rows.length} record${rows.length===1?'':'s'} · ${generated}</p>
 </body></html>`);
                     printWindow.document.close();
                     printWindow.print();

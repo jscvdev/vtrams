@@ -214,7 +214,16 @@ class AccessControl
             'voucher_sent.php' => 'canAccessVoucherWorkflowPages',
             'voucher_archives.php' => 'canAccessVoucherArchives',
             'voucher_performance.php' => 'canAccessExtended',
+            'voucher_returned_liaison.php' => 'canAccessLiaisonReturnedVouchers',
         ];
+    }
+
+    /**
+     * Returned Vouchers view for Liaison Officers (and System Admin).
+     */
+    public static function canAccessLiaisonReturnedVouchers(): bool
+    {
+        return self::hasRole('Liaison Officer') || self::hasRole('System Admin');
     }
 
     /**

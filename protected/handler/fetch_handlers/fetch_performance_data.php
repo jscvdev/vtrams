@@ -10,6 +10,7 @@ require __DIR__ . '/../../core/components/security/config_session.inc.php';
 require __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/cursor_pagination_helper.php';
+require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -23,6 +24,10 @@ if ($user === null && !empty($_SESSION['logged_user_emp_name'])) {
     $user = $_SESSION['logged_user_emp_name'];
 }
 $date   = isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date']) ? $_GET['date'] : null;
+
+$allowedActionTypes = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted', 'Other'];
+$rawActionType = trim((string) ($_GET['action_type'] ?? 'all'));
+$actionTypeFilter = in_array($rawActionType, $allowedActionTypes, true) ? $rawActionType : null;
 
 $whereParts = ["1=1"];
 $params = [];
@@ -67,9 +72,7 @@ if (trim($rawQ) !== '' && $q === '') {
 
     exit;
 }
-$fullTable = (string) ($_GET['full_table'] ?? '') === '1'
-    && $date !== null
-    && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $date);
+$fullTable = (string) ($_GET['full_table'] ?? '') === '1';
 $tablePage = max(1, (int) ($_GET['table_page'] ?? 1));
 $tablePerPage = clamp_int($_GET['table_per_page'] ?? null, 1, 50, 50);
 $maxTableBrowse = 100;
@@ -85,6 +88,11 @@ $actionCase = "
         ELSE 'Other'
     END
 ";
+
+if ($actionTypeFilter !== null) {
+    $whereParts[] = "({$actionCase}) = :action_type";
+    $params[':action_type'] = $actionTypeFilter;
+}
 
 try {
     // Overall counts (deduplicated by processing_no per action type)
@@ -105,6 +113,43 @@ try {
     $overall = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $overall[$row['action_type']] = (int)$row['cnt'];
+    }
+
+    $overallAmount = [];
+    $sqlAmountOverall = "
+        SELECT
+            action_type,
+            processing_no,
+            MAX(amount) AS amount
+        FROM (
+            SELECT
+                $actionCase AS action_type,
+                processing_no,
+                amount
+            FROM voucher_action_logs
+            WHERE $whereSQL
+        ) deduped
+        GROUP BY action_type, processing_no
+    ";
+    $stmt = $pdo->prepare($sqlAmountOverall);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->execute();
+    $seenAmountByType = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $type = (string) ($row['action_type'] ?? 'Other');
+        $pn = (string) ($row['processing_no'] ?? '');
+        $amountStr = amount_resolve_charged_or_amount('', $row['amount'] ?? '');
+        if ($pn === '' || $amountStr === '') {
+            continue;
+        }
+        $key = $type . '|' . $pn;
+        if (isset($seenAmountByType[$key])) {
+            continue;
+        }
+        $seenAmountByType[$key] = true;
+        $overallAmount[$type] = bcadd((string) ($overallAmount[$type] ?? '0'), $amountStr, 2);
     }
 
     // Daily breakdown for charts
@@ -137,6 +182,7 @@ try {
             processing_no,
             dv_no,
             payee,
+            amount,
             $actionCase AS action_type,
             action_by,
             datetime_action
@@ -158,6 +204,8 @@ try {
                 'processing_no' => $row['processing_no'],
                 'dv_no' => $row['dv_no'],
                 'payee' => $row['payee'],
+                'amount' => format_amount_display(amount_resolve_charged_or_amount('', $row['amount'] ?? '')),
+                'amount_raw' => amount_resolve_charged_or_amount('', $row['amount'] ?? ''),
                 'action_type' => $row['action_type'],
                 'action_by' => $row['action_by'],
                 'datetime_action' => $row['datetime_action'],
@@ -221,13 +269,44 @@ try {
         }
     }
 
+    $totalAmount = '0';
+    foreach ($filteredTable as $i => $r) {
+        $amt = (string) ($r['amount_raw'] ?? '');
+        if ($amt === '') {
+            $amt = amount_resolve_charged_or_amount('', $r['amount'] ?? '');
+        }
+        if ($amt !== '') {
+            $totalAmount = bcadd($totalAmount, $amt, 2);
+        }
+        unset($filteredTable[$i]['amount_raw']);
+    }
+    foreach ($tableOut as $i => $r) {
+        unset($tableOut[$i]['amount_raw']);
+    }
+
+    $overallAmountFormatted = [];
+    foreach ($overallAmount as $type => $sum) {
+        $overallAmountFormatted[$type] = format_amount_display($sum);
+    }
+
     echo json_encode([
         'overall' => $overall,
+        'overall_amount' => $overallAmountFormatted,
+        'total_amount' => format_amount_display($totalAmount),
         'daily' => $daily,
         'table' => $tableOut,
         'table_meta' => $tableMeta,
         'users' => $users,
-        'filters' => ['office' => $office, 'year' => $year, 'month' => $month, 'day' => $day, 'user' => $user, 'date' => $date, 'q' => $q],
+        'filters' => [
+            'office' => $office,
+            'year' => $year,
+            'month' => $month,
+            'day' => $day,
+            'user' => $user,
+            'date' => $date,
+            'q' => $q,
+            'action_type' => $actionTypeFilter ?? 'all',
+        ],
     ]);
 } catch (Exception $e) {
     http_response_code(500);

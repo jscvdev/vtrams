@@ -87,6 +87,7 @@ $dashboard_offices = utilities_signatory_fetch_offices($pdo);
 $dashboard_timing_section_labels = array_map(
     static fn(string $section): string => match ($section) {
         'Planning Section' => 'Planning',
+        'ICU' => 'ICU',
         'Conservation & Development Section' => 'CDS',
         'Budget Unit' => 'Budget',
         'Accounting Unit' => 'Accounting',

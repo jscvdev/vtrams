@@ -2052,6 +2052,7 @@ function voucher_tracking_dashboard_sections(): array
 {
     return [
         'Planning Section',
+        'ICU',
         'Conservation & Development Section',
         'Budget Unit',
         'Accounting Unit',

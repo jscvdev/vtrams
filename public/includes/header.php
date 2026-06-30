@@ -226,6 +226,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_designations = $can_view_system_utilities;
                         $can_view_performance = AccessControl::canAccessExtended();
                         $can_view_processing = AccessControl::canAccessExtended();
+                        $can_view_returned_liaison = AccessControl::canAccessLiaisonReturnedVouchers();
                         
 
                         $show_general_section = (
@@ -378,6 +379,15 @@ $header_text = $pageTitleHelper->getHeaderText();
                                                 <i class="ri-search-line"></i>
                                                 <span class="sidebar__link-name">Processed</span>
                                                 <span class="sidebar__link-floating">Processed</span>
+                                            </a>
+                                        </div>
+                                    <?php endif ?>
+                                    <?php if ($can_view_returned_liaison) : ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../vouchers/voucher_returned_liaison.php" class="sidebar__link">
+                                                <i class="ri-arrow-go-back-line"></i>
+                                                <span class="sidebar__link-name">Returned Vouchers</span>
+                                                <span class="sidebar__link-floating">Returned Vouchers</span>
                                             </a>
                                         </div>
                                     <?php endif ?>
