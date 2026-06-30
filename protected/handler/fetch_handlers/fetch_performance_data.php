@@ -62,8 +62,6 @@ if ($user) {
     $params[':user'] = $user;
 }
 
-$whereSQL = implode(" AND ", $whereParts);
-
 $rawQ = (string) ($_GET['q'] ?? '');
 $q = filterInput($rawQ);
 if (trim($rawQ) !== '' && $q === '') {
@@ -93,6 +91,8 @@ if ($actionTypeFilter !== null) {
     $whereParts[] = "({$actionCase}) = :action_type";
     $params[':action_type'] = $actionTypeFilter;
 }
+
+$whereSQL = implode(" AND ", $whereParts);
 
 try {
     // Overall counts (deduplicated by processing_no per action type)
