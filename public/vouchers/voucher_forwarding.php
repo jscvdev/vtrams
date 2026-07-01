@@ -1470,12 +1470,25 @@ if ($showCashierArchiveCol) {
         }
 
         if (targetArray2.includes('ICU')) {
-            docToSelect.innerHTML = '' +
-                '<option value="" disabled selected>Please Select</option>' +
-                '<option value="Budget Unit">Budget Unit</option>' +
-                '<option value="Planning Section">Planning Section</option>' +
-                '<option value="Accountant III">Chief Accountant</option>';
-            docToSelect.value = '';
+            docToSelect.innerHTML = `
+        <option value="" disabled selected>Please Select</option>
+        <option value="Budget Unit">Budget Unit</option>
+        <option value="Accounting Unit">Accounting Unit</option>
+        <option value="Planning Section">Planning Section</option>
+        <option value="Accountant III">Chief Accountant</option>
+
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
+            <option value="4HyLy">1. Marife C. Briton</option>
+        <?php endif; ?>
+
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
+            <option value="YS9M3">2. Diana E. Costuna</option>
+        <?php endif; ?>
+
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
+            <option value="s1JxV">3. Gracile B. Palce</option>
+        <?php endif; ?>
+    `;
             return;
         }
 
