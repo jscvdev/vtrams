@@ -209,6 +209,11 @@ function voucher_status_report_is_returned(array $row): bool
         return true;
     }
 
+    // Back in workflow (e.g. returner received again) — not currently returned.
+    if (voucher_tracking_normalize_active_status((string) ($row['active_status'] ?? '')) === 'yes') {
+        return false;
+    }
+
     return voucher_tracking_parse_returned_by((string) ($row['voucher_status'] ?? '')) !== '';
 }
 
@@ -268,10 +273,7 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
     }
 
     $isPaid = voucher_status_report_is_paid($pdo, $row);
-    $isReturned = voucher_status_report_is_returned($row);
-    if ($isReturned) {
-        $isPaid = false;
-    }
+    $isReturned = !$isPaid && voucher_status_report_is_returned($row);
     if ($isPaid) {
         $statusLabel = 'Paid';
     } elseif ($isReturned) {

@@ -59,6 +59,28 @@ function voucher_liaison_returned_scope_offices(PDO $pdo, string $loggedOffice, 
     return voucher_liaison_host_office_tree($pdo, $liaisonHost);
 }
 
+/** True when a voucher is still at returned status (not paid, not re-received into processing). */
+function voucher_liaison_is_currently_returned(PDO $pdo, array $row): bool
+{
+    if (voucher_status_report_is_paid($pdo, $row)) {
+        return false;
+    }
+
+    // Uses active_status = 'returned' and/or voucher_status "Returned by: …"; excludes active_status = 'yes'.
+    return voucher_status_report_is_returned($row);
+}
+
+/** SQL fragment: candidate rows that may still be returned (refined in PHP). */
+function voucher_liaison_returned_include_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return " AND (
+        {$alias}.active_status = 'returned'
+        OR {$alias}.voucher_status LIKE 'Returned by:%'
+    )";
+}
+
 /**
  * @return list<array<string, mixed>>
  */
@@ -81,7 +103,7 @@ function voucher_liaison_returned_fetch_entries(PDO $pdo, array $scopeOffices, ?
     $officeWhere = voucher_office_build_where_clause('vt.office_from', $queryOffices, 'lr_office');
     $sql = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1'
         . $officeWhere['sql']
-        . " AND (vt.active_status = 'returned' OR vt.voucher_status LIKE '%Returned by%')"
+        . voucher_liaison_returned_include_sql('vt')
         . ' ORDER BY vt.datetime_status DESC, vt.processing_no DESC';
 
     $stmt = $pdo->prepare($sql);
@@ -92,7 +114,7 @@ function voucher_liaison_returned_fetch_entries(PDO $pdo, array $scopeOffices, ?
 
     $entries = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        if (!voucher_status_report_is_returned($row)) {
+        if (!voucher_liaison_is_currently_returned($pdo, $row)) {
             continue;
         }
 

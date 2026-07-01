@@ -57,7 +57,7 @@ $pageTitleHelperName = $header_text ?? 'Returned Vouchers';
     <header class="voucher-dashboard-header no-print">
         <h1 class="voucher-dashboard-title">Returned Vouchers</h1>
         <p style="color: rgb(75 85 99 / 0.9); margin: 0.25rem 0 0;">
-            View-only list of returned vouchers within your liaison office and sub-offices.
+            View-only list of vouchers still at returned status within your liaison office and sub-offices (excludes paid and vouchers already re-received by the returner).
         </p>
     </header>
 
