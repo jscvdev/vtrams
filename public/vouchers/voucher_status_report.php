@@ -160,10 +160,10 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 <label for="statusReportPrintLimitMode">Print rows</label>
                 <div class="status-report-print-limit-controls">
                     <select id="statusReportPrintLimitMode" aria-label="Print row limit mode">
-                        <option value="all">All (max 100)</option>
+                        <option value="all">All (max 2000)</option>
                         <option value="custom">Custom amount</option>
                     </select>
-                    <input type="number" id="statusReportPrintLimitCustom" min="1" value="100" aria-label="Custom print row count" title="Enter how many rows to print when using custom amount">
+                    <input type="number" id="statusReportPrintLimitCustom" min="1" max="2000" value="100" aria-label="Custom print row count" title="Enter how many rows to print (1–2000) when using custom amount">
                 </div>
             </div>
             <button type="button" class="status-report-filter-bar__print" id="statusReportPrintBtn">Print Report</button>
@@ -920,15 +920,18 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             return '<span class="status-pill status-pill--processing">Processing</span>';
         }
 
+        const PRINT_ROW_MAX = 2000;
+
         function getPrintRowLimit() {
             const modeEl = document.getElementById('statusReportPrintLimitMode');
             const customEl = document.getElementById('statusReportPrintLimitCustom');
             const mode = modeEl ? String(modeEl.value || 'all') : 'all';
             if (mode === 'custom' && customEl) {
                 const parsed = parseInt(String(customEl.value || '100'), 10);
-                return Math.max(1, Number.isFinite(parsed) ? parsed : 100);
+                const safe = Math.max(1, Number.isFinite(parsed) ? parsed : 100);
+                return Math.min(PRINT_ROW_MAX, safe);
             }
-            return 100;
+            return PRINT_ROW_MAX;
         }
 
         function getSelectedProcessingNos() {
@@ -1104,7 +1107,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 if (!Number.isFinite(parsed)) {
                     return;
                 }
-                printLimitCustomEl.value = String(Math.max(1, parsed));
+                printLimitCustomEl.value = String(Math.min(PRINT_ROW_MAX, Math.max(1, parsed)));
             });
         }
         syncPrintLimitControls();

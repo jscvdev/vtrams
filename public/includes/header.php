@@ -113,6 +113,52 @@ $header_text = $pageTitleHelper->getHeaderText();
     <!--    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">-->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
     <link rel="shortcut icon" href="../assets/icons/DENR3.ico">
+    <style id="main-loader-critical">
+        html.page-loading #main {
+            position: relative;
+            min-height: 320px;
+            overflow: hidden;
+        }
+
+        html.page-loading #main > * {
+            visibility: hidden !important;
+        }
+
+        html.page-loading #main::before {
+            content: "";
+            position: absolute;
+            inset: 1.25rem 1.5rem;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #e8eaed 0%, #f3f4f6 45%, #e8eaed 90%);
+            background-size: 200% 100%;
+            animation: mainSkeletonShimmer 1.15s ease-in-out infinite;
+            z-index: 2;
+        }
+
+        html.page-loading #main::after {
+            content: "";
+            position: absolute;
+            left: 2rem;
+            right: 40%;
+            top: 2rem;
+            height: 1.75rem;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.55);
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        @keyframes mainSkeletonShimmer {
+            0% {
+                background-position: 100% 0;
+            }
+
+            100% {
+                background-position: -100% 0;
+            }
+        }
+    </style>
+    <script src="<?php echo htmlspecialchars(asset_url('../../protected/js/main_content_loader.js', __DIR__ . '/../../protected/js/main_content_loader.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>

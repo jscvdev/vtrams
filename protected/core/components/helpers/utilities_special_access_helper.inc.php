@@ -54,51 +54,103 @@ function utilities_special_access_ensure_schema(PDO $pdo): void
             ]);
         }
     }
+
+    utilities_special_access_ensure_forward_destinations_schema($pdo);
+}
+
+function utilities_special_access_ensure_forward_destinations_schema(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS voucher_forward_destinations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            designation VARCHAR(255) NOT NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_designation (designation),
+            KEY idx_active_sort (is_active, sort_order, designation)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ");
+
+    $count = (int) $pdo->query('SELECT COUNT(*) FROM voucher_forward_destinations')->fetchColumn();
+    if ($count === 0) {
+        $seed = [
+            ['Accounting Unit', 0],
+            ['Budget Unit', 1],
+            ['Planning Section', 2],
+            ['Conservation & Development Section', 3],
+            ['Cashiers Unit', 4],
+            ['Office of the PENRO', 5],
+            ['ICU', 6],
+            ['TSD-ENGP', 7],
+        ];
+        $stmt = $pdo->prepare("
+            INSERT INTO voucher_forward_destinations (designation, sort_order, is_active)
+            VALUES (:designation, :sort_order, 1)
+        ");
+        foreach ($seed as [$designation, $sort]) {
+            $stmt->execute([
+                ':designation' => $designation,
+                ':sort_order' => $sort,
+            ]);
+        }
+    }
 }
 
 /**
  * @return list<array<string, mixed>>
  */
-function utilities_special_access_fetch_all(PDO $pdo): array
+function utilities_special_access_forward_destinations_fetch_all(PDO $pdo): array
 {
+    utilities_special_access_ensure_forward_destinations_schema($pdo);
     $stmt = $pdo->query(
-        'SELECT id, voucher_type, forward_designation, sort_order, is_active
-         FROM voucher_special_access
-         ORDER BY sort_order ASC, voucher_type ASC'
+        'SELECT id, designation, sort_order, is_active
+         FROM voucher_forward_destinations
+         ORDER BY sort_order ASC, designation ASC'
     );
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 /**
- * Resolve direct-forward designation for a voucher type (empty when none configured).
+ * Active designations shown in routing rule "Forward to" dropdowns.
+ *
+ * @return list<string>
  */
-function utilities_special_access_resolve_target(PDO $pdo, string $voucher_type): string
+function utilities_special_access_forward_destinations_active(PDO $pdo): array
 {
-    $voucher_type = utilities_special_access_normalize_value($voucher_type);
-    if ($voucher_type === '') {
-        return '';
-    }
-
-    return RequestCache::remember('special_access', 'target:' . $voucher_type, static function () use ($pdo, $voucher_type): string {
-        $stmt = $pdo->prepare(
-            'SELECT forward_designation FROM voucher_special_access
-             WHERE voucher_type = :voucher_type AND is_active = 1
-             LIMIT 1'
+    return RequestCache::remember('special_access', 'forward_destinations_active', static function () use ($pdo): array {
+        utilities_special_access_ensure_forward_destinations_schema($pdo);
+        $stmt = $pdo->query(
+            'SELECT designation FROM voucher_forward_destinations
+             WHERE is_active = 1
+             ORDER BY sort_order ASC, designation ASC'
         );
-        $stmt->execute([':voucher_type' => $voucher_type]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $found = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $name = utilities_special_access_normalize_value((string) ($row['designation'] ?? ''));
+            if ($name !== '') {
+                $found[] = $name;
+            }
+        }
 
-        return utilities_special_access_normalize_value((string) ($row['forward_designation'] ?? ''));
+        return $found;
     });
 }
 
 /**
- * Designations available when configuring special access rules.
+ * Designations available when adding a forward destination entry.
  *
  * @return list<string>
  */
-function utilities_special_access_forward_destinations(PDO $pdo): array
+function utilities_special_access_forward_destinations_configurable(PDO $pdo): array
 {
     static $preferred = [
         'Accounting Unit',
@@ -151,6 +203,58 @@ function utilities_special_access_forward_destinations(PDO $pdo): array
     return $preferred;
 }
 
+/**
+ * @return list<array<string, mixed>>
+ */
+function utilities_special_access_fetch_all(PDO $pdo): array
+{
+    $stmt = $pdo->query(
+        'SELECT id, voucher_type, forward_designation, sort_order, is_active
+         FROM voucher_special_access
+         ORDER BY sort_order ASC, voucher_type ASC'
+    );
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * Resolve direct-forward designation for a voucher type (empty when none configured).
+ */
+function utilities_special_access_resolve_target(PDO $pdo, string $voucher_type): string
+{
+    $voucher_type = utilities_special_access_normalize_value($voucher_type);
+    if ($voucher_type === '') {
+        return '';
+    }
+
+    return RequestCache::remember('special_access', 'target:' . $voucher_type, static function () use ($pdo, $voucher_type): string {
+        $stmt = $pdo->prepare(
+            'SELECT forward_designation FROM voucher_special_access
+             WHERE voucher_type = :voucher_type AND is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute([':voucher_type' => $voucher_type]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return utilities_special_access_normalize_value((string) ($row['forward_designation'] ?? ''));
+    });
+}
+
+/**
+ * Designations available when configuring special access rules.
+ *
+ * @return list<string>
+ */
+function utilities_special_access_forward_destinations(PDO $pdo): array
+{
+    $active = utilities_special_access_forward_destinations_active($pdo);
+    if ($active !== []) {
+        return $active;
+    }
+
+    return utilities_special_access_forward_destinations_configurable($pdo);
+}
+
 function utilities_special_access_destination_is_allowed(PDO $pdo, string $designation): bool
 {
     $designation = utilities_special_access_normalize_value($designation);
@@ -158,5 +262,20 @@ function utilities_special_access_destination_is_allowed(PDO $pdo, string $desig
         return false;
     }
 
-    return in_array($designation, utilities_special_access_forward_destinations($pdo), true);
+    $allowed = utilities_special_access_forward_destinations_active($pdo);
+    if ($allowed === []) {
+        $allowed = utilities_special_access_forward_destinations_configurable($pdo);
+    }
+
+    if (in_array($designation, $allowed, true)) {
+        return true;
+    }
+
+    utilities_special_access_ensure_forward_destinations_schema($pdo);
+    $stmt = $pdo->prepare(
+        'SELECT 1 FROM voucher_forward_destinations WHERE designation = :designation LIMIT 1'
+    );
+    $stmt->execute([':designation' => $designation]);
+
+    return (bool) $stmt->fetchColumn();
 }

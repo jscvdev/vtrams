@@ -1268,6 +1268,36 @@ tr {
     display: none;
 }
 
+/*=============== MAIN CONTENT SKELETON LOADER ===============*/
+html.page-loading #main {
+    pointer-events: none;
+}
+
+html.page-loaded #main::before,
+html.page-loaded #main::after {
+    display: none !important;
+    content: none !important;
+    animation: none !important;
+}
+
+html.page-loaded #main > * {
+    visibility: visible !important;
+}
+
+html.page-loaded #main {
+    animation: mainContentFadeIn 0.22s ease-out;
+}
+
+@keyframes mainContentFadeIn {
+    from {
+        opacity: 0.92;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
 /*=============== VOUCHER DASHBOARD (main content style) ===============*/
 .main--voucher-dashboard,
 .main--dashboard {

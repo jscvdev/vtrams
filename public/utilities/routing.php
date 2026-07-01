@@ -20,6 +20,8 @@ utilities_office_ensure_schema($pdo);
 
 $voucher_types = checklist_types_with_labels();
 $destinations = utilities_special_access_forward_destinations($pdo);
+$forward_destination_units = utilities_special_access_forward_destinations_fetch_all($pdo);
+$forward_destination_configurable = utilities_special_access_forward_destinations_configurable($pdo);
 
 $flash = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -97,6 +99,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([':id' => $id]);
                     utilities_special_access_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Routing rule deleted.'];
+                }
+            } elseif ($action === 'forward_destination_add') {
+                $designation = utilities_special_access_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                if ($designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Designation is required.'];
+                } elseif (!in_array($designation, utilities_special_access_forward_destinations_configurable($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        INSERT INTO voucher_forward_destinations (designation, sort_order, is_active)
+                        VALUES (:designation, 0, 1)
+                    ");
+                    $stmt->execute([':designation' => $designation]);
+                    sort_order_place_at_position($pdo, 'voucher_forward_destinations', (int) $pdo->lastInsertId(), $sort);
+                    $pdo->commit();
+                    utilities_special_access_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Forward destination added.'];
+                }
+            } elseif ($action === 'forward_destination_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $designation = utilities_special_access_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id <= 0 || $designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                } elseif (!in_array($designation, utilities_special_access_forward_destinations_configurable($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    sort_order_handle_update($pdo, 'voucher_forward_destinations', $id, $sort);
+                    $stmt = $pdo->prepare("
+                        UPDATE voucher_forward_destinations
+                        SET designation = :designation,
+                            sort_order = :sort,
+                            is_active = :active
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':designation' => $designation,
+                        ':sort' => $sort,
+                        ':active' => $active,
+                        ':id' => $id,
+                    ]);
+                    $pdo->commit();
+                    utilities_special_access_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Forward destination updated.'];
+                }
+            } elseif ($action === 'forward_destination_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id <= 0) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                } else {
+                    $stmt = $pdo->prepare('DELETE FROM voucher_forward_destinations WHERE id = :id');
+                    $stmt->execute([':id' => $id]);
+                    utilities_special_access_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Forward destination removed.'];
                 }
             } elseif ($action === 'return_previous_add') {
                 $designation = utilities_return_previous_normalize_value((string) ($_POST['designation'] ?? ''));
@@ -318,11 +378,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $rules = utilities_special_access_fetch_all($pdo);
+$destinations = utilities_special_access_forward_destinations($pdo);
+$forward_destination_units = utilities_special_access_forward_destinations_fetch_all($pdo);
 $rule_count = count($rules);
 $active_count = 0;
 foreach ($rules as $rule) {
     if ((int) ($rule['is_active'] ?? 1) === 1) {
         $active_count++;
+    }
+}
+
+$forward_destination_count = count($forward_destination_units);
+$forward_destination_active_count = 0;
+foreach ($forward_destination_units as $forwardDestinationUnit) {
+    if ((int) ($forwardDestinationUnit['is_active'] ?? 1) === 1) {
+        $forward_destination_active_count++;
     }
 }
 
@@ -442,6 +512,20 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             routing_render_office_tree($pdo, $children, $allOffices, $depth + 1);
         }
     }
+}
+
+/**
+ * @param list<string> $destinations
+ * @return list<string>
+ */
+function routing_forward_destinations_for_select(array $destinations, string $stored): array
+{
+    $stored = trim($stored);
+    if ($stored !== '' && !in_array($stored, $destinations, true)) {
+        array_unshift($destinations, $stored);
+    }
+
+    return $destinations;
 }
 ?>
 
@@ -856,6 +940,82 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             <div class="util-stats">
                 <div class="util-stat"><strong><?= (int) $rule_count ?></strong> routing rule<?= $rule_count === 1 ? '' : 's' ?></div>
                 <div class="util-stat"><strong><?= (int) $active_count ?></strong> active</div>
+                <div class="util-stat"><strong><?= (int) $forward_destination_count ?></strong> forward destination<?= $forward_destination_count === 1 ? '' : 's' ?></div>
+            </div>
+
+            <div class="util-card" style="margin-bottom:1rem;">
+                <div class="util-card__head">
+                    <h3>Manage forward destinations</h3>
+                </div>
+                <div class="util-card__body">
+                    <p class="util-dv-desc" style="margin-top:0;">
+                        Units listed here appear in the <strong>Forward to</strong> dropdown when adding or editing routing rules.
+                    </p>
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="forward_destination_add">
+                        <div class="field">
+                            <label for="add_forward_destination">Designation / unit</label>
+                            <select class="form-custom-input" name="designation" id="add_forward_destination" required>
+                                <option value="" disabled selected>Select unit</option>
+                                <?php foreach ($forward_destination_configurable as $destination): ?>
+                                    <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width:110px;">
+                            <label for="add_forward_destination_sort_order">Sort</label>
+                            <input class="form-custom-input" type="number" name="sort_order" id="add_forward_destination_sort_order" value="0">
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Add forward destination" aria-label="Add forward destination">+</button>
+                        </div>
+                    </form>
+
+                    <?php if (!$forward_destination_units): ?>
+                        <p class="util-empty">No forward destinations configured yet. Add one above.</p>
+                    <?php endif; ?>
+
+                    <?php foreach ($forward_destination_units as $forwardDestinationUnit):
+                        $forwardDestinationId = (int) ($forwardDestinationUnit['id'] ?? 0);
+                        $storedForwardDesignation = (string) ($forwardDestinationUnit['designation'] ?? '');
+                        $editForwardOptions = routing_forward_destinations_for_select($forward_destination_configurable, $storedForwardDesignation);
+                    ?>
+                        <div class="util-routing-block">
+                            <div class="util-routing-block__main">
+                                <div class="util-inline util-inline--edit-row">
+                                    <form method="post" class="util-inline util-inline--edit-row" style="flex:1; min-width:0;">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="forward_destination_update">
+                                        <input type="hidden" name="id" value="<?= $forwardDestinationId ?>">
+                                        <select class="form-custom-input" name="designation" required>
+                                            <?php foreach ($editForwardOptions as $destination): ?>
+                                                <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= $storedForwardDesignation === $destination ? ' selected' : '' ?>>
+                                                    <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input class="form-custom-input" type="number" name="sort_order" value="<?= (int) ($forwardDestinationUnit['sort_order'] ?? 0) ?>">
+                                        <label class="chk">
+                                            <input type="checkbox" name="is_active" <?= ((int) ($forwardDestinationUnit['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                            <span>Active</span>
+                                        </label>
+                                        <button class="btn success" type="submit">Save</button>
+                                    </form>
+                                    <form method="post" onsubmit="return confirm('Remove this forward destination? Existing routing rules that use it will keep the stored value.');" class="util-row-actions">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="forward_destination_delete">
+                                        <input type="hidden" name="id" value="<?= $forwardDestinationId ?>">
+                                        <button class="btn danger" type="submit">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
             <div class="util-card">
@@ -905,6 +1065,8 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                     <?php foreach ($rules as $rule):
                         $ruleId = (int) ($rule['id'] ?? 0);
                         $storedType = (string) ($rule['voucher_type'] ?? '');
+                        $storedForward = (string) ($rule['forward_designation'] ?? '');
+                        $ruleForwardOptions = routing_forward_destinations_for_select($destinations, $storedForward);
                     ?>
                         <div class="util-routing-block">
                             <div class="util-routing-block__main">
@@ -921,8 +1083,8 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
                                             <?php endforeach; ?>
                                         </select>
                                         <select class="form-custom-input" name="forward_designation" required>
-                                            <?php foreach ($destinations as $destination): ?>
-                                                <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= ($rule['forward_designation'] ?? '') === $destination ? ' selected' : '' ?>>
+                                            <?php foreach ($ruleForwardOptions as $destination): ?>
+                                                <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= $storedForward === $destination ? ' selected' : '' ?>>
                                                     <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
                                                 </option>
                                             <?php endforeach; ?>
