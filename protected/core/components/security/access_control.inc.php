@@ -156,8 +156,6 @@ class AccessControl
             'Accounting Unit',
             'Accountant III',
             'Processor',
-            'Conservation & Development Section',
-            'CDS',
         ]);
     }
 
