@@ -850,7 +850,7 @@ function routing_render_office_tree(PDO $pdo, array $nodes, array $allOffices, i
             <p class="util-section-title">Direct forward routing</p>
             <p class="util-dv-desc">
                 Configure voucher types that skip the standard workflow when forwarded from the Voucher page
-                (e.g. e-NGP types sent directly to Accounting Unit or another unit). Each voucher type can have one active rule.
+                (e.g. e-NGP types sent directly to Accounting Unit, TSD-ENGP, or another unit). Each voucher type can have one active rule.
             </p>
 
             <div class="util-stats">

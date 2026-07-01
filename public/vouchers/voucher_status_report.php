@@ -25,6 +25,15 @@ $statusFilter = in_array(strtolower($rawStatus), ['all', 'processing', 'paid', '
 $entries = voucher_status_report_filter_by_status($entries, $statusFilter);
 $summary = voucher_status_report_summarize($entries);
 
+$report_voucher_types = checklist_types_with_labels();
+$rawType = trim((string) ($_GET['voucher_type'] ?? 'all'));
+$typeFilter = ($rawType === '' || strcasecmp($rawType, 'all') === 0) ? 'all' : $rawType;
+if ($typeFilter !== 'all' && !isset($report_voucher_types[$typeFilter])) {
+    $typeFilter = 'all';
+}
+$entries = voucher_status_report_filter_by_voucher_type($entries, $typeFilter);
+$summary = voucher_status_report_summarize($entries);
+
 $rawSearch = (string) ($_GET['q'] ?? '');
 $searchTerm = strtolower(trim($rawSearch));
 if ($searchTerm !== '') {
@@ -77,6 +86,9 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
         <?php if ($statusFilter !== 'all') : ?>
             <p class="status-report-print-search">Status filter: <?php echo htmlspecialchars(ucfirst($statusFilter), ENT_QUOTES, 'UTF-8'); ?></p>
         <?php endif; ?>
+        <?php if ($typeFilter !== 'all') : ?>
+            <p class="status-report-print-search">Type filter: <?php echo htmlspecialchars((string) ($report_voucher_types[$typeFilter] ?? $typeFilter), ENT_QUOTES, 'UTF-8'); ?></p>
+        <?php endif; ?>
         <div class="status-report-print-summary">
             <div class="status-report-print-summary__item"><span>Total</span><strong><?php echo (int) $summary['total']; ?></strong></div>
             <div class="status-report-print-summary__item status-report-print-summary__item--processing"><span>Processing</span><strong><?php echo (int) $summary['for_processing']; ?></strong></div>
@@ -128,6 +140,17 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                     <option value="paid"<?php echo $statusFilter === 'paid' ? ' selected' : ''; ?>>Paid</option>
                 </select>
             </div>
+            <div class="status-report-filter-bar__field">
+                <label for="typeFilter">Type</label>
+                <select id="typeFilter" name="voucher_type">
+                    <option value="all"<?php echo $typeFilter === 'all' ? ' selected' : ''; ?>>All Types</option>
+                    <?php foreach ($report_voucher_types as $type_value => $type_label) : ?>
+                        <option value="<?php echo htmlspecialchars((string) $type_value, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $typeFilter === (string) $type_value ? ' selected' : ''; ?>>
+                            <?php echo htmlspecialchars((string) $type_label, ENT_QUOTES, 'UTF-8'); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="status-report-filter-bar__field status-report-filter-bar__field--grow">
                 <label for="statusReportSearch">Search</label>
                 <input type="text" id="statusReportSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Processing no., payee, office, status…" autocomplete="off">
@@ -140,7 +163,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                         <option value="all">All (max 100)</option>
                         <option value="custom">Custom amount</option>
                     </select>
-                    <input type="number" id="statusReportPrintLimitCustom" min="1" max="100" value="100" aria-label="Custom print row count" title="Maximum 100 rows per print">
+                    <input type="number" id="statusReportPrintLimitCustom" min="1" value="100" aria-label="Custom print row count" title="Enter how many rows to print when using custom amount">
                 </div>
             </div>
             <button type="button" class="status-report-filter-bar__print" id="statusReportPrintBtn">Print Report</button>
@@ -903,7 +926,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             const mode = modeEl ? String(modeEl.value || 'all') : 'all';
             if (mode === 'custom' && customEl) {
                 const parsed = parseInt(String(customEl.value || '100'), 10);
-                return Math.min(100, Math.max(1, Number.isFinite(parsed) ? parsed : 100));
+                return Math.max(1, Number.isFinite(parsed) ? parsed : 100);
             }
             return 100;
         }
@@ -1081,7 +1104,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 if (!Number.isFinite(parsed)) {
                     return;
                 }
-                printLimitCustomEl.value = String(Math.min(100, Math.max(1, parsed)));
+                printLimitCustomEl.value = String(Math.max(1, parsed));
             });
         }
         syncPrintLimitControls();

@@ -340,6 +340,22 @@ function voucher_status_report_filter_by_status(array $entries, string $statusFi
 }
 
 /**
+ * @param list<array<string, mixed>> $entries
+ * @return list<array<string, mixed>>
+ */
+function voucher_status_report_filter_by_voucher_type(array $entries, string $typeFilter): array
+{
+    $typeFilter = trim($typeFilter);
+    if ($typeFilter === '' || strcasecmp($typeFilter, 'all') === 0) {
+        return $entries;
+    }
+
+    return array_values(array_filter($entries, static function (array $entry) use ($typeFilter): bool {
+        return strcasecmp(trim((string) ($entry['voucher_type'] ?? '')), $typeFilter) === 0;
+    }));
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $officeFilter = null, int $limit = 0): array

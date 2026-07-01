@@ -108,6 +108,7 @@ function utilities_special_access_forward_destinations(PDO $pdo): array
         'Cashiers Unit',
         'Office of the PENRO',
         'ICU',
+        'TSD-ENGP',
     ];
 
     $found = [];
@@ -129,6 +130,13 @@ function utilities_special_access_forward_destinations(PDO $pdo): array
 
         foreach ($preferred as $designation) {
             if (isset($registered[$designation])) {
+                $found[] = $designation;
+            }
+        }
+
+        static $alwaysInclude = ['TSD-ENGP'];
+        foreach ($alwaysInclude as $designation) {
+            if (!in_array($designation, $found, true)) {
                 $found[] = $designation;
             }
         }
