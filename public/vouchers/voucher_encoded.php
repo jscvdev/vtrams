@@ -422,6 +422,9 @@ function session_contains_phrase($phrase)
                 if (typeof openSignatoryModal === 'function') {
                     openSignatoryModal();
                 } else {
+                    if (typeof window.prepareDvPrint === 'function') {
+                        window.prepareDvPrint();
+                    }
                     window.print();
                 }
             });
@@ -1289,6 +1292,9 @@ function session_contains_phrase($phrase)
             closeSignatoryModal();
             window.requestAnimationFrame(function() {
                 if (typeof applyDvSignatories === 'function') applyDvSignatories(selection);
+                if (typeof window.prepareDvPrint === 'function') {
+                    window.prepareDvPrint();
+                }
                 window.print();
             });
         }

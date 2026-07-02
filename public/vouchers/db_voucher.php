@@ -97,55 +97,78 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
     </script>
     <style>
         @media print {
-            body * {
-                visibility: hidden;
+            body {
                 margin: 0;
-                /* Set margin of the entire page to zero */
                 padding: 0;
+                background: #fff;
             }
 
-            .sidebar {
-                display: none;
+            html.page-loading #main::before,
+            html.page-loading #main::after,
+            #main::before,
+            #main::after {
+                display: none !important;
+                visibility: hidden !important;
+                content: none !important;
             }
 
-            .main {
-                width: 100%;
+            .header,
+            .sidebar,
+            .overlay,
+            .popup-form,
+            .popup-form3,
+            .main,
+            #main,
+            .voucher-card,
+            .table-loader {
+                display: none !important;
             }
 
-            .printableTable {
-                display: block !important;
+            body.dv-printing > :not(#printableTable):not(script):not(style) {
+                display: none !important;
             }
 
-            #printableTable,
-            #printableTable * {
-                visibility: visible;
-
-            }
-
+            .printableTable,
             #printableTable {
-                position: absolute;
-                left: 0;
-                /* Align to the left */
-                text-align: center;
-                /* Center the table horizontally */
-                margin: 0;
-                padding: 0;
-                /* Remove default padding */
-                width: 100%;
+                display: none !important;
             }
 
-            #printableTable th,
-            #printableTable td {
+            body.dv-printing .printableTable,
+            body.dv-printing #printableTable {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                left: auto !important;
+                top: auto !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                pointer-events: auto !important;
+                overflow: visible !important;
+                z-index: auto !important;
+            }
+
+            body.dv-printing #printableTable,
+            body.dv-printing #printableTable * {
+                visibility: visible !important;
+            }
+
+            body.dv-printing #printableTable {
+                text-align: center;
+            }
+
+            body.dv-printing #printableTable th,
+            body.dv-printing #printableTable td {
                 font-size: 9px;
             }
 
-            #printableTable .dv-accounting-row td {
+            body.dv-printing #printableTable .dv-accounting-row td {
                 min-height: 20px;
                 padding-top: 4px;
                 padding-bottom: 4px;
             }
 
-            #printableTable #dv_accounting_body {
+            body.dv-printing #printableTable #dv_accounting_body {
                 padding-bottom: 10px;
             }
 
@@ -155,11 +178,9 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
                 margin-top: 0;
             }
 
-            #printableTable table {
+            body.dv-printing #printableTable table {
                 width: 100%;
-                /* Set table width to 100% */
                 border-collapse: collapse;
-                /* Collapse table borders */
             }
         }
     </style>
@@ -171,7 +192,7 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
         }
 
         .printableTable {
-            display: none;
+            display: none !important;
         }
 
         #printableTable {
@@ -477,3 +498,29 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
             </tbody>
         </table>
     </div>
+    <script>
+        (function () {
+            function prepareDvPrint() {
+                document.documentElement.classList.remove('page-loading');
+                document.documentElement.classList.add('page-loaded');
+                document.body.classList.add('dv-printing');
+
+                var printableRoot = document.getElementById('printableTable');
+                if (printableRoot) {
+                    document.body.appendChild(printableRoot);
+                }
+
+                if (typeof setDocumentData === 'function') {
+                    setDocumentData();
+                }
+            }
+
+            function cleanupDvPrint() {
+                document.body.classList.remove('dv-printing');
+            }
+
+            window.addEventListener('beforeprint', prepareDvPrint);
+            window.addEventListener('afterprint', cleanupDvPrint);
+            window.prepareDvPrint = prepareDvPrint;
+        })();
+    </script>
