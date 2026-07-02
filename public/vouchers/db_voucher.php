@@ -175,7 +175,7 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
             @page {
                 size: portrait;
                 /* auto is the default value, it will fit the content to the available space */
-                margin-top: 0;
+                margin-top: 5;
             }
 
             body.dv-printing #printableTable table {
