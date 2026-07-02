@@ -1019,6 +1019,7 @@ function session_contains_phrase($phrase)
         }
 
         window.openEncodedSlipChecklistModal = openModal;
+        window.openCoaForwardChecklistModal = openModal;
 
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
         if (cancelBtn) cancelBtn.addEventListener('click', closeModal);

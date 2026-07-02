@@ -1929,6 +1929,8 @@ function session_contains_phrase($phrase)
             if (overlay) overlay.style.display = 'block';
         }
 
+        window.openCoaForwardChecklistModal = openModal;
+
         if (openBtn) openBtn.addEventListener('click', openModal);
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
         if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
@@ -1988,6 +1990,12 @@ function session_contains_phrase($phrase)
                 hiddenSelected.value = JSON.stringify(selectedOptions);
                 hiddenSelected.dispatchEvent(new Event('change', { bubbles: true }));
                 closeModal();
+                if (window._slipPrintCoaPending) {
+                    window._slipPrintCoaPending = false;
+                    if (typeof window.openNatureOfClaimModalForSlip === 'function') {
+                        window.openNatureOfClaimModalForSlip();
+                    }
+                }
             });
         }
 

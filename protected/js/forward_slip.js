@@ -109,6 +109,31 @@
     }
   }
 
+  function openCoaChecklistModalIfAvailable() {
+    if (typeof window.openEncodedSlipChecklistModal === 'function') {
+      window.openEncodedSlipChecklistModal();
+      return true;
+    }
+    if (typeof window.openCoaForwardChecklistModal === 'function') {
+      window.openCoaForwardChecklistModal();
+      return true;
+    }
+    return false;
+  }
+
+  function promptCoaRequirementsBeforeSlip() {
+    if (openCoaChecklistModalIfAvailable()) {
+      window._slipPrintCoaPending = true;
+      return;
+    }
+    if (typeof showNotify === 'function') {
+      showNotify('Please select COA requirements before printing the slip.', 'warning', 3500);
+    } else {
+      alert('Please select COA requirements before printing the slip.');
+    }
+    syncPrintButtonState();
+  }
+
   function setPrintBtnEnabled(enabled) {
     printBtn.disabled = !enabled;
     if (!enabled) printBtn.classList.add('btn-disabled-forward');
@@ -313,6 +338,7 @@
 
   function cleanupAfterPrint() {
     document.body.classList.remove('forward-slip-printing');
+    document.body.classList.remove('dv-printing');
     const root = document.getElementById('forward-slip-print-root');
     if (root) root.innerHTML = '';
 
@@ -439,12 +465,7 @@
 
   async function printForwardSlip() {
     if (!hasSelectedCoaRequirements()) {
-      if (typeof showNotify === 'function') {
-        showNotify('Please select COA requirements before printing the slip.', 'warning', 3500);
-      } else {
-        alert('Please select COA requirements before printing the slip.');
-      }
-      syncPrintButtonState();
+      promptCoaRequirementsBeforeSlip();
       return;
     }
 
@@ -508,12 +529,7 @@
 
   printBtn.addEventListener('click', function () {
     if (!hasSelectedCoaRequirements()) {
-      if (typeof showNotify === 'function') {
-        showNotify('Please select COA requirements before printing the slip.', 'warning', 3500);
-      } else {
-        alert('Please select COA requirements before printing the slip.');
-      }
-      syncPrintButtonState();
+      promptCoaRequirementsBeforeSlip();
       return;
     }
     openNatureOfClaimModal();

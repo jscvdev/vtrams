@@ -342,5 +342,8 @@ window.applyStoredDvSignatories = applyStoredDvSignatories;
 window.storeDvSignatories = storeDvSignatories;
 
 window.addEventListener('beforeprint', () => {
+    if (document.body.classList.contains('forward-slip-printing')) {
+        return;
+    }
     setDocumentData();
 });

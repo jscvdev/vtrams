@@ -519,8 +519,22 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
                 document.body.classList.remove('dv-printing');
             }
 
-            window.addEventListener('beforeprint', prepareDvPrint);
-            window.addEventListener('afterprint', cleanupDvPrint);
+            function isForwardSlipPrint() {
+                return document.body.classList.contains('forward-slip-printing');
+            }
+
+            window.addEventListener('beforeprint', function () {
+                if (isForwardSlipPrint()) {
+                    return;
+                }
+                prepareDvPrint();
+            });
+            window.addEventListener('afterprint', function () {
+                if (isForwardSlipPrint()) {
+                    return;
+                }
+                cleanupDvPrint();
+            });
             window.prepareDvPrint = prepareDvPrint;
         })();
     </script>
