@@ -930,14 +930,20 @@ if ($showCashierArchiveCol) {
                                         }
                                     }
                                 }
-                            } elseif ($roleIcu && $treatAsSameOfficeWorkflow && !$upstreamRoutingComplete && $showForwardCol && !$roleCashiers) {
-                                $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                            } elseif ($roleIcu && $showForwardCol && !$roleCashiers) {
+                                if ($processProcessed && ($transmitEmpty || $transmitDone)) {
+                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                } else {
+                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                }
                             } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
                                     if ($processProcessed && $roleAccountantIII) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
                                     } elseif ($processProcessed && ($transmitEmpty || $transmitDone)) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                    } else {
+                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
                                     }
                                 }
                                 if ($canShowProcess) {

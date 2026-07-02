@@ -1147,6 +1147,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
         });
     })();
 </script>
+<script src="../../protected/js/main.js"></script>
 <?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
 </html>
