@@ -26,24 +26,44 @@ const DV_CONTRACTUAL_TYPES = new Set([
     'Contractual Services or Job Order Salary',
 ]);
 
-const DV_KNOWN_EMP_TAGS = new Set([
+/** Default accounting block height: 1 primary + 7 sub UACS rows (e.g. Other Professional Services). */
+const DV_ACCOUNTING_MIN_ROWS = 8;
+
+function getDvAccountingMinRows() {
+    const cfg = window.DV_ACCOUNTING || {};
+    const configured = Number(cfg.accountingMinRows);
+    return configured > 0 ? configured : DV_ACCOUNTING_MIN_ROWS;
+}
+
+const DV_FALLBACK_EMP_TAGS = [
     'Other Professional Services',
     'Janitorial Services',
     'Security Services',
-]);
+];
+
+function getDvKnownEmpTags() {
+    const cfg = window.DV_ACCOUNTING || {};
+    const known = cfg.knownEmpTags;
+    if (Array.isArray(known) && known.length) {
+        return known;
+    }
+    return DV_FALLBACK_EMP_TAGS;
+}
+
+function normalizeEmpTag(raw) {
+    const tag = String(raw || '').trim();
+    const cfg = window.DV_ACCOUNTING || {};
+    const known = getDvKnownEmpTags();
+    if (tag && known.indexOf(tag) !== -1) {
+        return tag;
+    }
+    return String(cfg.defaultEmpTag || 'Other Professional Services').trim() || 'Other Professional Services';
+}
 
 function normalizeNameKey(name) {
     return String(name || '')
         .trim()
         .replace(/\s+/g, ' ');
-}
-
-function normalizeEmpTag(raw) {
-    const tag = String(raw || '').trim();
-    if (tag === 'Janitorial Services' || tag === 'Security Services') {
-        return tag;
-    }
-    return 'Other Professional Services';
 }
 
 function resolveServiceAccountTitle(empTag) {
@@ -52,12 +72,8 @@ function resolveServiceAccountTitle(empTag) {
 
 function resolveEmpTagForPayee(payee, explicitTag, empId) {
     const explicit = String(explicitTag || '').trim();
-    if (explicit && DV_KNOWN_EMP_TAGS.has(explicit)) {
-        return normalizeEmpTag(explicit);
-    }
-
     const cfg = window.DV_ACCOUNTING || {};
-    const known = cfg.knownEmpTags || Array.from(DV_KNOWN_EMP_TAGS);
+    const known = getDvKnownEmpTags();
     if (explicit && known.indexOf(explicit) !== -1) {
         return normalizeEmpTag(explicit);
     }
@@ -80,7 +96,17 @@ function resolveEmpTagForPayee(payee, explicitTag, empId) {
         return normalizeEmpTag(cfg.defaultEmpTag || 'Other Professional Services');
     }
 
-    return 'Other Professional Services';
+    return normalizeEmpTag(cfg.defaultEmpTag || 'Other Professional Services');
+}
+
+function getVoucherTypeAccountingRows(voucherType) {
+    const cfg = window.DV_ACCOUNTING || {};
+    const maps = cfg.voucherTypeAccountingMaps || {};
+    const typeKey = String(voucherType || '').trim();
+    if (typeKey && maps[typeKey] && maps[typeKey].length) {
+        return maps[typeKey];
+    }
+    return [];
 }
 
 function getSalaryAccountingRows(empTag) {
@@ -115,9 +141,11 @@ function getSalaryAccountingRows(empTag) {
 
 function isContractualSalaryVoucher(voucherType) {
     const t = String(voucherType || '').trim();
-    if (DV_CONTRACTUAL_TYPES.has(t)) return true;
     const cfgTypes = (window.DV_ACCOUNTING && window.DV_ACCOUNTING.contractualTypes) || [];
-    return cfgTypes.indexOf(t) !== -1;
+    if (cfgTypes.indexOf(t) !== -1) {
+        return true;
+    }
+    return DV_CONTRACTUAL_TYPES.has(t);
 }
 
 function buildEmptyAccountingRowHtml() {
@@ -131,25 +159,44 @@ function buildEmptyAccountingRowHtml() {
     );
 }
 
+function padAccountingRows(rows) {
+    const minRows = getDvAccountingMinRows();
+    const padded = rows.slice();
+    while (padded.length < minRows) {
+        padded.push({ title: '', uacs: '', indent: false, empty: true });
+    }
+    return padded;
+}
+
 function renderAccountingEntries() {
     const tbody = document.getElementById('dv_accounting_body');
     if (!tbody) return;
 
     const voucherType = sessionStorage.getItem('voucher_type') || '';
-    if (!isContractualSalaryVoucher(voucherType)) {
+    let rows = [];
+
+    if (isContractualSalaryVoucher(voucherType)) {
+        const payee = sessionStorage.getItem('payee') || '';
+        const empId = sessionStorage.getItem('tin_employee_no') || '';
+        const storedTag = sessionStorage.getItem('emp_tag') || '';
+        const empTag = resolveEmpTagForPayee(payee, storedTag, empId);
+        sessionStorage.setItem('emp_tag', empTag);
+        rows = getSalaryAccountingRows(empTag);
+    } else {
+        rows = getVoucherTypeAccountingRows(voucherType);
+    }
+
+    if (!rows.length) {
         tbody.className = 'dv-accounting-body--empty';
-        tbody.innerHTML = Array.from({ length: 7 }, buildEmptyAccountingRowHtml).join('');
+        tbody.innerHTML = Array.from({ length: getDvAccountingMinRows() }, buildEmptyAccountingRowHtml).join('');
         return;
     }
 
     tbody.className = '';
-    const payee = sessionStorage.getItem('payee') || '';
-    const empId = sessionStorage.getItem('tin_employee_no') || '';
-    const storedTag = sessionStorage.getItem('emp_tag') || '';
-    const empTag = resolveEmpTagForPayee(payee, storedTag, empId);
-    sessionStorage.setItem('emp_tag', empTag);
-    const rows = getSalaryAccountingRows(empTag);
-    tbody.innerHTML = rows.map(function (row) {
+    tbody.innerHTML = padAccountingRows(rows).map(function (row) {
+        if (row.empty) {
+            return buildEmptyAccountingRowHtml();
+        }
         const titleClass = 'pad-2 dv-account-title' + (row.indent ? ' dv-account-title--indent' : '');
         const titleText = row.title ? escapeHtml(row.title) : '&nbsp;';
         const uacsText = row.uacs ? escapeHtml(row.uacs) : '&nbsp;';

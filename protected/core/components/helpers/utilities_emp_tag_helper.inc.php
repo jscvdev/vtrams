@@ -224,6 +224,13 @@ function utilities_emp_tag_build_salary_rows(PDO $pdo, string $tagValue): array
     utilities_emp_tag_ensure_schema($pdo);
     $tagValue = utilities_emp_tag_normalize_value($tagValue);
 
+    if (function_exists('utilities_uacs_build_salary_rows_for_tag')) {
+        $scopeRows = utilities_uacs_build_salary_rows_for_tag($pdo, $tagValue);
+        if ($scopeRows) {
+            return $scopeRows;
+        }
+    }
+
     $stmt = $pdo->prepare("
         SELECT id, tag_value, uacs_code
         FROM emp_tag_options

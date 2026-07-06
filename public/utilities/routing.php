@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_special_access_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
 require_once __DIR__ . '/../vouchers/checklist_config.php';
 AuditHelper::logPageView('Routing');
@@ -430,6 +431,79 @@ $liaison_candidate_offices = array_values(array_filter(
         return (int) ($row['is_active'] ?? 1) === 1;
     }
 ));
+
+$list_type_options = [];
+foreach ($rules as $rule) {
+    $ruleType = trim((string) ($rule['voucher_type'] ?? ''));
+    if ($ruleType !== '' && isset($voucher_types[$ruleType])) {
+        $list_type_options[$ruleType] = $voucher_types[$ruleType];
+    }
+}
+$list_filter = utilities_list_filter_voucher_type_params($list_type_options);
+
+$all_forward_destination_units = $forward_destination_units;
+$filtered_forward_destination_units = utilities_list_filter_rows(
+    $all_forward_destination_units,
+    $list_filter['q'],
+    'all',
+    ['designation']
+);
+$forward_destination_units = utilities_list_limit_initial(
+    $filtered_forward_destination_units,
+    $list_filter['is_filtered']
+);
+
+$all_rules = $rules;
+$rules_for_filter = utilities_list_filter_by_field_value($all_rules, 'voucher_type', $list_filter['voucher_type']);
+$filtered_rules = utilities_list_filter_rows(
+    $rules_for_filter,
+    $list_filter['q'],
+    'all',
+    ['voucher_type', 'forward_designation']
+);
+$rules = utilities_list_limit_initial($filtered_rules, $list_filter['is_filtered']);
+
+$all_return_previous_units = $return_previous_units;
+$filtered_return_previous_units = utilities_list_filter_rows(
+    $all_return_previous_units,
+    $list_filter['q'],
+    'all',
+    ['designation']
+);
+$return_previous_units = utilities_list_limit_initial(
+    $filtered_return_previous_units,
+    $list_filter['is_filtered']
+);
+
+$all_liaison_routing = $liaison_routing;
+$filtered_liaison_routing = utilities_list_filter_rows(
+    $all_liaison_routing,
+    $list_filter['q'],
+    'all',
+    ['office_name', 'parent_office_name', 'liaison_office_name', 'assignee_label']
+);
+$liaison_routing = utilities_list_limit_initial($filtered_liaison_routing, $list_filter['is_filtered']);
+
+$all_offices = $offices;
+$filtered_offices = utilities_list_filter_rows(
+    $all_offices,
+    $list_filter['q'],
+    'all',
+    ['office_name']
+);
+$offices_display = utilities_list_limit_initial($filtered_offices, $list_filter['is_filtered']);
+$office_tree_display = utilities_office_build_tree($offices_display);
+
+$routing_list_total = count($all_forward_destination_units)
+    + count($all_rules)
+    + count($all_return_previous_units)
+    + count($all_liaison_routing)
+    + count($all_offices);
+$routing_list_visible = count($forward_destination_units)
+    + count($rules)
+    + count($return_previous_units)
+    + count($liaison_routing)
+    + count($offices_display);
 
 /**
  * @param list<array<string, mixed>> $nodes
@@ -909,11 +983,23 @@ function routing_forward_destinations_for_select(array $destinations, string $st
         border-top: 1px solid var(--util-border);
     }
 </style>
+<?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
 <div class="main main--dashboard rt-page" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Routing</h1>
     </header>
+
+    <?php
+    $list_total = $routing_list_total;
+    $list_visible = $routing_list_visible;
+    $list_placeholder = 'Search destinations, voucher types, offices…';
+    $list_form_id = 'routingListFilterForm';
+    $list_filter_mode = 'voucher_type';
+    $list_voucher_types = $list_type_options;
+    $list_type_filter_label = 'Voucher type';
+    require __DIR__ . '/partials/list_filter_toolbar.php';
+    ?>
 
     <?php if ($flash): ?>
         <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>" style="margin-bottom:1.25rem;">
@@ -976,7 +1062,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                     </form>
 
                     <?php if (!$forward_destination_units): ?>
-                        <p class="util-empty">No forward destinations configured yet. Add one above.</p>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No forward destinations match your search.' : 'No forward destinations configured yet. Add one above.' ?></p>
                     <?php endif; ?>
 
                     <?php foreach ($forward_destination_units as $forwardDestinationUnit):
@@ -1059,7 +1145,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                     </form>
 
                     <?php if (!$rules): ?>
-                        <p class="util-empty">No routing rules yet. Add one above.</p>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No routing rules match your search.' : 'No routing rules yet. Add one above.' ?></p>
                     <?php endif; ?>
 
                     <?php foreach ($rules as $rule):
@@ -1153,7 +1239,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                     </form>
 
                     <?php if (!$return_previous_units): ?>
-                        <p class="util-empty">No return-to-previous units configured yet. Add one above.</p>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No return-to-previous units match your search.' : 'No return-to-previous units configured yet. Add one above.' ?></p>
                     <?php endif; ?>
 
                     <?php foreach ($return_previous_units as $returnPreviousUnit):
@@ -1255,7 +1341,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                     </form>
 
                     <?php if ($liaison_routing === []): ?>
-                        <p class="util-empty">No liaison-routed offices yet. Enable routing for CENRO or other sub-offices above.</p>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No liaison-routed offices match your search.' : 'No liaison-routed offices yet. Enable routing for CENRO or other sub-offices above.' ?></p>
                     <?php else: ?>
                         <?php foreach ($liaison_routing as $liaisonRow): ?>
                             <div class="util-routing-block util-liaison-row">
@@ -1365,10 +1451,10 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                         </div>
                     </form>
 
-                    <?php if (!$offices): ?>
-                        <p class="util-empty">No offices registered yet. Add one above or they will be seeded from existing user accounts on first load.</p>
+                    <?php if (!$offices_display): ?>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No offices match your search.' : 'No offices registered yet. Add one above or they will be seeded from existing user accounts on first load.' ?></p>
                     <?php else: ?>
-                        <?php routing_render_office_tree($pdo, $office_tree, $offices); ?>
+                        <?php routing_render_office_tree($pdo, $office_tree_display, $all_offices); ?>
                     <?php endif; ?>
                 </div>
             </div>

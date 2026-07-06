@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_emp_tag_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_uacs_helper.inc.php';
 
 /** Valid user_group.emp_tag / form "tag" values for salary UACS mapping. */
 function dv_known_emp_tags(?PDO $pdo = null): array
@@ -70,7 +71,7 @@ function dv_uacs_code_map(?PDO $pdo = null): array
 
     if ($pdo instanceof PDO) {
         try {
-            utilities_emp_tag_ensure_schema($pdo);
+            utilities_uacs_ensure_schema($pdo);
             foreach (utilities_emp_tag_build_salary_maps($pdo) as $rows) {
                 foreach ($rows as $row) {
                     $title = trim((string) ($row['title'] ?? ''));
@@ -79,6 +80,14 @@ function dv_uacs_code_map(?PDO $pdo = null): array
                         $map[$title] = $uacs;
                     }
                 }
+            }
+            if ($map) {
+                return $map;
+            }
+
+            $map = utilities_uacs_build_map($pdo, true);
+            if ($map) {
+                return $map;
             }
         } catch (Throwable $e) {
             // fall through
@@ -110,6 +119,26 @@ function dv_salary_common_account_titles(?PDO $pdo = null, ?string $empTag = nul
 {
     if ($pdo instanceof PDO && $empTag !== null && trim($empTag) !== '') {
         try {
+            utilities_uacs_ensure_schema($pdo);
+            $tagName = utilities_uacs_normalize_tag_name($empTag);
+            foreach (utilities_uacs_salary_voucher_types() as $salaryType) {
+                $rows = utilities_uacs_build_scope_rows($pdo, $salaryType, $tagName);
+                if ($rows) {
+                    $titles = [];
+                    foreach ($rows as $row) {
+                        if (!empty($row['indent'])) {
+                            $title = trim((string) ($row['title'] ?? ''));
+                            if ($title !== '') {
+                                $titles[] = $title;
+                            }
+                        }
+                    }
+                    if ($titles) {
+                        return $titles;
+                    }
+                }
+            }
+
             $tagId = utilities_emp_tag_find_id_by_value($pdo, $empTag);
             if ($tagId !== null) {
                 $titles = [];
@@ -129,6 +158,50 @@ function dv_salary_common_account_titles(?PDO $pdo = null, ?string $empTag = nul
     }
 
     return array_column(utilities_emp_tag_builtin_sub_uacs(), 'account_title');
+}
+
+/** @return list<string> */
+function dv_contractual_voucher_types(): array
+{
+    return utilities_uacs_salary_voucher_types();
+}
+
+/**
+ * UACS accounting rows for non-salary voucher types (type-wide scopes from utilities UACS).
+ *
+ * @return array<string, list<array{title: string, uacs: string, indent: bool}>>
+ */
+function dv_build_voucher_type_accounting_maps(PDO $pdo): array
+{
+    utilities_uacs_ensure_schema($pdo);
+    $grouped = utilities_uacs_group_rows(utilities_uacs_fetch_all($pdo));
+    $maps = [];
+
+    foreach ($grouped as $voucherType => $tags) {
+        $voucherType = (string) $voucherType;
+        if ($voucherType === '' || utilities_uacs_is_salary_voucher_type($voucherType)) {
+            continue;
+        }
+
+        $rows = utilities_uacs_build_scope_rows($pdo, $voucherType, '');
+        if (!$rows) {
+            foreach ($tags as $tagName => $group) {
+                if (!$group['primary'] && !$group['subs']) {
+                    continue;
+                }
+                $rows = utilities_uacs_build_scope_rows($pdo, $voucherType, (string) $tagName);
+                if ($rows) {
+                    break;
+                }
+            }
+        }
+
+        if ($rows) {
+            $maps[$voucherType] = $rows;
+        }
+    }
+
+    return $maps;
 }
 
 /**

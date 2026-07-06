@@ -327,6 +327,13 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             <span class="sidebar__link-floating">Routing</span>
                                         </a>
                                     </div>
+                                    <div class="sidebar-link-container">
+                                        <a href="../utilities/uacs.php" class="sidebar__link">
+                                            <i class="ri-barcode-box-line"></i>
+                                            <span class="sidebar__link-name">UACS Codes</span>
+                                            <span class="sidebar__link-floating">UACS Codes</span>
+                                        </a>
+                                    </div>
                                 <?php endif; ?>
                                 <?php if ($can_view_dashboard): ?>
                                     <div class="sidebar-link-container">

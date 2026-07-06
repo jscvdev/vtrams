@@ -976,6 +976,29 @@ function voucher_user_has_designation(array $designations, string $needle): bool
 }
 
 /**
+ * Whether the logged-in user belongs to a downstream voucher processing unit
+ * (Planning, ICU, Budget, Accounting, Cashiers, etc.).
+ *
+ * @param list<string> $designations
+ */
+function voucher_user_is_process_unit_member(array $designations): bool
+{
+    foreach (voucher_tracking_dashboard_sections() as $section) {
+        if (voucher_user_has_designation($designations, $section)) {
+            return true;
+        }
+    }
+
+    foreach (['Processor', 'Accountant III', 'Budget Officer'] as $role) {
+        if (voucher_user_has_designation($designations, $role)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Resolve which office should be used when routing to a designation.
  * Prefers the logged user's office when registered, otherwise the first
  * designation_limit office that has an assigned UDC.

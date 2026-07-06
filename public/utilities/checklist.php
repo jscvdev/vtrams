@@ -2,6 +2,7 @@
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_checklist_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
 AuditHelper::logPageView('Checklist');
 
@@ -177,12 +178,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$checklist_types = utilities_checklist_fetch_all($pdo);
-$type_count = count($checklist_types);
+$all_checklist_types = utilities_checklist_fetch_all($pdo);
+$list_type_options = utilities_list_type_options_from_rows($all_checklist_types, 'type_key', 'display_label');
+$list_filter = utilities_list_filter_voucher_type_params($list_type_options);
+$type_count = count($all_checklist_types);
 $item_count = 0;
-foreach ($checklist_types as $t) {
+foreach ($all_checklist_types as $t) {
     $item_count += count($t['items'] ?? []);
 }
+$checklist_rows_for_filter = utilities_list_filter_by_field_value($all_checklist_types, 'type_key', $list_filter['voucher_type']);
+$filtered_checklist_types = utilities_list_filter_rows(
+    $checklist_rows_for_filter,
+    $list_filter['q'],
+    'all',
+    ['type_key', 'title', 'display_label']
+);
+$checklist_types = utilities_list_limit_initial($filtered_checklist_types, $list_filter['is_filtered']);
+$checklist_visible = count($checklist_types);
 ?>
 
 <style>
@@ -538,11 +550,23 @@ foreach ($checklist_types as $t) {
         .util-inline input[type="text"] { width: 100%; }
     }
 </style>
+<?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
 <div class="main main--dashboard chk-page" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Checklist</h1>
     </header>
+
+    <?php
+    $list_total = $type_count;
+    $list_visible = $checklist_visible;
+    $list_placeholder = 'Search voucher type, title, or display label';
+    $list_form_id = 'checklistListFilterForm';
+    $list_filter_mode = 'voucher_type';
+    $list_voucher_types = $list_type_options;
+    $list_type_filter_label = 'Voucher type';
+    require __DIR__ . '/partials/list_filter_toolbar.php';
+    ?>
 
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">
@@ -601,7 +625,7 @@ foreach ($checklist_types as $t) {
                     </form>
 
                     <?php if (!$checklist_types): ?>
-                        <p class="util-empty">No voucher types yet. Add one above.</p>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No voucher types match your search.' : 'No voucher types yet. Add one above.' ?></p>
                     <?php endif; ?>
 
                     <?php foreach ($checklist_types as $type):

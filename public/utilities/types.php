@@ -2,6 +2,7 @@
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_voucher_type_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
 AuditHelper::logPageView('Types');
 
@@ -124,9 +125,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$type_rows = utilities_voucher_type_fetch_all($pdo);
+$all_type_rows = utilities_voucher_type_fetch_all($pdo);
 $known_type_keys = utilities_voucher_type_known_type_keys($pdo);
-$type_count = count($type_rows);
+$list_type_options = utilities_list_type_options_from_rows($all_type_rows, 'type_key', 'display_label');
+$list_filter = utilities_list_filter_voucher_type_params($list_type_options);
+$type_count = count($all_type_rows);
+$type_rows_for_filter = utilities_list_filter_by_field_value($all_type_rows, 'type_key', $list_filter['voucher_type']);
+$filtered_type_rows = utilities_list_filter_rows(
+    $type_rows_for_filter,
+    $list_filter['q'],
+    'all',
+    ['type_key', 'display_label', 'default_particulars']
+);
+$type_rows = utilities_list_limit_initial($filtered_type_rows, $list_filter['is_filtered']);
+$type_visible = count($type_rows);
 ?>
 
 <style>
@@ -332,11 +344,23 @@ $type_count = count($type_rows);
         }
     }
 </style>
+<?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
 <div class="main main--dashboard typ-page" id="main">
     <header class="voucher-dashboard-header">
         <h1 class="voucher-dashboard-title">Types</h1>
     </header>
+
+    <?php
+    $list_total = $type_count;
+    $list_visible = $type_visible;
+    $list_placeholder = 'Search type key, label, or particulars';
+    $list_form_id = 'typesListFilterForm';
+    $list_filter_mode = 'voucher_type';
+    $list_voucher_types = $list_type_options;
+    $list_type_filter_label = 'Type';
+    require __DIR__ . '/partials/list_filter_toolbar.php';
+    ?>
 
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">
@@ -408,7 +432,7 @@ $type_count = count($type_rows);
             </datalist>
 
             <?php if (!$type_rows): ?>
-                <p class="util-empty">No voucher type settings yet. Add one above or seed from checklist types on first load.</p>
+                <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No types match your search.' : 'No voucher type settings yet. Add one above or seed from checklist types on first load.' ?></p>
             <?php endif; ?>
 
             <?php foreach ($type_rows as $row):

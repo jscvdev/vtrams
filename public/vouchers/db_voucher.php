@@ -61,9 +61,12 @@ if (isset($pdo) && $pdo instanceof PDO) {
     }
 }
 
-$dv_contractual_voucher_types = ['Contractual Services or Job Order'];
+$dv_contractual_voucher_types = dv_contractual_voucher_types();
 $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
     ? utilities_emp_tag_build_salary_maps($pdo)
+    : [];
+$dv_voucher_type_accounting_maps = (isset($pdo) && $pdo instanceof PDO)
+    ? dv_build_voucher_type_accounting_maps($pdo)
     : [];
 ?>
     <!--=============== MAIN ===============!-->
@@ -81,6 +84,8 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
             'payeeEmpTagsByEmpId' => $dv_emp_tag_lookup['payeeEmpTagsByEmpId'],
             'salaryCommonTitles' => dv_salary_common_account_titles($pdo ?? null),
             'empTagSalaryMaps' => $dv_emp_tag_salary_maps,
+            'voucherTypeAccountingMaps' => $dv_voucher_type_accounting_maps,
+            'accountingMinRows' => 8,
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
         window.DV_SIGNATORY = <?= json_encode([
             'options' => array_values($dv_signatory_options),
@@ -170,6 +175,7 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
 
             body.dv-printing #printableTable #dv_accounting_body {
                 padding-bottom: 10px;
+                min-height: calc(var(--dv-accounting-min-rows, 8) * var(--dv-accounting-row-height, 30px));
             }
 
             @page {
@@ -273,6 +279,11 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
 
         #printableTable #dv_accounting_body {
             padding-bottom: 10px;
+            min-height: calc(var(--dv-accounting-min-rows, 8) * var(--dv-accounting-row-height, 30px));
+        }
+
+        #printableTable .dv-account-title {
+            min-height: var(--dv-accounting-row-height, 30px);
         }
 
         #printableTable #dv_accounting_body.dv-accounting-body--empty .dv-accounting-row td {
@@ -401,8 +412,8 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
                     <th class="text-centered">Credit</th>
                 </tr>
             </tbody>
-            <tbody id="dv_accounting_body" class="dv-accounting-body--empty">
-                <?php for ($i = 0; $i < 7; $i++): ?>
+            <tbody id="dv_accounting_body" class="dv-accounting-body--empty" style="--dv-accounting-min-rows: 8; --dv-accounting-row-height: 30px;">
+                <?php for ($i = 0; $i < 8; $i++): ?>
                 <tr class="dv-accounting-row dv-accounting-row--empty">
                     <td class="pad-2 dv-account-title" colspan="2">&nbsp;</td>
                     <td class="pad-2 dv-uacs-code text-centered" style="width: 100px !important;">&nbsp;</td>

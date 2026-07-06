@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../protected/core/components/notifications/custom_al
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_voucher_type_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 
 include 'db_voucher.php';
 check_voucher_errors();
@@ -35,9 +36,10 @@ if (empty($_SESSION['logged_user_emp_name']) && !empty($_SESSION['logged_user_em
 
 // Store logged user name for JavaScript
 $logged_user_name = htmlspecialchars($_SESSION['logged_user_emp_name'] ?? '', ENT_QUOTES, 'UTF-8');
+$logged_user_designations = voucher_logged_user_designations();
+$logged_user_can_unlock_payee = voucher_user_is_process_unit_member($logged_user_designations);
 
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
-require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 utilities_office_ensure_schema($pdo);
 $logged_user_office_for_encode = trim((string) ($_SESSION['logged_user_office'] ?? ''));
 $encoder_forwards_to_icu = $logged_user_office_for_encode !== ''
@@ -1351,6 +1353,7 @@ function session_contains_phrase($phrase)
 <script>
     (function() {
         const loggedUserName = <?php echo json_encode($logged_user_name); ?>;
+        const loggedUserCanUnlockPayee = <?php echo $logged_user_can_unlock_payee ? 'true' : 'false'; ?>;
 
         const voucherTypeSettingsMapRef = (typeof voucherTypeSettingsMap !== 'undefined')
             ? voucherTypeSettingsMap
@@ -1385,7 +1388,7 @@ function session_contains_phrase($phrase)
 
             const preserveExistingPayee = options && options.preserveExistingPayee;
             const selectedType = String(typeSelect.value || '').trim();
-            const shouldLock = isPayeeLockedType(selectedType);
+            const shouldLock = isPayeeLockedType(selectedType) && !loggedUserCanUnlockPayee;
 
             if (shouldLock && loggedUserName) {
                 if (!preserveExistingPayee || !String(payeeInput.value || '').trim()) {
