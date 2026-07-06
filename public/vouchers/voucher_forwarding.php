@@ -426,6 +426,7 @@ if ($showCashierArchiveCol) {
                                             <option value='Accounting Unit'>Accounting Unit</option>
                                         <?php elseif (in_array("Budget Unit", $target)) : ?>
                                             <option value='Accounting Unit'>Accounting Unit</option>
+                                            <option value='Accountant III' class="processed">Chief Accountant</option>
                                             <?php if (!in_array("Budget Officer", $target)) : ?>
                                                 <option value='Budget Officer' class="Budget_Officer">Budget Officer</option>
                                             <?php endif ?>
