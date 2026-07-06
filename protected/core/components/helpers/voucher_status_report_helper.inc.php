@@ -303,6 +303,7 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'status' => trim((string) ($row['status'] ?? '')),
         'datetime_status' => trim((string) ($row['datetime_status'] ?? '')),
         'datetime_encoded' => trim((string) ($row['datetime_encoded'] ?? '')),
+        'remarks' => trim((string) ($row['remarks'] ?? '')),
         'process_history' => voucher_tracking_normalize_process_history((string) ($row['process_history'] ?? '')),
         'categories' => $categories,
         'category_label' => implode(' · ', array_column($categories, 'label')),

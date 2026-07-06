@@ -886,6 +886,10 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                         <p class="status-breakdown-title">Latest Action</p>
                         <div class="status-breakdown-content" id="sr_latest"></div>
                     </div>
+                    <div class="status-breakdown-card status-breakdown-card--full" id="sr_latest_remarks_card" style="display:none;">
+                        <p class="status-breakdown-title">Latest Remarks</p>
+                        <div class="status-breakdown-content" id="sr_latest_remarks"></div>
+                    </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
                         <p class="status-breakdown-title">Complete Process History</p>
                         <ul class="status-history-list" id="sr_history"></ul>
@@ -1057,6 +1061,18 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             document.getElementById('sr_amount').textContent = entry.amount || '—';
             document.getElementById('sr_route_type').textContent = entry.category_label || '—';
             document.getElementById('sr_latest').textContent = (entry.voucher_status || '—') + (entry.datetime_status ? (' · ' + entry.datetime_status) : '');
+            const remarksCard = document.getElementById('sr_latest_remarks_card');
+            const remarksEl = document.getElementById('sr_latest_remarks');
+            const remarks = String(entry.remarks || '').trim();
+            if (remarksCard && remarksEl) {
+                if (remarks !== '') {
+                    remarksEl.textContent = remarks;
+                    remarksCard.style.display = '';
+                } else {
+                    remarksEl.textContent = '';
+                    remarksCard.style.display = 'none';
+                }
+            }
             document.getElementById('sr_history').innerHTML = renderHistoryList(entry.process_history || '');
             modal.style.display = 'block';
             overlay.style.display = 'block';
