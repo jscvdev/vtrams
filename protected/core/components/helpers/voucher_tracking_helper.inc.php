@@ -2133,6 +2133,86 @@ function voucher_tracking_section_sort_key(string $section): string
     return sprintf('%03d-%s', $rank, strtolower($section));
 }
 
+/** Whether a calendar day counts as work time for dashboard processing metrics (Mon–Thu only). */
+function voucher_tracking_is_work_day(DateTimeInterface $date): bool
+{
+    $dayOfWeek = (int) $date->format('N');
+
+    return $dayOfWeek >= 1 && $dayOfWeek <= 4;
+}
+
+/**
+ * Elapsed seconds between two timestamps, counting only Monday through Thursday.
+ * Used by voucher dashboard processing-time analytics.
+ */
+function voucher_tracking_elapsed_work_seconds(int $startTs, int $endTs): int
+{
+    if ($startTs <= 0 || $endTs <= 0 || $endTs <= $startTs) {
+        return 0;
+    }
+
+    $total = 0;
+    $cursor = (new DateTimeImmutable())->setTimestamp($startTs);
+
+    while ($cursor->getTimestamp() < $endTs) {
+        $dayStart = $cursor->setTime(0, 0, 0);
+        $dayEnd = $dayStart->modify('+1 day');
+
+        if (voucher_tracking_is_work_day($dayStart)) {
+            $segmentStart = max($startTs, $cursor->getTimestamp());
+            $segmentEnd = min($endTs, $dayEnd->getTimestamp());
+            if ($segmentEnd > $segmentStart) {
+                $total += $segmentEnd - $segmentStart;
+            }
+        }
+
+        $cursor = $dayEnd;
+    }
+
+    return $total;
+}
+
+/**
+ * Dashboard total processing time (Mon–Thu): first receive at workflow start through last status time.
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ */
+function voucher_tracking_dashboard_total_processing_seconds(
+    object $pdo,
+    string $processing_no,
+    int $endTs,
+    string $voucher_type,
+    string $fallbackStartTimestamp,
+    array $actions
+): ?int {
+    $processing_no = trim($processing_no);
+    if ($processing_no === '' || $endTs <= 0) {
+        return null;
+    }
+
+    if (trim($voucher_type) === '') {
+        $voucher_type = voucher_fetch_stored_voucher_type($pdo, $processing_no);
+    }
+
+    $startSection = voucher_tracking_total_processing_start_section($voucher_type);
+    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
+
+    if ($startTs === null && trim($fallbackStartTimestamp) !== '') {
+        $fallbackTs = strtotime(trim($fallbackStartTimestamp));
+        if ($fallbackTs !== false) {
+            $startTs = $fallbackTs;
+        }
+    }
+
+    if ($startTs === null || $endTs < $startTs) {
+        return null;
+    }
+
+    $seconds = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
+
+    return $seconds > 0 ? $seconds : null;
+}
+
 /**
  * @param array<string, int> $totals
  */
@@ -2142,7 +2222,7 @@ function voucher_tracking_add_section_duration(array &$totals, string $section, 
         return;
     }
 
-    $delta = $endTs - $startTs;
+    $delta = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
     if ($delta > 0) {
         $totals[$section] = ($totals[$section] ?? 0) + $delta;
     }
@@ -2516,11 +2596,29 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
             $labels[$section] = voucher_tracking_format_duration_seconds($seconds);
         }
 
+        $totalProcessingTime = '';
+        if ($openEndTs !== null && $openEndTs > 0) {
+            $totalSeconds = voucher_tracking_dashboard_total_processing_seconds(
+                $pdo,
+                $pn,
+                $openEndTs,
+                trim((string) ($trackingRow['voucher_type'] ?? '')),
+                trim((string) ($trackingRow['datetime_encoded'] ?? '')),
+                $logsByPn[$pn] ?? []
+            );
+            if ($totalSeconds !== null) {
+                $totalProcessingTime = voucher_tracking_format_turnaround_seconds($totalSeconds);
+            }
+        }
+        if ($totalProcessingTime === '') {
+            $totalProcessingTime = trim((string) ($trackingRow['total_processing_time'] ?? ''));
+        }
+
         $byVoucher[] = [
             'processing_no' => $pn,
             'payee' => trim((string) ($trackingRow['payee'] ?? '')),
             'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
-            'total_processing_time' => trim((string) ($trackingRow['total_processing_time'] ?? '')),
+            'total_processing_time' => $totalProcessingTime,
             'sections' => $durations,
             'sections_label' => $labels,
             'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
