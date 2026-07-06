@@ -100,6 +100,20 @@ function user_login_unblock(PDO $pdo, string $emp_id): bool
     return $stmt->rowCount() > 0;
 }
 
+/** Manually block a user account (developer tool). */
+function user_login_block(PDO $pdo, string $emp_id): bool
+{
+    user_login_ensure_schema($pdo);
+
+    $stmt = $pdo->prepare(
+        'UPDATE user_group SET is_blocked = 1 WHERE emp_id = :emp_id AND is_blocked = 0'
+    );
+    $stmt->bindValue(':emp_id', $emp_id, PDO::PARAM_STR);
+    $stmt->execute();
+
+    return $stmt->rowCount() > 0;
+}
+
 function user_login_blocked_message(): string
 {
     return 'Account is blocked due to multiple failed login attempts. Contact your administrator.';

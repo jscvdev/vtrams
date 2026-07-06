@@ -282,6 +282,7 @@ if (!$emp_tag_options) {
                     <th>Status</th>
                     <th>Created At</th>
                     <th>Edit</th>
+                    <th>Block</th>
                     <th>Unblock</th>
                     <th>Delete</th>
                 </thead>
@@ -307,6 +308,15 @@ if (!$emp_tag_options) {
                         <td data-label="password" class="hidden"><?php echo $row['password']; ?></td>
 
                         <td data-label=""><button class="btn-target btn success popupForm-edit_user" id="btn_edit" name="btn-edit" type="button">Edit</button></td>
+                        <td data-label="Block">
+                            <?php if (!$isBlocked): ?>
+                                <a href="#"
+                                    data-url="<?php echo '../../protected/handler/devtool_module/block_user_module/block_user_handler.inc.php?emp_id=' . htmlspecialchars((string) $row['emp_id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    class="btn danger devtool-block-btn">Block</a>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Unblock">
                             <?php if ($isBlocked): ?>
                                 <a href="#"
@@ -568,6 +578,21 @@ if (!$emp_tag_options) {
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.devtool-block-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var url = btn.getAttribute('data-url');
+                if (!url) return;
+                if (typeof functionAlert !== 'function') {
+                    window.location.href = url;
+                    return;
+                }
+                functionAlert('Block this user? They will not be able to log in until unblocked.', '', function() {
+                    window.location.href = url;
+                });
+            });
+        });
+
         document.querySelectorAll('.devtool-unblock-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
