@@ -58,7 +58,11 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         $stmt->execute();
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $sectionTiming = voucher_tracking_build_section_timing_report($pdo, $rows);
+        $sectionTiming = voucher_tracking_build_section_timing_report(
+            $pdo,
+            $rows,
+            voucher_tracking_dashboard_breakdown_sections()
+        );
         header('Content-Type: application/json; charset=UTF-8');
         echo json_encode([
             'rows' => $rows,
@@ -84,7 +88,11 @@ AuditHelper::logPageView('Dashboard');
 require_once __DIR__ . '/checklist_config.php';
 utilities_signatory_ensure_schema($pdo);
 $dashboard_offices = utilities_signatory_fetch_offices($pdo);
-$dashboard_timing_section_labels = array_values(voucher_tracking_dashboard_section_labels());
+$dashboard_breakdown_sections = voucher_tracking_dashboard_breakdown_sections();
+$dashboard_timing_section_labels = array_map(
+    static fn(string $section): string => voucher_tracking_dashboard_section_label($section),
+    $dashboard_breakdown_sections
+);
 $dashboard_section_timing_blurb = count($dashboard_timing_section_labels) > 1
     ? implode(', ', array_slice($dashboard_timing_section_labels, 0, -1))
         . ', and ' . $dashboard_timing_section_labels[array_key_last($dashboard_timing_section_labels)]
@@ -781,6 +789,9 @@ if ($scriptName !== '') {
                 };
                 const summary = Array.isArray(timing.summary) ? timing.summary : [];
                 const sections = Array.isArray(timing.sections) ? timing.sections : [];
+                const byVoucherSections = Array.isArray(timing.by_voucher_sections) && timing.by_voucher_sections.length
+                    ? timing.by_voucher_sections
+                    : sections;
                 const byVoucher = Array.isArray(timing.by_voucher) ? timing.by_voucher : [];
 
                 if (sectionTimeChart) sectionTimeChart.destroy();
@@ -846,7 +857,7 @@ if ($scriptName !== '') {
 
                 const headerRow = document.createElement('tr');
                 let headerHtml = '<th>Processing No.</th><th>Payee</th><th>DV No.</th>';
-                sections.forEach(section => {
+                byVoucherSections.forEach(section => {
                     headerHtml += `<th style="text-align:right;">${section}</th>`;
                 });
                 headerHtml += '<th style="text-align:right;">Total Processing Time</th>';
@@ -855,7 +866,7 @@ if ($scriptName !== '') {
 
                 if (byVoucher.length === 0) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td colspan="${4 + sections.length}" style="text-align:center;color:#888;">No per-voucher section timing data for the current filters.</td>`;
+                    row.innerHTML = `<td colspan="${4 + byVoucherSections.length}" style="text-align:center;color:#888;">No per-voucher section timing data for the current filters.</td>`;
                     voucherBody.appendChild(row);
                     return;
                 }
@@ -866,7 +877,7 @@ if ($scriptName !== '') {
                         <td>${row.payee || '-'}</td>
                         <td>${row.dv_no || '-'}</td>`;
                     const labels = row.sections_label || {};
-                    sections.forEach(section => {
+                    byVoucherSections.forEach(section => {
                         html += `<td style="text-align:right;">${labels[section] || '—'}</td>`;
                     });
                     const tpt = (row.total_processing_time || '').trim();

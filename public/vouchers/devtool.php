@@ -15,10 +15,35 @@ check_add_user_errors();
 $rawQ = (string) ($_GET['q'] ?? '');
 $q = filterInput($rawQ);
 $invalidSearch = (trim($rawQ) !== '' && $q === '');
+$rawOffice = trim((string) ($_GET['office'] ?? ''));
+$rawRole = trim((string) ($_GET['role'] ?? ''));
+$blockStatus = trim((string) ($_GET['block'] ?? 'all'));
+if (!in_array($blockStatus, ['all', 'active', 'blocked'], true)) {
+    $blockStatus = 'all';
+}
 $rowsPerPage = clamp_int($_GET['rowsPerPage'] ?? null, 1, 50, 50);
 $maxBrowse = 100;
 
-$searchSql = '';
+$office_options_stmt = $pdo->query(
+    "SELECT DISTINCT TRIM(office) AS office
+     FROM user_group
+     WHERE TRIM(COALESCE(office, '')) <> ''
+     ORDER BY office ASC"
+);
+$office_options = $office_options_stmt
+    ? array_values(array_filter(array_map('strval', array_column($office_options_stmt->fetchAll(PDO::FETCH_ASSOC), 'office'))))
+    : [];
+
+$fetch_designations_query = 'SELECT designation FROM designation_limit ORDER BY designation ASC';
+$fetch_designations = $pdo->prepare($fetch_designations_query);
+$fetch_designations->execute();
+$designation_options = $fetch_designations->fetchAll(PDO::FETCH_COLUMN) ?: [];
+$designation_options = array_values(array_filter(array_map('strval', $designation_options)));
+
+$filterOffice = in_array($rawOffice, $office_options, true) ? $rawOffice : '';
+$filterRole = in_array($rawRole, $designation_options, true) ? $rawRole : '';
+
+$whereClauses = [];
 $searchParams = [];
 if (!$invalidSearch && $q !== '') {
     $pat = '%' . $q . '%';
@@ -29,8 +54,24 @@ if (!$invalidSearch && $q !== '') {
         $parts[] = '`' . $col . '` LIKE ' . $ph;
         $searchParams[$ph] = [$pat, PDO::PARAM_STR];
     }
-    $searchSql = ' WHERE (' . implode(' OR ', $parts) . ')';
+    $whereClauses[] = '(' . implode(' OR ', $parts) . ')';
 }
+if ($filterOffice !== '') {
+    $whereClauses[] = 'TRIM(`office`) = :flt_office';
+    $searchParams[':flt_office'] = [$filterOffice, PDO::PARAM_STR];
+}
+if ($filterRole !== '') {
+    $whereClauses[] = '`designation` LIKE :flt_role';
+    $searchParams[':flt_role'] = ['%' . $filterRole . '%', PDO::PARAM_STR];
+}
+if ($blockStatus === 'active') {
+    $whereClauses[] = 'COALESCE(`is_blocked`, 0) = 0';
+} elseif ($blockStatus === 'blocked') {
+    $whereClauses[] = '`is_blocked` = 1';
+}
+
+$searchSql = $whereClauses ? (' WHERE ' . implode(' AND ', $whereClauses)) : '';
+$isFiltered = (!$invalidSearch && $q !== '') || $filterOffice !== '' || $filterRole !== '' || $blockStatus !== 'all';
 
 if ($invalidSearch) {
     $dbCount = 0;
@@ -62,11 +103,20 @@ $fetch_users->bindValue(':off', $offset, PDO::PARAM_INT);
 $fetch_users->execute();
 
 $totalRows = $displayTotal;
-$qsDevtool = $rawQ !== '' ? ('&q=' . rawurlencode($rawQ)) : '';
-
-$fetch_designations_query = "SELECT designation FROM designation_limit ORDER BY designation ASC";
-$fetch_designations = $pdo->prepare($fetch_designations_query);
-$fetch_designations->execute();
+$qsDevtoolParts = [];
+if ($rawQ !== '') {
+    $qsDevtoolParts[] = 'q=' . rawurlencode($rawQ);
+}
+if ($filterOffice !== '') {
+    $qsDevtoolParts[] = 'office=' . rawurlencode($filterOffice);
+}
+if ($filterRole !== '') {
+    $qsDevtoolParts[] = 'role=' . rawurlencode($filterRole);
+}
+if ($blockStatus !== 'all') {
+    $qsDevtoolParts[] = 'block=' . rawurlencode($blockStatus);
+}
+$qsDevtool = $qsDevtoolParts ? ('&' . implode('&', $qsDevtoolParts)) : '';
 
 $nextEmpId = '1';
 try {
@@ -130,8 +180,8 @@ if (!$emp_tag_options) {
     <style>
         #devtoolFilterForm {
             display: flex;
-            align-items: center;
-            flex-wrap: nowrap !important;
+            align-items: flex-end;
+            flex-wrap: wrap !important;
             width: 100%;
             gap: 10px;
         }
@@ -142,14 +192,44 @@ if (!$emp_tag_options) {
         }
 
         #devtoolFilterForm .filter-search {
-            flex: 1 1 auto;
+            flex: 1 1 220px;
             min-width: 0 !important;
+        }
+
+        #devtoolFilterForm .devtool-filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+            flex: 0 0 auto;
+            min-width: 140px;
+        }
+
+        #devtoolFilterForm .devtool-filter-field label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        #devtoolFilterForm .devtool-filter-field select {
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            min-height: 38px;
+            box-sizing: border-box;
+            background: #fff;
+        }
+
+        #devtoolFilterForm .devtool-filter-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex: 0 0 auto;
         }
     </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
             <div class="filter-left">
-                <form method="GET" action="" id="devtoolFilterForm" class="filter-toolbar-form" onsubmit="return false;">
+                <form method="GET" action="" id="devtoolFilterForm" class="filter-toolbar-form">
                     <div class="filter-chips" aria-label="Filter tools">
                         <a class="filter-icon-btn" href="devtool.php" aria-label="Home">
                         </a>
@@ -158,6 +238,42 @@ if (!$emp_tag_options) {
                     </div>
                     <div class="filter-search">
                         <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search for name, office, designation, etc" autocomplete="off">
+                    </div>
+                    <div class="devtool-filter-field">
+                        <label for="filterOffice">Office</label>
+                        <select name="office" id="filterOffice">
+                            <option value=""<?php echo $filterOffice === '' ? ' selected' : ''; ?>>All offices</option>
+                            <?php foreach ($office_options as $officeOption): ?>
+                                <option value="<?php echo htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $filterOffice === $officeOption ? ' selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($officeOption, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="devtool-filter-field">
+                        <label for="filterRole">Role</label>
+                        <select name="role" id="filterRole">
+                            <option value=""<?php echo $filterRole === '' ? ' selected' : ''; ?>>All roles</option>
+                            <?php foreach ($designation_options as $roleOption): ?>
+                                <option value="<?php echo htmlspecialchars($roleOption, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $filterRole === $roleOption ? ' selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($roleOption, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="devtool-filter-field">
+                        <label for="filterBlock">Block status</label>
+                        <select name="block" id="filterBlock">
+                            <option value="all"<?php echo $blockStatus === 'all' ? ' selected' : ''; ?>>All</option>
+                            <option value="active"<?php echo $blockStatus === 'active' ? ' selected' : ''; ?>>Active</option>
+                            <option value="blocked"<?php echo $blockStatus === 'blocked' ? ' selected' : ''; ?>>Blocked</option>
+                        </select>
+                    </div>
+                    <div class="devtool-filter-actions">
+                        <button type="submit" class="btn primary">Apply</button>
+                        <?php if ($isFiltered): ?>
+                            <a class="btn secondary" href="devtool.php">Clear</a>
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -228,13 +344,9 @@ if (!$emp_tag_options) {
                                 <label for="">Designation</label>
                                 <!--                   <input multiple type="text" class="position" name="position" placeholder="section">-->
                                 <select multiple class="designation form-custom-multi-input" name="designation[]" id="designation" onchange="check_selected(this)">
-                                    <?php
-                                    while ($row = $fetch_designations->fetch(PDO::FETCH_ASSOC)) {
-                                    ?>
-                                        <option value="<?php echo $row['designation']; ?>"><?php echo $row['designation']; ?></option>
-                                    <?php
-                                    }
-                                    ?>
+                                    <?php foreach ($designation_options as $designationOption): ?>
+                                        <option value="<?php echo htmlspecialchars($designationOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($designationOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="label-input__container dynamic_input_office hidden_input">
@@ -390,24 +502,60 @@ if (!$emp_tag_options) {
 <script src="../../protected/js/popscript.js"></script>
 <script>
     (function() {
+        var form = document.getElementById('devtoolFilterForm');
         var inp = document.getElementById('filterInput');
-        if (!inp) return;
-        var initial = String(inp.value || '');
+        if (!form || !inp) return;
+
+        var initial = {
+            q: String(inp.value || ''),
+            office: String((document.getElementById('filterOffice') || {}).value || ''),
+            role: String((document.getElementById('filterRole') || {}).value || ''),
+            block: String((document.getElementById('filterBlock') || {}).value || 'all')
+        };
+
+        function currentValues() {
+            return {
+                q: String(inp.value || ''),
+                office: String((document.getElementById('filterOffice') || {}).value || ''),
+                role: String((document.getElementById('filterRole') || {}).value || ''),
+                block: String((document.getElementById('filterBlock') || {}).value || 'all')
+            };
+        }
+
+        function valuesChanged(current) {
+            return current.q !== initial.q
+                || current.office !== initial.office
+                || current.role !== initial.role
+                || current.block !== initial.block;
+        }
+
         function applyFilterSearch() {
-            var v = String(inp.value || '');
-            if (v === initial) return;
+            var current = currentValues();
+            if (!valuesChanged(current)) return;
             var u = new URL(window.location.href);
             u.searchParams.set('page', '1');
             u.searchParams.set('rowsPerPage', '50');
-            if (v === '') u.searchParams.delete('q');
-            else u.searchParams.set('q', v);
+            if (current.q === '') u.searchParams.delete('q');
+            else u.searchParams.set('q', current.q);
+            if (current.office === '') u.searchParams.delete('office');
+            else u.searchParams.set('office', current.office);
+            if (current.role === '') u.searchParams.delete('role');
+            else u.searchParams.set('role', current.role);
+            if (current.block === 'all') u.searchParams.delete('block');
+            else u.searchParams.set('block', current.block);
             window.location.href = u.toString();
         }
+
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 applyFilterSearch();
             }
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            applyFilterSearch();
         });
     })();
 </script>
@@ -419,11 +567,11 @@ if (!$emp_tag_options) {
         }
     });
 </script>
-<?php elseif (trim($rawQ) !== '' && $q !== '' && $displayTotal < 1): ?>
+<?php elseif ($isFiltered && !$invalidSearch && $displayTotal < 1): ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof showNotify === 'function') {
-            showNotify('No matching users for your search.', 'warning', 2200);
+            showNotify('No matching users for your search or filters.', 'warning', 2200);
         }
     });
 </script>

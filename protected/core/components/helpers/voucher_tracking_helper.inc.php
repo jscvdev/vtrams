@@ -181,9 +181,11 @@ function voucher_sync_tracking_identifiers(
     $finalDv = voucher_pick_field($dv_no, $current['dv_no'] ?? '');
     $finalAda = voucher_pick_field($ada_check_no, $current['ada_check_no'] ?? '');
 
-    if (voucher_field_is_placeholder($finalOrs)
+    if (
+        voucher_field_is_placeholder($finalOrs)
         && voucher_field_is_placeholder($finalDv)
-        && voucher_field_is_placeholder($finalAda)) {
+        && voucher_field_is_placeholder($finalAda)
+    ) {
         return;
     }
 
@@ -887,10 +889,12 @@ function voucher_designation_limit_receiver_udcs_for_office(
     $officeMatched = voucher_filter_udcs_by_user_group_office($pdo, $designated_udc, $office);
 
     $merged = [];
-    foreach (array_merge(
-        array_filter(array_map('trim', explode(',', $picked))),
-        array_filter(array_map('trim', explode(',', $officeMatched)))
-    ) as $udc) {
+    foreach (
+        array_merge(
+            array_filter(array_map('trim', explode(',', $picked))),
+            array_filter(array_map('trim', explode(',', $officeMatched)))
+        ) as $udc
+    ) {
         if ($udc !== '') {
             $merged[$udc] = $udc;
         }
@@ -1119,12 +1123,14 @@ function voucher_user_is_process_unit_member(array $designations): bool
  */
 function voucher_user_can_unlock_payee(array $designations): bool
 {
-    foreach ([
-        'System Admin',
-        'Accounting Unit',
-        'Accountant III',
-        'Cashiers Unit',
-    ] as $role) {
+    foreach (
+        [
+            'System Admin',
+            'Accounting Unit',
+            'Accountant III',
+            'Cashiers Unit',
+        ] as $role
+    ) {
         if (voucher_user_has_designation($designations, $role)) {
             return true;
         }
@@ -2287,6 +2293,53 @@ function voucher_tracking_dashboard_sections(): array
     ];
 }
 
+/** Sections omitted from dashboard timing breakdowns (chart, summary, per-voucher columns). */
+function voucher_tracking_dashboard_breakdown_excluded_sections(): array
+{
+    return [
+        'Conservation & Development Section',
+    ];
+}
+
+/**
+ * Sections shown in dashboard section processing breakdowns.
+ *
+ * @return list<string>
+ */
+function voucher_tracking_dashboard_breakdown_sections(): array
+{
+    $exclude = array_flip(voucher_tracking_dashboard_breakdown_excluded_sections());
+
+    return array_values(array_filter(
+        voucher_tracking_dashboard_sections(),
+        static fn(string $section): bool => !isset($exclude[$section])
+    ));
+}
+
+/**
+ * Column order for dashboard per-voucher section breakdown (ICU before Planning).
+ *
+ * @return list<string>
+ */
+function voucher_tracking_dashboard_breakdown_voucher_column_sections(): array
+{
+    $preferred = [
+        'ICU',
+        'Planning Section',
+        'TSD-ENGP',
+        'Budget Unit',
+        'Accounting Unit',
+        'Office of the PENRO',
+        'Cashiers Unit',
+    ];
+    $available = array_flip(voucher_tracking_dashboard_breakdown_sections());
+
+    return array_values(array_filter(
+        $preferred,
+        static fn(string $section): bool => isset($available[$section])
+    ));
+}
+
 /** @return array<string, string> */
 function voucher_tracking_dashboard_section_labels(): array
 {
@@ -2563,10 +2616,12 @@ function voucher_tracking_resolve_cashiers_process_section(
         return '';
     }
 
-    foreach (array_filter([
-        trim((string) ($user['section'] ?? '')),
-        ...array_map('trim', explode(',', (string) ($user['designation'] ?? ''))),
-    ]) as $candidate) {
+    foreach (
+        array_filter([
+            trim((string) ($user['section'] ?? '')),
+            ...array_map('trim', explode(',', (string) ($user['designation'] ?? ''))),
+        ]) as $candidate
+    ) {
         if (voucher_tracking_normalize_section_label($candidate) === 'Cashiers Unit') {
             return 'Cashiers Unit';
         }
@@ -2803,8 +2858,11 @@ function voucher_tracking_voucher_last_processed_ts(array $trackingRow, array $a
  *   by_voucher: list<array{processing_no: string, payee: string, dv_no: string, total_processing_time: string, sections: array<string, int>, sections_label: array<string, string>}>
  * }
  */
-function voucher_tracking_build_section_timing_report(object $pdo, array $voucherRows): array
-{
+function voucher_tracking_build_section_timing_report(
+    object $pdo,
+    array $voucherRows,
+    ?array $breakdownSections = null
+): array {
     $processingNos = [];
     $rowByPn = [];
     foreach ($voucherRows as $row) {
@@ -2818,6 +2876,8 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
 
     $logsByPn = voucher_tracking_fetch_action_logs_grouped($pdo, $processingNos);
     $archivedProcessingNos = voucher_tracking_archived_processing_nos($pdo, $processingNos);
+    $sections = $breakdownSections ?? voucher_tracking_dashboard_breakdown_sections();
+    $sectionLookup = array_flip($sections);
     $sectionBuckets = [];
     $allSections = [];
     $byVoucher = [];
@@ -2841,7 +2901,7 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
         );
         $labels = [];
         foreach ($durations as $section => $seconds) {
-            if ($seconds <= 0) {
+            if ($seconds <= 0 || !isset($sectionLookup[$section])) {
                 continue;
             }
             $allSections[$section] = true;
@@ -2876,7 +2936,7 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
             'payee' => trim((string) ($trackingRow['payee'] ?? '')),
             'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
             'total_processing_time' => $totalProcessingTime,
-            'sections' => $durations,
+            'sections' => array_intersect_key($durations, $sectionLookup),
             'sections_label' => $labels,
             'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
                 $trackingRow,
@@ -2886,7 +2946,6 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
         ];
     }
 
-    $sections = voucher_tracking_dashboard_sections();
     foreach ($sections as $section) {
         if (!isset($allSections[$section])) {
             $allSections[$section] = false;
@@ -2928,6 +2987,7 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
 
     return [
         'sections' => $sections,
+        'by_voucher_sections' => voucher_tracking_dashboard_breakdown_voucher_column_sections(),
         'summary' => $summary,
         'by_voucher' => $byVoucherRecent,
         'by_voucher_limit' => $recentLimit,
