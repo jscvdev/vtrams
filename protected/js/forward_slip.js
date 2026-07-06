@@ -66,6 +66,11 @@
     })();
 
     const claimant = document.getElementById('encoded_payee')?.value || '';
+    const processingNo =
+      document.getElementById('processing_no')?.value ||
+      document.getElementById('encoded_processing_no')?.value ||
+      document.querySelector('.processing_no')?.value ||
+      '';
     const amount = document.getElementById('string_amount')?.value || '';
     const voucherType =
       document.getElementById('voucher_type')?.value ||
@@ -82,6 +87,7 @@
 
     return {
       claimant,
+      processing_no: processingNo,
       amount,
       nature,
       remarks,

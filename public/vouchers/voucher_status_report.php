@@ -564,6 +564,10 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 color: #4b5563;
             }
 
+            #statusReportModal .status-breakdown-hero__subtitle + .status-breakdown-hero__subtitle {
+                margin-top: 4px;
+            }
+
             #statusReportModal .status-breakdown-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -860,6 +864,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 <div class="status-breakdown-hero">
                     <div class="status-breakdown-hero__main">
                         <p class="status-breakdown-hero__title" id="sr_processing_no"></p>
+                        <p class="status-breakdown-hero__subtitle" id="sr_voucher_type"></p>
                         <p class="status-breakdown-hero__subtitle" id="sr_payee"></p>
                     </div>
                     <div id="sr_status_pill"></div>
@@ -900,6 +905,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
 <script>
     (function() {
         const entries = <?php echo $entriesJson ?: '[]'; ?>;
+        const voucherTypeLabels = <?php echo json_encode($report_voucher_types, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
         const modal = document.getElementById('statusReportModal');
         const overlay = document.getElementById('statusReportOverlay');
 
@@ -1034,10 +1040,17 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             }).join('');
         }
 
+        function resolveVoucherTypeLabel(typeKey) {
+            const key = String(typeKey || '').trim();
+            if (!key) return '—';
+            return voucherTypeLabels[key] || key;
+        }
+
         function openBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
             document.getElementById('statusReportModalTitle').textContent = 'Status Breakdown';
             document.getElementById('sr_processing_no').textContent = entry.processing_no || '—';
+            document.getElementById('sr_voucher_type').textContent = resolveVoucherTypeLabel(entry.voucher_type);
             document.getElementById('sr_payee').textContent = entry.payee || '—';
             document.getElementById('sr_status_pill').innerHTML = renderStatusPill(entry);
             document.getElementById('sr_origin').textContent = entry.origin_office || entry.office_from || '—';

@@ -331,6 +331,7 @@ function session_contains_phrase($phrase)
 <div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
 
 <div id="encoded-slip-hidden-fields" style="display:none;" aria-hidden="true">
+    <input type="text" id="encoded_processing_no" value="">
     <input type="text" id="encoded_payee" value="">
     <input type="text" id="string_amount" value="">
     <input type="text" id="voucher_type" value="">
@@ -438,6 +439,7 @@ function session_contains_phrase($phrase)
             const amountShown = amountNorm !== '' && typeof formatAmountDisplay === 'function'
                 ? formatAmountDisplay(amountNorm)
                 : String(row.amount || '');
+            setVal('encoded_processing_no', row.processing_no);
             setVal('encoded_payee', row.payee);
             setVal('string_amount', amountShown);
             setVal('voucher_type', row.voucher_type);

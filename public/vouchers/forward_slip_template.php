@@ -1,6 +1,6 @@
 <?php
 // Template for the printable forward slip.
-// Expects POST data: claimant, amount, nature, remarks, processedBy, processedDate, voucher_type.
+// Expects POST data: processing_no, claimant, amount, nature, remarks, processedBy, processedDate, voucher_type.
 // Checklist is selected by voucher_type via centralized checklist_config.php.
 
 require_once __DIR__ . '/checklist_config.php';
@@ -21,6 +21,7 @@ function formatAmount($val)
 }
 
 $claimant = h($_POST['claimant'] ?? '');
+$processingNo = h($_POST['processing_no'] ?? '');
 $amount = formatAmount($_POST['amount'] ?? '');
 $nature = h($_POST['nature'] ?? '');
 $remarks = h($_POST['remarks'] ?? '');
@@ -75,6 +76,11 @@ function selected_match_label($base, $set)
 ?>
 
 <div class="forward-slip-sheet">
+    <div class="row">
+        <div class="label">PROCESSING NO.:</div>
+        <div class="field text"><span><?= $processingNo ?></span></div>
+    </div>
+
     <div class="row space">
         <div class="row" style="flex:1;">
             <div class="label">NAME OF CLAIMANT:</div>
