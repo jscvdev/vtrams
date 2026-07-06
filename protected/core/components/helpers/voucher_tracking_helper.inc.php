@@ -2086,6 +2086,64 @@ function voucher_tracking_calculate_total_processing_time(
     return voucher_tracking_format_turnaround_seconds($endTs - $startTs);
 }
 
+/** Whether a voucher_tracking row represents a paid (archived) voucher. */
+function voucher_tracking_is_paid(object $pdo, array $row, ?array $archivedProcessingNos = null): bool
+{
+    if (strcasecmp(trim((string) ($row['status'] ?? '')), 'Paid') === 0) {
+        return true;
+    }
+
+    $processingNo = trim((string) ($row['processing_no'] ?? ''));
+    if ($processingNo === '') {
+        return false;
+    }
+
+    if ($archivedProcessingNos !== null) {
+        return isset($archivedProcessingNos[$processingNo]);
+    }
+
+    static $archiveStmt = null;
+    if ($archiveStmt === null) {
+        $archiveStmt = $pdo->prepare('SELECT 1 FROM voucher_archives WHERE processing_no = :processing_no LIMIT 1');
+    }
+    $archiveStmt->bindValue(':processing_no', $processingNo, PDO::PARAM_STR);
+    $archiveStmt->execute();
+
+    return (bool) $archiveStmt->fetchColumn();
+}
+
+/**
+ * @param list<string> $processingNos
+ * @return array<string, true>
+ */
+function voucher_tracking_archived_processing_nos(object $pdo, array $processingNos): array
+{
+    $processingNos = array_values(array_unique(array_filter(array_map(
+        static fn($pn): string => trim((string) $pn),
+        $processingNos
+    ))));
+    if ($processingNos === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
+    $stmt = $pdo->prepare("SELECT processing_no FROM voucher_archives WHERE processing_no IN ({$placeholders})");
+    foreach ($processingNos as $i => $pn) {
+        $stmt->bindValue($i + 1, $pn, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $archived = [];
+    while ($pn = $stmt->fetchColumn()) {
+        $pn = trim((string) $pn);
+        if ($pn !== '') {
+            $archived[$pn] = true;
+        }
+    }
+
+    return $archived;
+}
+
 function voucher_tracking_dashboard_recent_voucher_limit(): int
 {
     return 15;
@@ -2564,6 +2622,7 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
     }
 
     $logsByPn = voucher_tracking_fetch_action_logs_grouped($pdo, $processingNos);
+    $archivedProcessingNos = voucher_tracking_archived_processing_nos($pdo, $processingNos);
     $sectionBuckets = [];
     $allSections = [];
     $byVoucher = [];
@@ -2597,21 +2656,24 @@ function voucher_tracking_build_section_timing_report(object $pdo, array $vouche
         }
 
         $totalProcessingTime = '';
-        if ($openEndTs !== null && $openEndTs > 0) {
-            $totalSeconds = voucher_tracking_dashboard_total_processing_seconds(
-                $pdo,
-                $pn,
-                $openEndTs,
-                trim((string) ($trackingRow['voucher_type'] ?? '')),
-                trim((string) ($trackingRow['datetime_encoded'] ?? '')),
-                $logsByPn[$pn] ?? []
-            );
-            if ($totalSeconds !== null) {
-                $totalProcessingTime = voucher_tracking_format_turnaround_seconds($totalSeconds);
+        $isPaid = voucher_tracking_is_paid($pdo, $trackingRow, $archivedProcessingNos);
+        if ($isPaid) {
+            if ($openEndTs !== null && $openEndTs > 0) {
+                $totalSeconds = voucher_tracking_dashboard_total_processing_seconds(
+                    $pdo,
+                    $pn,
+                    $openEndTs,
+                    trim((string) ($trackingRow['voucher_type'] ?? '')),
+                    trim((string) ($trackingRow['datetime_encoded'] ?? '')),
+                    $logsByPn[$pn] ?? []
+                );
+                if ($totalSeconds !== null) {
+                    $totalProcessingTime = voucher_tracking_format_turnaround_seconds($totalSeconds);
+                }
             }
-        }
-        if ($totalProcessingTime === '') {
-            $totalProcessingTime = trim((string) ($trackingRow['total_processing_time'] ?? ''));
+            if ($totalProcessingTime === '') {
+                $totalProcessingTime = trim((string) ($trackingRow['total_processing_time'] ?? ''));
+            }
         }
 
         $byVoucher[] = [
