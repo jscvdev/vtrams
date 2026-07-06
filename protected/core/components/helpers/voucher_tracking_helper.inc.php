@@ -2034,6 +2034,13 @@ function voucher_tracking_dashboard_section_from_action_row(
         trim((string) ($user['section'] ?? '')),
         ...array_map('trim', explode(',', (string) ($user['designation'] ?? ''))),
     ]);
+    if (voucher_tracking_user_has_designation($user, 'TSD-ENGP')) {
+        $normalizedFrom = voucher_tracking_normalize_section_label($actionFrom);
+        if (in_array(strtoupper($normalizedFrom), ['TSD', 'ENGP FOCAL PERSON', 'TSD-ENGP'], true)) {
+            return 'TSD-ENGP';
+        }
+    }
+
     foreach ($fromUser as $candidate) {
         $section = voucher_tracking_normalize_section_label($candidate);
         if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
@@ -2272,11 +2279,83 @@ function voucher_tracking_dashboard_sections(): array
         'Planning Section',
         'ICU',
         'Conservation & Development Section',
+        'TSD-ENGP',
         'Budget Unit',
         'Accounting Unit',
         'Office of the PENRO',
         'Cashiers Unit',
     ];
+}
+
+/** @return array<string, string> */
+function voucher_tracking_dashboard_section_labels(): array
+{
+    return [
+        'Planning Section' => 'Planning',
+        'ICU' => 'ICU',
+        'Conservation & Development Section' => 'CDS',
+        'TSD-ENGP' => 'TSD-ENGP',
+        'Budget Unit' => 'Budget',
+        'Accounting Unit' => 'Accounting',
+        'Office of the PENRO' => 'Office of the PENRO',
+        'Cashiers Unit' => 'Cashiers',
+    ];
+}
+
+function voucher_tracking_dashboard_section_label(string $section): string
+{
+    $labels = voucher_tracking_dashboard_section_labels();
+
+    return $labels[$section] ?? $section;
+}
+
+/**
+ * Dashboard sections that appear in process history (workflow order preserved).
+ *
+ * @return list<string>
+ */
+function voucher_tracking_sections_from_process_history(
+    object $pdo,
+    string $process_history,
+    string $voucher_type = '',
+    array &$userCache = []
+): array {
+    $process_history = voucher_tracking_enrich_process_history_for_return($pdo, $process_history, $voucher_type);
+    $process_history = voucher_tracking_normalize_process_history($process_history);
+    if ($process_history === '') {
+        return [];
+    }
+
+    $seen = [];
+    $ordered = [];
+    foreach (preg_split('/\n/', $process_history) as $line) {
+        $line = trim($line);
+        if ($line === '' || !str_contains($line, '|')) {
+            continue;
+        }
+
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        if (!isset($parts[0], $parts[2])) {
+            continue;
+        }
+
+        $section = voucher_tracking_dashboard_section_from_action_row(
+            [
+                'action_by' => trim($parts[0]),
+                'action_from' => trim($parts[2]),
+            ],
+            $pdo,
+            $userCache
+        );
+        if ($section === '' || !voucher_tracking_is_dashboard_section($section) || isset($seen[$section])) {
+            continue;
+        }
+
+        $seen[$section] = true;
+        $ordered[] = $section;
+    }
+
+    return $ordered;
 }
 
 function voucher_tracking_is_dashboard_section(string $section): bool

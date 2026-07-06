@@ -84,18 +84,7 @@ AuditHelper::logPageView('Dashboard');
 require_once __DIR__ . '/checklist_config.php';
 utilities_signatory_ensure_schema($pdo);
 $dashboard_offices = utilities_signatory_fetch_offices($pdo);
-$dashboard_timing_section_labels = array_map(
-    static fn(string $section): string => match ($section) {
-        'Planning Section' => 'Planning',
-        'ICU' => 'ICU',
-        'Conservation & Development Section' => 'CDS',
-        'Budget Unit' => 'Budget',
-        'Accounting Unit' => 'Accounting',
-        'Cashiers Unit' => 'Cashiers',
-        default => $section,
-    },
-    voucher_tracking_dashboard_sections()
-);
+$dashboard_timing_section_labels = array_values(voucher_tracking_dashboard_section_labels());
 $dashboard_section_timing_blurb = count($dashboard_timing_section_labels) > 1
     ? implode(', ', array_slice($dashboard_timing_section_labels, 0, -1))
         . ', and ' . $dashboard_timing_section_labels[array_key_last($dashboard_timing_section_labels)]

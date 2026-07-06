@@ -86,6 +86,7 @@ $actionCase = "
         ELSE 'Other'
     END
 ";
+$actionCaseAliased = preg_replace('/\baction\b/', 'a.action', $actionCase);
 
 if ($actionTypeFilter !== null) {
     $whereParts[] = "({$actionCase}) = :action_type";
@@ -119,37 +120,49 @@ try {
     $sqlAmountOverall = "
         SELECT
             action_type,
-            processing_no,
-            MAX(amount) AS amount
+            SUM(voucher_amount) AS total_amount
         FROM (
             SELECT
                 $actionCase AS action_type,
                 processing_no,
-                amount
+                MAX(amount) AS voucher_amount
             FROM voucher_action_logs
             WHERE $whereSQL
-        ) deduped
-        GROUP BY action_type, processing_no
+            GROUP BY action_type, processing_no
+        ) per_voucher
+        GROUP BY action_type
     ";
     $stmt = $pdo->prepare($sqlAmountOverall);
     foreach ($params as $k => $v) {
         $stmt->bindValue($k, $v);
     }
     $stmt->execute();
-    $seenAmountByType = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $type = (string) ($row['action_type'] ?? 'Other');
-        $pn = (string) ($row['processing_no'] ?? '');
+        $sum = amount_resolve_charged_or_amount('', $row['total_amount'] ?? '');
+        if ($sum !== '') {
+            $overallAmount[$type] = $sum;
+        }
+    }
+
+    $uniqueVoucherAmounts = [];
+    $sqlUniqueAmounts = "
+        SELECT processing_no, MAX(amount) AS amount
+        FROM voucher_action_logs
+        WHERE $whereSQL
+        GROUP BY processing_no
+    ";
+    $stmt = $pdo->prepare($sqlUniqueAmounts);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->execute();
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pn = trim((string) ($row['processing_no'] ?? ''));
         $amountStr = amount_resolve_charged_or_amount('', $row['amount'] ?? '');
-        if ($pn === '' || $amountStr === '') {
-            continue;
+        if ($pn !== '' && $amountStr !== '') {
+            $uniqueVoucherAmounts[$pn] = $amountStr;
         }
-        $key = $type . '|' . $pn;
-        if (isset($seenAmountByType[$key])) {
-            continue;
-        }
-        $seenAmountByType[$key] = true;
-        $overallAmount[$type] = bcadd((string) ($overallAmount[$type] ?? '0'), $amountStr, 2);
     }
 
     // Daily breakdown for charts
@@ -176,41 +189,42 @@ try {
         $daily[$row['formatted_date']][$row['action_type']] = (int)$row['cnt'];
     }
 
-    // Table data: one row per processing_no (unique voucher) - dedupe in PHP for "taken-action"
+    // Table data: one row per processing_no (latest log row per voucher).
     $sqlTable = "
         SELECT
-            processing_no,
-            dv_no,
-            payee,
-            amount,
-            $actionCase AS action_type,
-            action_by,
-            datetime_action
-        FROM voucher_action_logs
-        WHERE $whereSQL
-        ORDER BY datetime_action DESC
+            a.processing_no,
+            a.dv_no,
+            a.payee,
+            a.amount,
+            $actionCaseAliased AS action_type,
+            a.action_by,
+            a.datetime_action
+        FROM voucher_action_logs a
+        INNER JOIN (
+            SELECT processing_no, MAX(id) AS max_id
+            FROM voucher_action_logs
+            WHERE $whereSQL
+            GROUP BY processing_no
+        ) pick ON a.id = pick.max_id
+        ORDER BY a.datetime_action DESC
     ";
     $stmt = $pdo->prepare($sqlTable);
     foreach ($params as $k => $v) {
         $stmt->bindValue($k, $v);
     }
     $stmt->execute();
-    $seen = [];
     $tableRows = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        if (!isset($seen[$row['processing_no']])) {
-            $seen[$row['processing_no']] = true;
-            $tableRows[] = [
-                'processing_no' => $row['processing_no'],
-                'dv_no' => $row['dv_no'],
-                'payee' => $row['payee'],
-                'amount' => format_amount_display(amount_resolve_charged_or_amount('', $row['amount'] ?? '')),
-                'amount_raw' => amount_resolve_charged_or_amount('', $row['amount'] ?? ''),
-                'action_type' => $row['action_type'],
-                'action_by' => $row['action_by'],
-                'datetime_action' => $row['datetime_action'],
-            ];
-        }
+        $tableRows[] = [
+            'processing_no' => $row['processing_no'],
+            'dv_no' => $row['dv_no'],
+            'payee' => $row['payee'],
+            'amount' => format_amount_display(amount_resolve_charged_or_amount('', $row['amount'] ?? '')),
+            'amount_raw' => amount_resolve_charged_or_amount('', $row['amount'] ?? ''),
+            'action_type' => $row['action_type'],
+            'action_by' => $row['action_by'],
+            'datetime_action' => $row['datetime_action'],
+        ];
     }
 
     $filteredTable = $tableRows;
@@ -270,13 +284,18 @@ try {
     }
 
     $totalAmount = '0';
+    $seenAmountPn = [];
     foreach ($filteredTable as $i => $r) {
-        $amt = (string) ($r['amount_raw'] ?? '');
-        if ($amt === '') {
-            $amt = amount_resolve_charged_or_amount('', $r['amount'] ?? '');
-        }
-        if ($amt !== '') {
-            $totalAmount = bcadd($totalAmount, $amt, 2);
+        $pn = trim((string) ($r['processing_no'] ?? ''));
+        if ($pn !== '' && !isset($seenAmountPn[$pn])) {
+            $seenAmountPn[$pn] = true;
+            $amt = (string) ($r['amount_raw'] ?? '');
+            if ($amt === '' && isset($uniqueVoucherAmounts[$pn])) {
+                $amt = $uniqueVoucherAmounts[$pn];
+            }
+            if ($amt !== '') {
+                $totalAmount = bcadd($totalAmount, $amt, 2);
+            }
         }
         unset($filteredTable[$i]['amount_raw']);
     }

@@ -71,6 +71,7 @@ $GLOBALS['REDIRECT_MAP'] = [
 
     // Internal (relative to protected)
     'route_404'                         => null, // special: path from protected
+    'route_403'                         => null, // special: path from protected
 ];
 
 /**
@@ -79,6 +80,7 @@ $GLOBALS['REDIRECT_MAP'] = [
  */
 $GLOBALS['REDIRECT_INTERNAL_MAP'] = [
     'route_404' => 'routes/404.php',
+    'route_403' => 'routes/403.php',
 ];
 
 /**

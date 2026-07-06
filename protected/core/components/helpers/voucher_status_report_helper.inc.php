@@ -315,6 +315,125 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
 }
 
 /**
+ * Per-section breakdown for status report modal (sections from process history).
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @return list<array{section: string, section_label: string, processing_time: string, processing_seconds: int}>
+ */
+function voucher_status_report_build_section_breakdown(
+    PDO $pdo,
+    array $entry,
+    array $trackingRow,
+    array $actions
+): array {
+    $history = (string) ($entry['process_history'] ?? '');
+    $voucherType = (string) ($entry['voucher_type'] ?? '');
+    $isPaid = !empty($entry['is_paid']);
+    $userCache = [];
+    $sections = voucher_tracking_sections_from_process_history($pdo, $history, $voucherType, $userCache);
+    if ($sections === []) {
+        return [];
+    }
+
+    $durations = [];
+    if ($isPaid && $actions !== []) {
+        $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+        $durations = voucher_tracking_section_durations_from_actions(
+            $actions,
+            $statusTs !== false ? $statusTs : null,
+            $pdo,
+            $userCache,
+            trim((string) ($trackingRow['status'] ?? '')),
+            trim((string) ($trackingRow['total_processing_time'] ?? ''))
+        );
+    }
+
+    $breakdown = [];
+    foreach ($sections as $section) {
+        $seconds = (int) ($durations[$section] ?? 0);
+        $breakdown[] = [
+            'section' => $section,
+            'section_label' => voucher_tracking_dashboard_section_label($section),
+            'processing_time' => ($isPaid && $seconds > 0)
+                ? voucher_tracking_format_duration_seconds($seconds)
+                : '',
+            'processing_seconds' => $seconds,
+        ];
+    }
+
+    usort($breakdown, static function (array $a, array $b): int {
+        return voucher_tracking_section_sort_key((string) ($a['section'] ?? ''))
+            <=> voucher_tracking_section_sort_key((string) ($b['section'] ?? ''));
+    });
+
+    return $breakdown;
+}
+
+function voucher_status_report_total_processing_time_label(
+    PDO $pdo,
+    array $entry,
+    array $trackingRow,
+    array $actions
+): string {
+    if (empty($entry['is_paid'])) {
+        return '';
+    }
+
+    $pn = trim((string) ($entry['processing_no'] ?? ''));
+    $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+    if ($pn !== '' && $statusTs !== false && $statusTs > 0) {
+        $totalSeconds = voucher_tracking_dashboard_total_processing_seconds(
+            $pdo,
+            $pn,
+            $statusTs,
+            (string) ($entry['voucher_type'] ?? ''),
+            (string) ($trackingRow['datetime_encoded'] ?? ''),
+            $actions
+        );
+        if ($totalSeconds !== null && $totalSeconds > 0) {
+            return voucher_tracking_format_turnaround_seconds($totalSeconds);
+        }
+    }
+
+    return trim((string) ($trackingRow['total_processing_time'] ?? ''));
+}
+
+/**
+ * @param list<array<string, mixed>> $entries
+ * @param array<string, array<string, mixed>> $trackingRowsByPn
+ */
+function voucher_status_report_attach_section_breakdowns(PDO $pdo, array $entries, array $trackingRowsByPn): array
+{
+    if ($entries === []) {
+        return $entries;
+    }
+
+    $processingNos = array_values(array_filter(array_map(
+        static fn(array $entry): string => trim((string) ($entry['processing_no'] ?? '')),
+        $entries
+    )));
+    $logsByPn = voucher_tracking_fetch_action_logs_grouped($pdo, $processingNos);
+
+    foreach ($entries as $index => $entry) {
+        $pn = trim((string) ($entry['processing_no'] ?? ''));
+        $entries[$index]['section_breakdown'] = voucher_status_report_build_section_breakdown(
+            $pdo,
+            $entry,
+            $trackingRowsByPn[$pn] ?? [],
+            $logsByPn[$pn] ?? []
+        );
+        $entries[$index]['section_breakdown_tpt'] = voucher_status_report_total_processing_time_label(
+            $pdo,
+            $entry,
+            $trackingRowsByPn[$pn] ?? [],
+            $logsByPn[$pn] ?? []
+        );
+    }
+
+    return $entries;
+}
+
+/**
  * @param list<array<string, mixed>> $entries
  * @return list<array<string, mixed>>
  */
@@ -382,14 +501,19 @@ function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $of
     $stmt->execute();
 
     $entries = [];
+    $trackingRowsByPn = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $classified = voucher_status_report_classify_row($pdo, $row, $scope);
         if ($classified !== null) {
+            $pn = trim((string) ($classified['processing_no'] ?? ''));
+            if ($pn !== '') {
+                $trackingRowsByPn[$pn] = $row;
+            }
             $entries[] = $classified;
         }
     }
 
-    return $entries;
+    return voucher_status_report_attach_section_breakdowns($pdo, $entries, $trackingRowsByPn);
 }
 
 /**

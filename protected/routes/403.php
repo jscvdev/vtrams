@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/error_page_common.php';
 
-http_response_code(404);
+http_response_code(403);
 header('X-Robots-Tag: noindex, nofollow');
 
 $homeUrl = error_page_web_base() . '/';
@@ -14,15 +14,15 @@ $iconUrl = error_page_asset_url('public/assets/icons/DENR3.ico');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PENRO-DTS</title>
+    <title>Access Denied</title>
     <link rel="stylesheet" href="<?php echo htmlspecialchars($cssUrl, ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="shortcut icon" href="<?php echo htmlspecialchars($iconUrl, ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 
 <body>
     <div class="container">
-        <h1>404</h1>
-        <p>The page you are trying to access needs user authentication</p>
+        <h1 class="code-forbidden">403</h1>
+        <p>Access to this area is not allowed.</p>
         <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>">Go back to safety</a>
     </div>
 </body>

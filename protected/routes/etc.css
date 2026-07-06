@@ -20,6 +20,10 @@ h1 {
     margin: 0;
 }
 
+h1.code-forbidden {
+    color: #d35400;
+}
+
 p {
     font-size: 1.5em;
     color: #777;

@@ -1,6 +1,10 @@
 #disable listing
 Options -indexes
 
+# Custom error pages (paths from server document root; change /vtrams if needed).
+ErrorDocument 403 /vtrams/protected/routes/403.php
+ErrorDocument 404 /vtrams/protected/routes/404.php
+
 #set default page
 DirectoryIndex index.php
 

@@ -620,6 +620,51 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 font-size: 13px;
             }
 
+            #statusReportModal .status-section-breakdown-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+
+            #statusReportModal .status-section-breakdown-scroll {
+                overflow-x: auto;
+            }
+
+            #statusReportModal .status-section-breakdown-table th,
+            #statusReportModal .status-section-breakdown-table td {
+                padding: 8px 10px;
+                border: 1px solid #e5e7eb;
+                text-align: right;
+                white-space: nowrap;
+            }
+
+            #statusReportModal .status-section-breakdown-table th {
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: #6b7280;
+                background: #f9fafb;
+                text-align: center;
+            }
+
+            #statusReportModal .status-section-breakdown-table tbody td {
+                text-align: center;
+                color: #111827;
+            }
+
+            #statusReportModal .status-section-breakdown-table th.status-section-breakdown-tpt,
+            #statusReportModal .status-section-breakdown-table td.status-section-breakdown-tpt {
+                background: #f3f4f6;
+                font-weight: 700;
+            }
+
+            #statusReportModal .status-section-breakdown-note {
+                margin: 8px 0 0;
+                font-size: 11px;
+                color: #6b7280;
+            }
+
             .status-report-table-wrap {
                 overflow: auto;
                 max-height: 70vh;
@@ -890,6 +935,16 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                         <p class="status-breakdown-title">Latest Remarks</p>
                         <div class="status-breakdown-content" id="sr_latest_remarks"></div>
                     </div>
+                    <div class="status-breakdown-card status-breakdown-card--full" id="sr_section_breakdown_card" style="display:none;">
+                        <p class="status-breakdown-title">Section Processing Breakdown</p>
+                        <div class="status-section-breakdown-scroll">
+                            <table class="status-section-breakdown-table">
+                                <thead id="sr_section_breakdown_head"></thead>
+                                <tbody id="sr_section_breakdown"></tbody>
+                            </table>
+                        </div>
+                        <p class="status-section-breakdown-note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
+                    </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
                         <p class="status-breakdown-title">Complete Process History</p>
                         <ul class="status-history-list" id="sr_history"></ul>
@@ -1050,6 +1105,38 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             return voucherTypeLabels[key] || key;
         }
 
+        function renderSectionBreakdown(entry) {
+            const card = document.getElementById('sr_section_breakdown_card');
+            const head = document.getElementById('sr_section_breakdown_head');
+            const body = document.getElementById('sr_section_breakdown');
+            if (!card || !head || !body) return;
+
+            const rows = entry && Array.isArray(entry.section_breakdown) ? entry.section_breakdown : [];
+            if (rows.length === 0) {
+                card.style.display = 'none';
+                head.innerHTML = '';
+                body.innerHTML = '';
+                return;
+            }
+
+            let headerCells = '';
+            let dataCells = '';
+            rows.forEach(function(row) {
+                const label = row.section_label || row.section || '—';
+                const time = String(row.processing_time || '').trim();
+                headerCells += '<th>' + escapeHtml(label) + '</th>';
+                dataCells += '<td>' + (time !== '' ? escapeHtml(time) : '—') + '</td>';
+            });
+
+            const tpt = String(entry.section_breakdown_tpt || '').trim();
+            headerCells += '<th class="status-section-breakdown-tpt">TPT</th>';
+            dataCells += '<td class="status-section-breakdown-tpt">' + (tpt !== '' ? escapeHtml(tpt) : '—') + '</td>';
+
+            head.innerHTML = '<tr>' + headerCells + '</tr>';
+            body.innerHTML = '<tr>' + dataCells + '</tr>';
+            card.style.display = '';
+        }
+
         function openBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
             document.getElementById('statusReportModalTitle').textContent = 'Status Breakdown';
@@ -1073,6 +1160,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                     remarksCard.style.display = 'none';
                 }
             }
+            renderSectionBreakdown(entry);
             document.getElementById('sr_history').innerHTML = renderHistoryList(entry.process_history || '');
             modal.style.display = 'block';
             overlay.style.display = 'block';
