@@ -57,6 +57,37 @@ function utilities_return_previous_ensure_schema(PDO $pdo): void
             ]);
         }
     }
+
+    utilities_return_previous_ensure_default_units($pdo);
+}
+
+/**
+ * Ensure workflow units exist on older installs (idempotent).
+ */
+function utilities_return_previous_ensure_default_units(PDO $pdo): void
+{
+    $defaults = [
+        ['Conservation & Development Section', 2],
+        ['TSD-ENGP', 7],
+    ];
+    $check = $pdo->prepare(
+        'SELECT 1 FROM voucher_return_previous_units WHERE designation = :designation LIMIT 1'
+    );
+    $insert = $pdo->prepare(
+        'INSERT INTO voucher_return_previous_units (designation, sort_order, is_active)
+         VALUES (:designation, :sort_order, 1)'
+    );
+    foreach ($defaults as [$designation, $sort]) {
+        $check->execute([':designation' => $designation]);
+        if ($check->fetchColumn()) {
+            continue;
+        }
+        $insert->execute([
+            ':designation' => $designation,
+            ':sort_order' => $sort,
+        ]);
+    }
+    utilities_return_previous_invalidate_cache();
 }
 
 /**
@@ -110,12 +141,13 @@ function utilities_return_previous_configurable_destinations(PDO $pdo): array
     static $preferred = [
         'Planning Section',
         'ICU',
+        'Conservation & Development Section',
+        'TSD-ENGP',
         'Budget Unit',
         'Accounting Unit',
         'Accountant III',
         'Office of the PENRO',
         'Cashiers Unit',
-        'Conservation & Development Section',
     ];
 
     $found = [];
@@ -137,6 +169,13 @@ function utilities_return_previous_configurable_destinations(PDO $pdo): array
 
         foreach ($preferred as $designation) {
             if (isset($registered[$designation])) {
+                $found[] = $designation;
+            }
+        }
+
+        static $alwaysInclude = ['TSD-ENGP'];
+        foreach ($alwaysInclude as $designation) {
+            if (!in_array($designation, $found, true)) {
                 $found[] = $designation;
             }
         }
@@ -185,6 +224,9 @@ function utilities_return_previous_normalize_destination(string $destination): s
 
     if (strcasecmp($destination, 'Accountant III') === 0) {
         return 'Accountant III';
+    }
+    if (strcasecmp($destination, 'TSD-ENGP') === 0) {
+        return 'TSD-ENGP';
     }
 
     require_once __DIR__ . '/voucher_tracking_helper.inc.php';

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
 
 function voucher_document_user_action(
@@ -115,7 +116,8 @@ function voucher_document_user_action(
     // "FULL EMPLOYEE NAME | action | section/unit/division | office"
     // to process_history in all relevant voucher tables.
     if ($inserted) {
-        $history_line = trim($action_by) . ' | ' . trim($action) . ' | ' . trim($action_from) . ' | ' . trim($office_from);
+        $historySection = voucher_tracking_resolve_action_from_for_history($pdo, $action_by, $action_from);
+        $history_line = trim($action_by) . ' | ' . trim($action) . ' | ' . trim($historySection) . ' | ' . trim($office_from);
 
         // Protect against empty lines; still useful to record that something happened
         if ($history_line !== ' |  |  | ') {

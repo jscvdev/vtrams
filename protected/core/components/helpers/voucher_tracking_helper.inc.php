@@ -318,6 +318,59 @@ function voucher_tracking_primary_designation(?string $designation): string
 }
 
 /**
+ * Whether a user row includes a workflow designation (comma-separated designation field).
+ *
+ * @param array{designation?: string}|null $user
+ */
+function voucher_tracking_user_has_designation(?array $user, string $designation): bool
+{
+    if ($user === null || trim($designation) === '') {
+        return false;
+    }
+
+    foreach (array_map('trim', explode(',', (string) ($user['designation'] ?? ''))) as $part) {
+        if ($part !== '' && strcasecmp($part, $designation) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Designations stored in process_history section when the actor holds that role.
+ *
+ * @return list<string>
+ */
+function voucher_tracking_workflow_history_designations(): array
+{
+    return ['TSD-ENGP'];
+}
+
+/**
+ * Resolve section label for process_history (prefer workflow designations over generic section).
+ */
+function voucher_tracking_resolve_action_from_for_history(
+    object $pdo,
+    string $action_by,
+    string $action_from
+): string {
+    $action_from = trim($action_from);
+    $action_by = trim($action_by);
+
+    if ($action_by !== '') {
+        $user = voucher_tracking_lookup_user_by_display_name($pdo, $action_by);
+        foreach (voucher_tracking_workflow_history_designations() as $designation) {
+            if (voucher_tracking_user_has_designation($user, $designation)) {
+                return $designation;
+            }
+        }
+    }
+
+    return $action_from;
+}
+
+/**
  * Office from the most recent "Returned by" entry in process_history.
  */
 function voucher_tracking_history_last_return_office(string $process_history): string
@@ -1821,6 +1874,8 @@ function voucher_tracking_section_label_map(): array
         'ICU' => 'ICU',
         'MSD' => 'MSD',
         'TSD' => 'TSD',
+        'TSD-ENGP' => 'TSD-ENGP',
+        'ENGP FOCAL PERSON' => 'TSD-ENGP',
         'ICT' => 'ICT',
         'RECORDS' => 'Records',
         'ADMIN AND FINANCE' => 'Admin and Finance',
