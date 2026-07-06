@@ -68,6 +68,10 @@ $dv_emp_tag_salary_maps = (isset($pdo) && $pdo instanceof PDO)
 $dv_voucher_type_accounting_maps = (isset($pdo) && $pdo instanceof PDO)
     ? dv_build_voucher_type_accounting_maps($pdo)
     : [];
+
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+$dv_logged_user_designations = voucher_logged_user_designations();
+$dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designations);
 ?>
     <!--=============== MAIN ===============!-->
     <script src="../../protected/js/amount_helper.js"></script>

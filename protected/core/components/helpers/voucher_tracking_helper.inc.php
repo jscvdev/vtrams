@@ -999,6 +999,27 @@ function voucher_user_is_process_unit_member(array $designations): bool
 }
 
 /**
+ * Whether the user may unlock payee on salary/locked voucher types.
+ *
+ * @param list<string> $designations
+ */
+function voucher_user_can_unlock_payee(array $designations): bool
+{
+    foreach ([
+        'System Admin',
+        'Accounting Unit',
+        'Accountant III',
+        'Cashiers Unit',
+    ] as $role) {
+        if (voucher_user_has_designation($designations, $role)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Resolve which office should be used when routing to a designation.
  * Prefers the logged user's office when registered, otherwise the first
  * designation_limit office that has an assigned UDC.

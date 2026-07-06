@@ -36,8 +36,8 @@ if (empty($_SESSION['logged_user_emp_name']) && !empty($_SESSION['logged_user_em
 
 // Store logged user name for JavaScript
 $logged_user_name = htmlspecialchars($_SESSION['logged_user_emp_name'] ?? '', ENT_QUOTES, 'UTF-8');
-$logged_user_designations = voucher_logged_user_designations();
-$logged_user_can_unlock_payee = voucher_user_is_process_unit_member($logged_user_designations);
+$logged_user_designations = $dv_logged_user_designations ?? voucher_logged_user_designations();
+$logged_user_can_unlock_payee = (bool) ($dv_can_unlock_payee ?? voucher_user_can_unlock_payee($logged_user_designations));
 
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
 utilities_office_ensure_schema($pdo);
