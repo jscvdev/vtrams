@@ -697,6 +697,11 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             (string) ($row['processing_no'] ?? ''),
                             (string) ($row['process_history'] ?? '')
                         );
+                        $incoming_process_history = voucher_tracking_enrich_process_history_for_return(
+                            $pdo,
+                            $incoming_process_history,
+                            (string) ($row['voucher_type'] ?? '')
+                        );
                         $incoming_requires_dv = $incoming_is_accounting_role
                             ? voucher_incoming_requires_dv_no(
                                 $pdo,
@@ -2102,7 +2107,15 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
             var s = String(raw).trim();
             if (!s) return '';
             var mapped = sectionMap[s.toUpperCase()] || s;
-            return String(mapped).trim();
+            mapped = String(mapped).trim();
+            if (mapped.toUpperCase() === 'TSD') {
+                for (var i = 0; i < returnPreviousAllowedUnits.length; i++) {
+                    if (String(returnPreviousAllowedUnits[i] || '').trim().toLowerCase() === 'tsd-engp') {
+                        return 'TSD-ENGP';
+                    }
+                }
+            }
+            return mapped;
         }
 
         function normalizePersonName(name) {
@@ -2186,8 +2199,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
                 if (isPersonInvolved(parsed.user, parsed.action, currentUserName)) continue;
                 if (!parsed.section) continue;
-                var raw = parsed.section.toUpperCase();
-                var mapped = sectionMap[raw] || parsed.section;
+                var mapped = normalizeUnitLabel(parsed.section);
                 if (mapped && !seen[mapped]) {
                     seen[mapped] = true;
                     offices.push(mapped);

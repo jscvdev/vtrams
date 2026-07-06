@@ -816,6 +816,11 @@ if ($showCashierArchiveCol) {
                 <tbody>
                     <?php
                     while ($row = $fetch_voucher_receiving_data->fetch(PDO::FETCH_ASSOC)) {
+                        $forwarding_process_history = voucher_tracking_enrich_process_history_for_return(
+                            $pdo,
+                            (string) ($row['process_history'] ?? ''),
+                            (string) ($row['voucher_type'] ?? '')
+                        );
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -1027,7 +1032,7 @@ if ($showCashierArchiveCol) {
                             <td data-label="priority" class="hidden"><?php echo isset($row['priority']) ? htmlspecialchars((string)$row['priority']) : ''; ?></td>
                             <td data-label="process_status" class="hidden"><?php echo $row['process_status']; ?></td>
                             <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
-                            <td data-label="process_history" class="hidden"><?php echo isset($row['process_history']) ? htmlspecialchars($row['process_history']) : ''; ?></td>
+                            <td data-label="process_history" class="hidden"><?php echo htmlspecialchars($forwarding_process_history, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars((string)$row['coa_options']) : ''; ?></td>
                             <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category']) : ''; ?></td>
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection']) : ''; ?></td>
@@ -3084,7 +3089,16 @@ if ($showCashierArchiveCol) {
             if (!raw) return '';
             var s = String(raw).trim();
             if (!s) return '';
-            return sectionMap[s.toUpperCase()] || s;
+            var mapped = sectionMap[s.toUpperCase()] || s;
+            mapped = String(mapped).trim();
+            if (mapped.toUpperCase() === 'TSD') {
+                for (var i = 0; i < returnPreviousAllowedUnits.length; i++) {
+                    if (String(returnPreviousAllowedUnits[i] || '').trim().toLowerCase() === 'tsd-engp') {
+                        return 'TSD-ENGP';
+                    }
+                }
+            }
+            return mapped;
         }
 
         function normalizePersonName(name) {
@@ -3172,8 +3186,7 @@ if ($showCashierArchiveCol) {
                 if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
                 if (isPersonInvolved(parsed.user, parsed.action, currentUserName)) continue;
                 if (!parsed.section) continue;
-                var raw = parsed.section.toUpperCase();
-                var mapped = sectionMap[raw] || parsed.section;
+                var mapped = normalizeUnitLabel(parsed.section);
                 if (mapped && !seen[mapped]) {
                     seen[mapped] = true;
                     offices.push(mapped);

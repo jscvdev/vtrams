@@ -371,6 +371,67 @@ function voucher_tracking_resolve_action_from_for_history(
 }
 
 /**
+ * Rewrite process_history section labels for return-to-previous UI
+ * (e.g. legacy "TSD" steps by TSD-ENGP users → "TSD-ENGP").
+ */
+function voucher_tracking_enrich_process_history_for_return(
+    object $pdo,
+    string $process_history,
+    string $voucher_type = ''
+): string {
+    $process_history = voucher_tracking_normalize_process_history($process_history);
+    if ($process_history === '') {
+        return '';
+    }
+
+    $userCache = [];
+    $lines = [];
+    foreach (preg_split('/\n/', $process_history) as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        if (!str_contains($line, '|')) {
+            $lines[] = $line;
+            continue;
+        }
+
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        if (!isset($parts[0], $parts[1], $parts[2], $parts[3])) {
+            $lines[] = $line;
+            continue;
+        }
+
+        $section = trim($parts[2]);
+        $userName = trim($parts[0]);
+        $shouldUseTsdEngp = false;
+
+        if ($userName !== '') {
+            if (!array_key_exists($userName, $userCache)) {
+                $userCache[$userName] = voucher_tracking_lookup_user_by_display_name($pdo, $userName);
+            }
+            $shouldUseTsdEngp = voucher_tracking_user_has_designation($userCache[$userName], 'TSD-ENGP');
+        }
+
+        if (
+            !$shouldUseTsdEngp
+            && strcasecmp($section, 'TSD') === 0
+            && voucher_type_is_engp($voucher_type)
+        ) {
+            $shouldUseTsdEngp = true;
+        }
+
+        if ($shouldUseTsdEngp && in_array(strtoupper($section), ['TSD', 'ENGP FOCAL PERSON'], true)) {
+            $parts[2] = 'TSD-ENGP';
+        }
+
+        $lines[] = implode(' | ', $parts);
+    }
+
+    return implode("\n", $lines);
+}
+
+/**
  * Office from the most recent "Returned by" entry in process_history.
  */
 function voucher_tracking_history_last_return_office(string $process_history): string
