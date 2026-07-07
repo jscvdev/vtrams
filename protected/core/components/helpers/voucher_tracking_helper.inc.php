@@ -1371,6 +1371,19 @@ function voucher_special_access_forward_target(object $pdo, string $voucher_type
 }
 
 /**
+ * All active direct-forward destinations for a voucher type.
+ *
+ * @return list<string>
+ */
+function voucher_special_access_forward_targets(object $pdo, string $voucher_type): array
+{
+    require_once __DIR__ . '/utilities_special_access_helper.inc.php';
+    utilities_special_access_ensure_schema($pdo);
+
+    return utilities_special_access_resolve_targets($pdo, $voucher_type);
+}
+
+/**
  * Encoders at CENRO offices or offices with a registered Liaison Officer
  * must forward all vouchers to Liaison Officer first.
  */

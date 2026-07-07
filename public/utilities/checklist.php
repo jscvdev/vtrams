@@ -26,7 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $typeKey = utilities_checklist_normalize_value((string) ($_POST['type_key'] ?? ''));
                 $title = utilities_checklist_normalize_value((string) ($_POST['title'] ?? ''));
                 $displayLabel = utilities_checklist_normalize_value((string) ($_POST['display_label'] ?? ''));
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 if ($typeKey === '') {
                     $flash = ['type' => 'error', 'msg' => 'Voucher type name is required.'];
                 } else {
@@ -40,7 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':title' => $title !== '' ? $title : strtoupper($typeKey),
                         ':display_label' => $displayLabel !== '' ? $displayLabel : null,
                     ]);
-                    sort_order_place_at_position($pdo, 'checklist_type_options', (int) $pdo->lastInsertId(), $sort);
+                    $newId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'checklist_type_options');
+                    sort_order_place_at_position($pdo, 'checklist_type_options', $newId, $sort);
                     $pdo->commit();
                     utilities_checklist_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Voucher type added.'];
@@ -89,7 +90,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $typeId = (int) ($_POST['checklist_type_id'] ?? 0);
                 $label = utilities_checklist_normalize_value((string) ($_POST['item_label'] ?? ''));
                 $subitems = utilities_checklist_parse_subitems_text((string) ($_POST['subitems_text'] ?? ''));
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 if (!utilities_checklist_type_exists($pdo, $typeId)) {
                     $flash = ['type' => 'error', 'msg' => 'Voucher type not found.'];
                 } elseif ($label === '') {
@@ -105,10 +105,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':label' => $label,
                         ':subitems' => utilities_checklist_encode_subitems($subitems),
                     ]);
+                    $newId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'checklist_type_items', [
+                        'checklist_type_id' => $typeId,
+                    ]);
                     sort_order_place_at_position(
                         $pdo,
                         'checklist_type_items',
-                        (int) $pdo->lastInsertId(),
+                        $newId,
                         $sort,
                         ['checklist_type_id' => $typeId]
                     );
@@ -195,6 +199,7 @@ $filtered_checklist_types = utilities_list_filter_rows(
 );
 $checklist_types = utilities_list_limit_initial($filtered_checklist_types, $list_filter['is_filtered']);
 $checklist_visible = count($checklist_types);
+$next_checklist_type_sort = sort_order_next_position($pdo, 'checklist_type_options');
 ?>
 
 <style>
@@ -616,7 +621,7 @@ $checklist_visible = count($checklist_types);
                         </div>
                         <div class="field" style="max-width:110px;">
                             <label>Sort</label>
-                            <input class="form-custom-input" type="number" name="sort_order" value="0">
+                            <input class="form-custom-input" type="number" value="<?= (int) $next_checklist_type_sort ?>" readonly title="Assigned automatically on add">
                         </div>
                         <div class="field util-add-btn-field">
                             <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
@@ -632,6 +637,9 @@ $checklist_visible = count($checklist_types);
                         $typeId = (int) ($type['id'] ?? 0);
                         $items = $type['items'] ?? [];
                         $displayLabel = trim((string) ($type['display_label'] ?? ''));
+                        $next_item_sort = sort_order_next_position($pdo, 'checklist_type_items', [
+                            'checklist_type_id' => $typeId,
+                        ]);
                     ?>
                         <div class="util-checklist-block">
                             <div class="util-checklist-block__main">
@@ -678,7 +686,7 @@ $checklist_visible = count($checklist_types);
                                     </div>
                                     <div class="field" style="max-width:110px;">
                                         <label>Sort</label>
-                                        <input class="form-custom-input" type="number" name="sort_order" value="0">
+                                        <input class="form-custom-input" type="number" value="<?= (int) $next_item_sort ?>" readonly title="Assigned automatically on add">
                                     </div>
                                     <div class="field util-add-btn-field">
                                         <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>

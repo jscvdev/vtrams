@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'rule_add') {
                 $voucherType = utilities_special_access_normalize_value((string) ($_POST['voucher_type'] ?? ''));
                 $forwardDesignation = utilities_special_access_normalize_value((string) ($_POST['forward_designation'] ?? ''));
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 if ($voucherType === '') {
                     $flash = ['type' => 'error', 'msg' => 'Voucher type is required.'];
                 } elseif ($forwardDesignation === '' || !utilities_special_access_destination_is_allowed($pdo, $forwardDesignation)) {
@@ -52,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':voucher_type' => $voucherType,
                         ':forward_designation' => $forwardDesignation,
                     ]);
-                    sort_order_place_at_position($pdo, 'voucher_special_access', (int) $pdo->lastInsertId(), $sort);
+                    $newId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'voucher_special_access');
+                    sort_order_place_at_position($pdo, 'voucher_special_access', $newId, $sort);
                     $pdo->commit();
                     utilities_special_access_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Routing rule added.'];
@@ -103,7 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } elseif ($action === 'forward_destination_add') {
                 $designation = utilities_special_access_normalize_value((string) ($_POST['designation'] ?? ''));
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 if ($designation === '') {
                     $flash = ['type' => 'error', 'msg' => 'Designation is required.'];
                 } elseif (!in_array($designation, utilities_special_access_forward_destinations_configurable($pdo), true)) {
@@ -115,7 +115,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         VALUES (:designation, 0, 1)
                     ");
                     $stmt->execute([':designation' => $designation]);
-                    sort_order_place_at_position($pdo, 'voucher_forward_destinations', (int) $pdo->lastInsertId(), $sort);
+                    $newId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'voucher_forward_destinations');
+                    sort_order_place_at_position($pdo, 'voucher_forward_destinations', $newId, $sort);
                     $pdo->commit();
                     utilities_special_access_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Forward destination added.'];
@@ -370,7 +372,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
             if (str_contains(strtolower($e->getMessage()), 'duplicate')) {
-                $flash = ['type' => 'warning', 'msg' => 'That voucher type already has a routing rule.'];
+                if (str_contains(strtolower($e->getMessage()), 'uniq_voucher_type_destination')
+                    || str_contains(strtolower($e->getMessage()), 'voucher_type_destination')) {
+                    $flash = ['type' => 'warning', 'msg' => 'That voucher type already has a routing rule for the selected destination.'];
+                } elseif (str_contains(strtolower($e->getMessage()), 'uniq_designation')) {
+                    $flash = ['type' => 'warning', 'msg' => 'That forward destination is already configured.'];
+                } else {
+                    $flash = ['type' => 'warning', 'msg' => 'That entry already exists.'];
+                }
             } else {
                 $flash = ['type' => 'error', 'msg' => 'Database error: ' . $e->getMessage()];
             }
@@ -381,6 +390,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $rules = utilities_special_access_fetch_all($pdo);
 $destinations = utilities_special_access_forward_destinations($pdo);
 $forward_destination_units = utilities_special_access_forward_destinations_fetch_all($pdo);
+$next_rule_sort = sort_order_next_position($pdo, 'voucher_special_access');
+$next_forward_destination_sort = sort_order_next_position($pdo, 'voucher_forward_destinations');
 $rule_count = count($rules);
 $active_count = 0;
 foreach ($rules as $rule) {
@@ -1020,7 +1031,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
             <p class="util-section-title">Direct forward routing</p>
             <p class="util-dv-desc">
                 Configure voucher types that skip the standard workflow when forwarded from the Voucher page
-                (e.g. e-NGP types sent directly to Accounting Unit, TSD-ENGP, or another unit). Each voucher type can have one active rule.
+                (e.g. e-NGP types sent directly to Accounting Unit, TSD-ENGP, or another unit). A voucher type may have multiple rules; lower sort numbers take priority when forwarding.
             </p>
 
             <div class="util-stats">
@@ -1053,7 +1064,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                         </div>
                         <div class="field" style="max-width:110px;">
                             <label for="add_forward_destination_sort_order">Sort</label>
-                            <input class="form-custom-input" type="number" name="sort_order" id="add_forward_destination_sort_order" value="0">
+                            <input class="form-custom-input" type="number" id="add_forward_destination_sort_order" value="<?= (int) $next_forward_destination_sort ?>" readonly title="Assigned automatically on add">
                         </div>
                         <div class="field util-add-btn-field">
                             <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
@@ -1136,7 +1147,7 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                         </div>
                         <div class="field" style="max-width:110px;">
                             <label for="add_sort_order">Sort</label>
-                            <input class="form-custom-input" type="number" name="sort_order" id="add_sort_order" value="0">
+                            <input class="form-custom-input" type="number" id="add_sort_order" value="<?= (int) $next_rule_sort ?>" readonly title="Assigned automatically on add">
                         </div>
                         <div class="field util-add-btn-field">
                             <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>

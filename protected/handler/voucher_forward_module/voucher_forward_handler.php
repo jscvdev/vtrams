@@ -177,17 +177,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($resolved['temp_errors']) {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
-                    } elseif (
-                        !$needsReturnForward
-                        && ($specialAccessTarget = voucher_special_access_forward_target($pdo, (string) ($voucher_type ?? ''))) !== ''
-                    ) {
-                        $target_to = $specialAccessTarget;
-                        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
-                        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
-                        $receiver_udc = $resolved['receiver_udc'];
-                        $forwarded_to = $resolved['forwarded_to'];
-                        if ($resolved['temp_errors']) {
-                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                    } elseif (!$needsReturnForward) {
+                        $specialAccessTargets = voucher_special_access_forward_targets(
+                            $pdo,
+                            (string) ($voucher_type ?? '')
+                        );
+                        $specialAccessTarget = '';
+                        if ($specialAccessTargets !== []) {
+                            $pickedTarget = utilities_special_access_normalize_value($forward_return_designation);
+                            if (count($specialAccessTargets) > 1) {
+                                if ($pickedTarget !== '' && in_array($pickedTarget, $specialAccessTargets, true)) {
+                                    $specialAccessTarget = $pickedTarget;
+                                } else {
+                                    $temp_dump['special_access_target'] = 'Please select a forward destination.';
+                                }
+                            } else {
+                                $specialAccessTarget = $specialAccessTargets[0];
+                            }
+                        }
+                        if ($specialAccessTarget !== '') {
+                            $target_to = $specialAccessTarget;
+                            $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+                            $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+                            $receiver_udc = $resolved['receiver_udc'];
+                            $forwarded_to = $resolved['forwarded_to'];
+                            if ($resolved['temp_errors']) {
+                                $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                            }
                         }
                     } elseif (voucher_user_has_designation($target, 'Liaison Officer')) {
                         // Liaison officers forward upstream to ICU at the processing office,

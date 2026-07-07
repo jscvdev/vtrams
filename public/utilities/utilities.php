@@ -67,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 if ($scope === 'ada' && $action === 'add') {
                     $value = normalize_opt_value((string)($_POST['option_value'] ?? ''));
-                    $sort = (int)($_POST['sort_order'] ?? 0);
                     $isDefault = isset($_POST['is_default']) ? 1 : 0;
                     if ($value === '') {
                         $flash = ['type' => 'error', 'msg' => 'Value is required.'];
@@ -79,6 +78,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ");
                         $stmt->execute([':t' => $type, ':office' => $formOffice, ':v' => $value, ':d' => $isDefault]);
                         $newId = (int) $pdo->lastInsertId();
+                        $sort = sort_order_next_position($pdo, 'ada_signatory_options', [
+                            'option_type' => $type,
+                            'office' => $formOffice,
+                        ]);
                         sort_order_place_at_position($pdo, 'ada_signatory_options', $newId, $sort, [
                             'option_type' => $type,
                             'office' => $formOffice,
@@ -190,6 +193,20 @@ $opts_certified = fetch_opts($pdo, ADA_OPT_CERTIFIED, $selected_office);
 $opts_approved = fetch_opts($pdo, ADA_OPT_APPROVED, $selected_office);
 $opts_signatory = fetch_opts($pdo, ADA_OPT_SIGNATORY, $selected_office);
 $ada_option_defaults = utilities_fetch_ada_option_defaults($pdo, $selected_office);
+$ada_next_sort = [
+    ADA_OPT_CERTIFIED => sort_order_next_position($pdo, 'ada_signatory_options', [
+        'option_type' => ADA_OPT_CERTIFIED,
+        'office' => $selected_office,
+    ]),
+    ADA_OPT_APPROVED => sort_order_next_position($pdo, 'ada_signatory_options', [
+        'option_type' => ADA_OPT_APPROVED,
+        'office' => $selected_office,
+    ]),
+    ADA_OPT_SIGNATORY => sort_order_next_position($pdo, 'ada_signatory_options', [
+        'option_type' => ADA_OPT_SIGNATORY,
+        'office' => $selected_office,
+    ]),
+];
 
 // DV signatories (single row per key)
 $dv_keys = [
@@ -764,6 +781,7 @@ $dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
                 ];
                 foreach ($sections as $type => $rows):
                     $sectionDefault = $ada_option_defaults[$type] ?? '';
+                    $nextAdaSort = (int) ($ada_next_sort[$type] ?? 0);
                 ?>
                     <div class="util-card">
                         <div class="util-card__head">
@@ -786,7 +804,7 @@ $dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
                                 </div>
                                 <div class="field util-ada-sort-field">
                                     <label>Sort</label>
-                                    <input class="form-custom-input" type="number" name="sort_order" value="0">
+                                    <input class="form-custom-input" type="number" value="<?= $nextAdaSort ?>" readonly title="Assigned automatically on add">
                                 </div>
                                 <label class="chk">
                                     <input type="checkbox" name="is_default">

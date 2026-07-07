@@ -51,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tagName = utilities_uacs_normalize_tag_name((string) ($_POST['tag_name'] ?? ''));
                 $title = utilities_uacs_normalize_title((string) ($_POST['account_title'] ?? ''));
                 $uacsCheck = utilities_emp_tag_validate_uacs((string) ($_POST['uacs_code'] ?? ''), true);
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 $indented = isset($_POST['is_indented']) ? 1 : 0;
 
                 if ($formVoucherType === '') {
@@ -79,7 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ':parent' => $parentTitle,
                             ':uacs' => $uacsCheck['uacs'],
                         ]);
-                        sort_order_place_at_position($pdo, 'uacs_code_options', (int) $pdo->lastInsertId(), $sort, [
+                        $newId = (int) $pdo->lastInsertId();
+                        $sort = sort_order_next_position($pdo, 'uacs_code_options', [
+                            'voucher_type' => $formVoucherType,
+                        ]);
+                        sort_order_place_at_position($pdo, 'uacs_code_options', $newId, $sort, [
                             'voucher_type' => $formVoucherType,
                         ]);
                         $pdo->commit();
@@ -103,7 +106,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':title' => $accountTitle,
                         ':uacs' => $uacsCheck['uacs'],
                     ]);
-                    sort_order_place_at_position($pdo, 'uacs_code_options', (int) $pdo->lastInsertId(), $sort, [
+                    $newId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'uacs_code_options', [
+                        'voucher_type' => $formVoucherType,
+                    ]);
+                    sort_order_place_at_position($pdo, 'uacs_code_options', $newId, $sort, [
                         'voucher_type' => $formVoucherType,
                     ]);
                     $pdo->commit();
@@ -191,7 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } elseif ($action === 'emp_tag_add') {
                 $value = utilities_emp_tag_normalize_value((string) ($_POST['tag_value'] ?? ''));
-                $sort = (int) ($_POST['sort_order'] ?? 0);
                 $isDefault = isset($_POST['is_default']) ? 1 : 0;
                 if ($value === '') {
                     $flash = ['type' => 'error', 'msg' => 'Tag name is required.'];
@@ -203,6 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     $stmt->execute([':v' => $value, ':d' => $isDefault]);
                     $newTagId = (int) $pdo->lastInsertId();
+                    $sort = sort_order_next_position($pdo, 'emp_tag_options');
                     sort_order_place_at_position($pdo, 'emp_tag_options', $newTagId, $sort);
                     if ($isDefault === 1) {
                         utilities_emp_tag_set_default($pdo, $newTagId);
@@ -292,6 +299,10 @@ $filter_voucher_type = (string) ($list_filter['voucher_type'] ?? '');
 $form_list_voucher_type = $filter_voucher_type;
 $form_list_q = (string) ($list_filter['q'] ?? '');
 $add_form_voucher_type = $filter_voucher_type !== '' ? $filter_voucher_type : $selected_voucher_type;
+$next_uacs_sort = sort_order_next_position($pdo, 'uacs_code_options', [
+    'voucher_type' => $add_form_voucher_type,
+]);
+$next_emp_tag_sort = sort_order_next_position($pdo, 'emp_tag_options');
 
 $filtered_uacs_rows = utilities_uacs_filter_rows(
     $all_uacs_rows,
@@ -488,7 +499,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="field" style="max-width:110px;">
                     <label for="add_sort_order">Sort</label>
-                    <input class="form-custom-input" type="number" name="sort_order" id="add_sort_order" value="0">
+                    <input class="form-custom-input" type="number" id="add_sort_order" value="<?= (int) $next_uacs_sort ?>" readonly title="Assigned automatically on add">
                 </div>
                 <button class="btn primary utl-btn-add" type="submit" title="Add UACS mapping">+</button>
             </form>
@@ -537,7 +548,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="field" style="max-width:110px;">
                         <label>Sort</label>
-                        <input class="form-custom-input" type="number" name="sort_order" value="0">
+                        <input class="form-custom-input" type="number" value="<?= (int) $next_emp_tag_sort ?>" readonly title="Assigned automatically on add">
                     </div>
                     <label class="chk">
                         <input type="checkbox" name="is_default">

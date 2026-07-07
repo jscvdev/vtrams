@@ -31,10 +31,12 @@ function utilities_special_access_ensure_schema(PDO $pdo): void
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uniq_voucher_type (voucher_type),
+            KEY idx_voucher_type_active_sort (voucher_type, is_active, sort_order, id),
             KEY idx_active_sort (is_active, sort_order, voucher_type)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
+
+    utilities_special_access_upgrade_schema_for_multiple_rules($pdo);
 
     $count = (int) $pdo->query('SELECT COUNT(*) FROM voucher_special_access')->fetchColumn();
     if ($count === 0) {
@@ -56,6 +58,36 @@ function utilities_special_access_ensure_schema(PDO $pdo): void
     }
 
     utilities_special_access_ensure_forward_destinations_schema($pdo);
+}
+
+function utilities_special_access_upgrade_schema_for_multiple_rules(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM voucher_special_access WHERE Key_name = 'uniq_voucher_type'");
+        if ($stmt && $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec('ALTER TABLE voucher_special_access DROP INDEX uniq_voucher_type');
+        }
+    } catch (Throwable) {
+        // Index may already be removed.
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW INDEX FROM voucher_special_access WHERE Key_name = 'uniq_voucher_type_destination'");
+        if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec(
+                'ALTER TABLE voucher_special_access
+                 ADD UNIQUE KEY uniq_voucher_type_destination (voucher_type, forward_designation)'
+            );
+        }
+    } catch (Throwable) {
+        // Composite unique may already exist or duplicates need manual cleanup.
+    }
 }
 
 function utilities_special_access_ensure_forward_destinations_schema(PDO $pdo): void
@@ -219,26 +251,45 @@ function utilities_special_access_fetch_all(PDO $pdo): array
 }
 
 /**
+ * Active direct-forward destinations for a voucher type (empty when none configured).
+ *
+ * @return list<string>
+ */
+function utilities_special_access_resolve_targets(PDO $pdo, string $voucher_type): array
+{
+    $voucher_type = utilities_special_access_normalize_value($voucher_type);
+    if ($voucher_type === '') {
+        return [];
+    }
+
+    return RequestCache::remember('special_access', 'targets:' . $voucher_type, static function () use ($pdo, $voucher_type): array {
+        $stmt = $pdo->prepare(
+            'SELECT forward_designation FROM voucher_special_access
+             WHERE voucher_type = :voucher_type AND is_active = 1
+             ORDER BY sort_order ASC, id ASC'
+        );
+        $stmt->execute([':voucher_type' => $voucher_type]);
+
+        $targets = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $designation = utilities_special_access_normalize_value((string) ($row['forward_designation'] ?? ''));
+            if ($designation !== '' && !in_array($designation, $targets, true)) {
+                $targets[] = $designation;
+            }
+        }
+
+        return $targets;
+    });
+}
+
+/**
  * Resolve direct-forward designation for a voucher type (empty when none configured).
  */
 function utilities_special_access_resolve_target(PDO $pdo, string $voucher_type): string
 {
-    $voucher_type = utilities_special_access_normalize_value($voucher_type);
-    if ($voucher_type === '') {
-        return '';
-    }
+    $targets = utilities_special_access_resolve_targets($pdo, $voucher_type);
 
-    return RequestCache::remember('special_access', 'target:' . $voucher_type, static function () use ($pdo, $voucher_type): string {
-        $stmt = $pdo->prepare(
-            'SELECT forward_designation FROM voucher_special_access
-             WHERE voucher_type = :voucher_type AND is_active = 1
-             LIMIT 1'
-        );
-        $stmt->execute([':voucher_type' => $voucher_type]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return utilities_special_access_normalize_value((string) ($row['forward_designation'] ?? ''));
-    });
+    return $targets[0] ?? '';
 }
 
 /**

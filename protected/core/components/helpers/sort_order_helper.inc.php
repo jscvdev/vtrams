@@ -107,6 +107,16 @@ function sort_order_write_sequence(
     }
 }
 
+function sort_order_next_position(
+    PDO $pdo,
+    string $table,
+    array $scopeColumns = [],
+    string $idColumn = 'id',
+    string $sortColumn = 'sort_order'
+): int {
+    return count(sort_order_fetch_ordered_ids($pdo, $table, $scopeColumns, $idColumn, $sortColumn));
+}
+
 /**
  * Place a row at list position $targetPosition (0-based) and renumber the whole list
  * sequentially so each sort_order follows the previous item (0, 1, 2, 3, …).

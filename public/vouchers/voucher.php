@@ -510,8 +510,9 @@ function session_contains_phrase($phrase)
                                 <input type='text' class='remarks form-custom-input' name='remarks' id='remarks' value='' placeholder='Remarks'>
                             </div>
                             <div class='label-input__container forward-only-field' id='forward_target_container' style="display: none;">
-                                <label for='forward_target_display'>Forward To</label>
+                                <label for='forward_target_display' id='forward_target_label'>Forward To</label>
                                 <input type='text' class='form-custom-input' id='forward_target_display' value='' readonly>
+                                <select class='form-custom-input' id='forward_target_select' style="display: none;" aria-label="Forward To"></select>
                                 <input type='hidden' name='forward_return_designation' id='forward_return_designation' value=''>
                             </div>
                             <div class='label-input__container forward-only-field'>
@@ -981,51 +982,118 @@ function session_contains_phrase($phrase)
             return false;
         }
 
+        function normalizeSpecialAccessTargets(row) {
+            if (!row) return [];
+            var raw = row.special_access_forward_targets;
+            if (Array.isArray(raw)) {
+                return raw.map(function(item) { return String(item || '').trim(); }).filter(Boolean);
+            }
+            var single = String(row.special_access_forward_target || '').trim();
+            return single ? [single] : [];
+        }
+
+        function syncForwardTargetHiddenFromSelect() {
+            var select = document.getElementById('forward_target_select');
+            var hidden = document.getElementById('forward_return_designation');
+            if (select && hidden && select.style.display !== 'none') {
+                hidden.value = String(select.value || '').trim();
+            }
+        }
+
         function setForwardReturnTarget(row) {
             var container = document.getElementById('forward_target_container');
+            var label = document.getElementById('forward_target_label');
             var display = document.getElementById('forward_target_display');
+            var select = document.getElementById('forward_target_select');
             var hidden = document.getElementById('forward_return_designation');
             var needsTarget = voucherRowNeedsReturnForwardTarget(row);
             var designation = needsTarget ? String(row.forward_return_designation || '').trim() : '';
-            var label = needsTarget ? String(row.forward_return_label || row.returned_by_name || '').trim() : '';
+            var labelText = needsTarget ? String(row.forward_return_label || row.returned_by_name || '').trim() : '';
 
-            if (needsTarget && !designation && !label) {
+            if (needsTarget && !designation && !labelText) {
                 var encodedFrom = String(row.encoded_from || '').trim();
                 if (encodedFrom) {
                     designation = encodedFrom;
-                    label = encodedFrom;
+                    labelText = encodedFrom;
                 }
             }
 
             if (!needsTarget && window.__encoderForwardsToIcu) {
                 designation = '';
-                label = 'ICU';
+                labelText = 'ICU';
             }
 
+            var specialAccessTargets = [];
             if (!needsTarget && row) {
-                var specialAccessTarget = String(row.special_access_forward_target || '').trim();
-                if (specialAccessTarget) {
-                    designation = specialAccessTarget;
-                    label = specialAccessTarget;
+                specialAccessTargets = normalizeSpecialAccessTargets(row);
+                if (specialAccessTargets.length === 1) {
+                    designation = specialAccessTargets[0];
+                    labelText = specialAccessTargets[0];
+                } else if (specialAccessTargets.length > 1) {
+                    designation = specialAccessTargets[0];
+                    labelText = '';
                 }
             }
 
-            if (hidden) {
-                hidden.value = designation;
+            if (select) {
+                select.innerHTML = '';
+                select.style.display = 'none';
+                if (!needsTarget && specialAccessTargets.length > 1) {
+                    specialAccessTargets.forEach(function(target) {
+                        var option = document.createElement('option');
+                        option.value = target;
+                        option.textContent = target;
+                        select.appendChild(option);
+                    });
+                    select.value = designation;
+                    select.style.display = '';
+                }
             }
+
             if (display) {
-                display.value = label;
+                display.style.display = (!needsTarget && specialAccessTargets.length > 1) ? 'none' : '';
+                display.value = labelText;
             }
+
+            if (label) {
+                label.htmlFor = (!needsTarget && specialAccessTargets.length > 1)
+                    ? 'forward_target_select'
+                    : 'forward_target_display';
+            }
+
+            if (hidden) {
+                hidden.value = (!needsTarget && specialAccessTargets.length > 1)
+                    ? String((select && select.value) || designation || '').trim()
+                    : designation;
+            }
+
             if (container) {
-                var showForwardTarget = (needsTarget && (designation || label))
-                    || (!needsTarget && label);
+                var showForwardTarget = (needsTarget && (designation || labelText))
+                    || (!needsTarget && (labelText || specialAccessTargets.length > 1));
                 container.style.display = showForwardTarget ? '' : 'none';
             }
         }
 
         function clearForwardReturnTarget() {
+            var select = document.getElementById('forward_target_select');
+            if (select) {
+                select.innerHTML = '';
+                select.style.display = 'none';
+            }
+            var display = document.getElementById('forward_target_display');
+            if (display) {
+                display.style.display = '';
+                display.value = '';
+            }
             setForwardReturnTarget(null);
         }
+
+        (function bindForwardTargetSelect() {
+            var select = document.getElementById('forward_target_select');
+            if (select) {
+                select.addEventListener('change', syncForwardTargetHiddenFromSelect);
+            }
+        })();
 
         function handleRowAction(row, name) {
             var processing_no = String(row.processing_no || '');
