@@ -1022,7 +1022,7 @@ function session_contains_phrase($phrase)
             }
 
             var specialAccessTargets = [];
-            if (!needsTarget && row) {
+            if (!needsTarget && row && row.has_special_access_routing) {
                 specialAccessTargets = normalizeSpecialAccessTargets(row);
                 if (specialAccessTargets.length === 1) {
                     designation = specialAccessTargets[0];

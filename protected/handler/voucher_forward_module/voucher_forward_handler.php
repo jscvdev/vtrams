@@ -178,22 +178,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
                     } elseif (!$needsReturnForward) {
-                        $specialAccessTargets = voucher_special_access_forward_targets(
+                        $hasSpecialAccessRouting = voucher_type_has_special_access(
                             $pdo,
                             (string) ($voucher_type ?? '')
                         );
-                        $hasSpecialAccessRouting = $specialAccessTargets !== [];
                         $specialAccessTarget = '';
                         if ($hasSpecialAccessRouting) {
-                            $pickedTarget = utilities_special_access_normalize_value($forward_return_designation);
-                            if (count($specialAccessTargets) > 1) {
-                                if ($pickedTarget !== '' && in_array($pickedTarget, $specialAccessTargets, true)) {
-                                    $specialAccessTarget = $pickedTarget;
-                                } else {
-                                    $temp_dump['special_access_target'] = 'Please select a forward destination.';
-                                }
-                            } else {
-                                $specialAccessTarget = $specialAccessTargets[0];
+                            $specialAccessResolved = voucher_forward_resolve_special_access_target(
+                                $pdo,
+                                (string) ($voucher_type ?? ''),
+                                $forward_return_designation
+                            );
+                            $specialAccessTarget = $specialAccessResolved['target'];
+                            if ($specialAccessResolved['errors']) {
+                                $temp_dump = array_merge($temp_dump, $specialAccessResolved['errors']);
                             }
                         }
 

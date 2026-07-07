@@ -130,12 +130,12 @@ try {
         $row['forward_return_designation'] = $returnTarget['designation'];
         $row['forward_return_label'] = $returnTarget['label'];
         $row['forward_return_office'] = $returnTarget['office'];
-        $row['special_access_forward_targets'] = voucher_special_access_forward_targets(
-            $pdo,
-            (string) ($row['voucher_type'] ?? '')
-        );
-        $row['special_access_forward_target'] = $row['special_access_forward_targets'][0]
-            ?? voucher_special_access_forward_target($pdo, (string) ($row['voucher_type'] ?? ''));
+        $hasSpecialAccessRouting = voucher_type_has_special_access($pdo, (string) ($row['voucher_type'] ?? ''));
+        $row['has_special_access_routing'] = $hasSpecialAccessRouting;
+        $row['special_access_forward_targets'] = $hasSpecialAccessRouting
+            ? voucher_special_access_forward_targets($pdo, (string) ($row['voucher_type'] ?? ''))
+            : [];
+        $row['special_access_forward_target'] = $row['special_access_forward_targets'][0] ?? '';
         $row['needs_return_forward_target'] = voucher_tracking_needs_return_forward(
             [
                 'active_status' => $row['active_status'],

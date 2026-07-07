@@ -1391,7 +1391,7 @@ function voucher_type_is_engp(string $voucher_type): bool
 /** Voucher types configured for direct forward routing (Special Access utility). */
 function voucher_type_has_special_access(object $pdo, string $voucher_type): bool
 {
-    return voucher_special_access_forward_target($pdo, $voucher_type) !== '';
+    return voucher_special_access_forward_targets($pdo, $voucher_type) !== [];
 }
 
 /**
@@ -1399,10 +1399,9 @@ function voucher_type_has_special_access(object $pdo, string $voucher_type): boo
  */
 function voucher_special_access_forward_target(object $pdo, string $voucher_type): string
 {
-    require_once __DIR__ . '/utilities_special_access_helper.inc.php';
-    utilities_special_access_ensure_schema($pdo);
+    $targets = voucher_special_access_forward_targets($pdo, $voucher_type);
 
-    return utilities_special_access_resolve_target($pdo, $voucher_type);
+    return $targets[0] ?? '';
 }
 
 /**
@@ -1412,10 +1411,79 @@ function voucher_special_access_forward_target(object $pdo, string $voucher_type
  */
 function voucher_special_access_forward_targets(object $pdo, string $voucher_type): array
 {
+    if (!voucher_type_is_configured($voucher_type)) {
+        return [];
+    }
+
     require_once __DIR__ . '/utilities_special_access_helper.inc.php';
     utilities_special_access_ensure_schema($pdo);
 
     return utilities_special_access_resolve_targets($pdo, $voucher_type);
+}
+
+/** Whether a voucher type string is non-empty (guards special-access lookups). */
+function voucher_type_is_configured(string $voucher_type): bool
+{
+    return trim($voucher_type) !== '';
+}
+
+/**
+ * Encoder forwards for cashier-handled voucher types (e.g. cash advances by the Cashier).
+ */
+function voucher_type_routes_encoder_to_cashiers(string $voucher_type): bool
+{
+    $voucher_type = trim($voucher_type);
+    if ($voucher_type === '') {
+        return false;
+    }
+
+    static $explicit = [
+        'Cash Advances on PS & MOOE by the Cashier',
+    ];
+
+    foreach ($explicit as $type) {
+        if (strcasecmp($voucher_type, $type) === 0) {
+            return true;
+        }
+    }
+
+    return (bool) preg_match('/\bby the Cashier\b/i', $voucher_type);
+}
+
+/**
+ * Resolve special-access forward destination from configured rules (empty when not applicable).
+ *
+ * @return array{target: string, errors: array<string, string>}
+ */
+function voucher_forward_resolve_special_access_target(
+    object $pdo,
+    string $voucher_type,
+    string $picked_designation
+): array {
+    if (!voucher_type_has_special_access($pdo, $voucher_type)) {
+        return ['target' => '', 'errors' => []];
+    }
+
+    require_once __DIR__ . '/utilities_special_access_helper.inc.php';
+
+    $targets = voucher_special_access_forward_targets($pdo, $voucher_type);
+    if ($targets === []) {
+        return ['target' => '', 'errors' => []];
+    }
+
+    if (count($targets) === 1) {
+        return ['target' => $targets[0], 'errors' => []];
+    }
+
+    $picked = utilities_special_access_normalize_value($picked_designation);
+    if ($picked !== '' && in_array($picked, $targets, true)) {
+        return ['target' => $picked, 'errors' => []];
+    }
+
+    return [
+        'target' => '',
+        'errors' => ['special_access_target' => 'Please select a forward destination.'],
+    ];
 }
 
 /**
@@ -1568,6 +1636,10 @@ function voucher_tracking_history_has_tsd_engp_receive(array $lines): bool
 /** Whether special-access routing sends the voucher directly to accounting roles. */
 function voucher_special_access_routes_to_accounting(object $pdo, string $voucher_type): bool
 {
+    if (!voucher_type_has_special_access($pdo, $voucher_type)) {
+        return false;
+    }
+
     $target = voucher_special_access_forward_target($pdo, $voucher_type);
     if ($target === '') {
         return false;
@@ -1584,6 +1656,10 @@ function voucher_special_access_routes_to_accounting(object $pdo, string $vouche
  */
 function voucher_special_access_routes_via_tsd_engp(object $pdo, string $voucher_type): bool
 {
+    if (!voucher_type_has_special_access($pdo, $voucher_type)) {
+        return false;
+    }
+
     if (!voucher_type_is_engp($voucher_type) || voucher_special_access_routes_to_accounting($pdo, $voucher_type)) {
         return false;
     }
@@ -1960,8 +2036,9 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
 /**
  * Default forward target for encoders based on designation_limit office registration.
  * CENRO / liaison-assigned offices are routed via voucher_encoder_forwards_to_liaison_first().
+ * Cashier voucher types → Cashiers Unit when registered.
  * eNGP vouchers → Conservation & Development Section when registered for the office.
- * Other PENRO vouchers at the processing office → ICU when Planning Section is registered.
+ * Other PENRO vouchers → ICU when Planning Section or ICU is registered.
  */
 function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office, string $voucher_type = ''): string
 {
@@ -1974,13 +2051,22 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
         return '';
     }
 
+    if (voucher_type_routes_encoder_to_cashiers($voucher_type)) {
+        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Cashiers Unit')) {
+            return 'Cashiers Unit';
+        }
+    }
+
     if (voucher_type_is_engp($voucher_type)) {
         if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Conservation & Development Section')) {
             return 'Conservation & Development Section';
         }
     }
 
-    if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')) {
+    if (
+        voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')
+        || voucher_designation_limit_office_registered($pdo, $logged_user_office, 'ICU')
+    ) {
         return 'ICU';
     }
 
