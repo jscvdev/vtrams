@@ -178,68 +178,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                         }
                     } elseif (!$needsReturnForward) {
-                        $hasSpecialAccessRouting = voucher_type_has_special_access(
+                        $encoderRoute = voucher_forward_resolve_encoder_route(
                             $pdo,
-                            (string) ($voucher_type ?? '')
+                            (string) ($voucher_type ?? ''),
+                            $encoder_office,
+                            $logged_user_office,
+                            $sender_udc,
+                            $forward_return_designation,
+                            $target
                         );
-                        $specialAccessTarget = '';
-                        if ($hasSpecialAccessRouting) {
-                            $specialAccessResolved = voucher_forward_resolve_special_access_target(
-                                $pdo,
-                                (string) ($voucher_type ?? ''),
-                                $forward_return_designation
-                            );
-                            $specialAccessTarget = $specialAccessResolved['target'];
-                            if ($specialAccessResolved['errors']) {
-                                $temp_dump = array_merge($temp_dump, $specialAccessResolved['errors']);
-                            }
-                        }
-
-                        if ($hasSpecialAccessRouting && $specialAccessTarget !== '') {
-                            $target_to = $specialAccessTarget;
-                            $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
-                            $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
-                            $receiver_udc = $resolved['receiver_udc'];
-                            $forwarded_to = $resolved['forwarded_to'];
-                            if ($resolved['temp_errors']) {
-                                $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
-                            }
-                        }
-
-                        if (!$hasSpecialAccessRouting && trim($receiver_udc) === '') {
-                            if (voucher_user_has_designation($target, 'Liaison Officer')) {
-                                // Liaison officers forward upstream to ICU at the processing office,
-                                // even when their office normally routes encoders to another liaison first.
-                                $resolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
-                                $target_to = 'ICU';
-                                $office_to = $resolved['office_to'];
-                                $receiver_udc = $resolved['receiver_udc'];
-                                $forwarded_to = $resolved['forwarded_to'];
-                                if ($resolved['temp_errors']) {
-                                    $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
-                                }
-                            } elseif (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
-                                $target_to = 'Liaison Officer';
-                                $liaisonOffice = voucher_encoder_liaison_route_office($pdo, $encoder_office);
-                                $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $liaisonOffice);
-                                $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
-                                $receiver_udc = $resolved['receiver_udc'];
-                                $forwarded_to = $resolved['forwarded_to'];
-                                if ($resolved['temp_errors']) {
-                                    $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
-                                }
-                            } elseif (
-                                ($encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $encoder_office, $voucher_type ?? '')) !== ''
-                            ) {
-                                $target_to = $encoderForwardTarget;
-                                $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
-                                $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
-                                $receiver_udc = $resolved['receiver_udc'];
-                                $forwarded_to = $resolved['forwarded_to'];
-                                if ($resolved['temp_errors']) {
-                                    $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
-                                }
-                            }
+                        $receiver_udc = $encoderRoute['receiver_udc'];
+                        $forwarded_to = $encoderRoute['forwarded_to'];
+                        $office_to = $encoderRoute['office_to'] !== ''
+                            ? $encoderRoute['office_to']
+                            : $office_to;
+                        $target_to = $encoderRoute['target_to'];
+                        if ($encoderRoute['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $encoderRoute['temp_errors']);
                         }
                     }
 

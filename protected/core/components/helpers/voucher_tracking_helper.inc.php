@@ -1428,29 +1428,6 @@ function voucher_type_is_configured(string $voucher_type): bool
 }
 
 /**
- * Encoder forwards for cashier-handled voucher types (e.g. cash advances by the Cashier).
- */
-function voucher_type_routes_encoder_to_cashiers(string $voucher_type): bool
-{
-    $voucher_type = trim($voucher_type);
-    if ($voucher_type === '') {
-        return false;
-    }
-
-    static $explicit = [
-        'Cash Advances on PS & MOOE by the Cashier',
-    ];
-
-    foreach ($explicit as $type) {
-        if (strcasecmp($voucher_type, $type) === 0) {
-            return true;
-        }
-    }
-
-    return (bool) preg_match('/\bby the Cashier\b/i', $voucher_type);
-}
-
-/**
  * Resolve special-access forward destination from configured rules (empty when not applicable).
  *
  * @return array{target: string, errors: array<string, string>}
@@ -1487,8 +1464,123 @@ function voucher_forward_resolve_special_access_target(
 }
 
 /**
- * Encoders at CENRO offices or offices with a registered Liaison Officer
- * must forward all vouchers to Liaison Officer first.
+ * First encoder forward hop from voucher.php (excludes return re-forward).
+ *
+ * Priority:
+ * 1. Special Access rules (voucher_special_access in Routing utilities) when configured for the type
+ * 2. Liaison Officer user → ICU at the processing office
+ * 3. Sub-office encoder → Liaison Officer (liaison forwards to ICU on the next hop)
+ * 4. e-NGP (not direct-to-accounting special access) → TSD-ENGP at the processing office
+ * 5. Processing office encoder → ICU
+ *
+ * @param list<string> $user_designations
+ * @return array{receiver_udc: string, forwarded_to: string, office_to: string, target_to: string, temp_errors: array<string, string>}
+ */
+function voucher_forward_resolve_encoder_route(
+    object $pdo,
+    string $voucher_type,
+    string $encoder_office,
+    string $logged_user_office,
+    string $sender_udc,
+    string $picked_special_access_designation,
+    array $user_designations
+): array {
+    $empty = [
+        'receiver_udc' => '',
+        'forwarded_to' => '',
+        'office_to' => '',
+        'target_to' => '',
+        'temp_errors' => [],
+    ];
+
+    if (voucher_type_has_special_access($pdo, $voucher_type)) {
+        $specialAccess = voucher_forward_resolve_special_access_target(
+            $pdo,
+            $voucher_type,
+            $picked_special_access_designation
+        );
+        if ($specialAccess['errors'] !== []) {
+            return array_merge($empty, ['temp_errors' => $specialAccess['errors']]);
+        }
+        if ($specialAccess['target'] !== '') {
+            $target_to = $specialAccess['target'];
+            $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+            $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+
+            return [
+                'receiver_udc' => $resolved['receiver_udc'],
+                'forwarded_to' => $resolved['forwarded_to'],
+                'office_to' => $office_to,
+                'target_to' => $target_to,
+                'temp_errors' => $resolved['temp_errors'],
+            ];
+        }
+    }
+
+    if (voucher_user_has_designation($user_designations, 'Liaison Officer')) {
+        $resolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
+
+        return [
+            'receiver_udc' => $resolved['receiver_udc'],
+            'forwarded_to' => $resolved['forwarded_to'],
+            'office_to' => $resolved['office_to'],
+            'target_to' => 'ICU',
+            'temp_errors' => $resolved['temp_errors'],
+        ];
+    }
+
+    if (voucher_encoder_forwards_to_liaison_first($pdo, $encoder_office)) {
+        $target_to = 'Liaison Officer';
+        $liaisonOffice = voucher_encoder_liaison_route_office($pdo, $encoder_office);
+        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $liaisonOffice);
+        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+
+        return [
+            'receiver_udc' => $resolved['receiver_udc'],
+            'forwarded_to' => $resolved['forwarded_to'],
+            'office_to' => $office_to,
+            'target_to' => $target_to,
+            'temp_errors' => $resolved['temp_errors'],
+        ];
+    }
+
+    if (
+        voucher_type_is_engp($voucher_type)
+        && !voucher_special_access_routes_to_accounting($pdo, $voucher_type)
+    ) {
+        $target_to = 'TSD-ENGP';
+        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+
+        return [
+            'receiver_udc' => $resolved['receiver_udc'],
+            'forwarded_to' => $resolved['forwarded_to'],
+            'office_to' => $office_to,
+            'target_to' => $target_to,
+            'temp_errors' => $resolved['temp_errors'],
+        ];
+    }
+
+    $encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $encoder_office);
+    if ($encoderForwardTarget !== '') {
+        $target_to = $encoderForwardTarget;
+        $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
+        $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
+
+        return [
+            'receiver_udc' => $resolved['receiver_udc'],
+            'forwarded_to' => $resolved['forwarded_to'],
+            'office_to' => $office_to,
+            'target_to' => $target_to,
+            'temp_errors' => $resolved['temp_errors'],
+        ];
+    }
+
+    return $empty;
+}
+
+/**
+ * Sub-offices configured in Routing utilities (system_offices) forward to Liaison Officer first.
  */
 function voucher_encoder_forwards_to_liaison_first(object $pdo, string $encoder_office): bool
 {
@@ -1499,11 +1591,8 @@ function voucher_encoder_forwards_to_liaison_first(object $pdo, string $encoder_
 
     require_once __DIR__ . '/utilities_office_helper.inc.php';
     utilities_office_ensure_schema($pdo);
-    if (utilities_office_encoder_requires_liaison_first($pdo, $encoder_office)) {
-        return true;
-    }
 
-    return voucher_designation_limit_office_registered($pdo, $encoder_office, 'Liaison Officer');
+    return utilities_office_encoder_requires_liaison_first($pdo, $encoder_office);
 }
 
 function voucher_tracking_normalize_process_history(?string $value): string
@@ -2034,13 +2123,12 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
 }
 
 /**
- * Default forward target for encoders based on designation_limit office registration.
- * CENRO / liaison-assigned offices are routed via voucher_encoder_forwards_to_liaison_first().
- * Cashier voucher types → Cashiers Unit when registered.
- * eNGP vouchers → Conservation & Development Section when registered for the office.
- * Other PENRO vouchers → ICU when Planning Section or ICU is registered.
+ * Default forward target for encoders based on Routing utilities (system_offices).
+ * Sub-offices with liaison routing are handled by voucher_encoder_forwards_to_liaison_first().
+ * e-NGP encoder routing is handled by voucher_forward_resolve_encoder_route() (TSD-ENGP).
+ * Processing office encoders → ICU at the processing office.
  */
-function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office, string $voucher_type = ''): string
+function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office): string
 {
     $logged_user_office = trim($logged_user_office);
     if ($logged_user_office === '') {
@@ -2051,22 +2139,9 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
         return '';
     }
 
-    if (voucher_type_routes_encoder_to_cashiers($voucher_type)) {
-        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Cashiers Unit')) {
-            return 'Cashiers Unit';
-        }
-    }
-
-    if (voucher_type_is_engp($voucher_type)) {
-        if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Conservation & Development Section')) {
-            return 'Conservation & Development Section';
-        }
-    }
-
-    if (
-        voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')
-        || voucher_designation_limit_office_registered($pdo, $logged_user_office, 'ICU')
-    ) {
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    utilities_office_ensure_schema($pdo);
+    if (utilities_office_is_processing_encoder_office($pdo, $logged_user_office)) {
         return 'ICU';
     }
 

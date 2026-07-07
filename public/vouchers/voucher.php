@@ -43,7 +43,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/utilities_offic
 utilities_office_ensure_schema($pdo);
 $logged_user_office_for_encode = trim((string) ($_SESSION['logged_user_office'] ?? ''));
 $encoder_forwards_to_icu = $logged_user_office_for_encode !== ''
-    && voucher_forward_encoder_default_target($pdo, $logged_user_office_for_encode, '') === 'ICU';
+    && voucher_forward_encoder_default_target($pdo, $logged_user_office_for_encode) === 'ICU';
 
 function session_contains_phrase($phrase)
 {

@@ -187,6 +187,31 @@ function utilities_office_get_processing(PDO $pdo): ?array
     return null;
 }
 
+/** Whether an encoder office is the processing office configured in Routing utilities. */
+function utilities_office_is_processing_encoder_office(PDO $pdo, string $encoderOffice): bool
+{
+    utilities_office_ensure_schema($pdo);
+
+    $encoderOffice = utilities_office_normalize_name($encoderOffice);
+    if ($encoderOffice === '') {
+        return false;
+    }
+
+    $record = utilities_office_find_by_name($pdo, $encoderOffice);
+    if ($record !== null) {
+        return (int) ($record['is_processing_office'] ?? 0) === 1;
+    }
+
+    $processing = utilities_office_get_processing($pdo);
+    if ($processing === null) {
+        return false;
+    }
+
+    $processingName = utilities_office_normalize_name((string) ($processing['office_name'] ?? ''));
+
+    return $processingName !== '' && utilities_signatory_offices_match($processingName, $encoderOffice);
+}
+
 /**
  * @param list<array<string, mixed>> $offices
  * @return list<array<string, mixed>>
