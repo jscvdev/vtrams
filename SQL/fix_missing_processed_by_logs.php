@@ -4,7 +4,8 @@
  * 1) Backfill missing cashier "Processed by" rows in voucher_action_logs from
  *    voucher_archives, sync process_history on voucher_tracking, and compute
  *    total_processing_time from first receive at Planning/CDS through cashier Processed by.
- * 2) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
+ * 2) Correct process_history office labels using user_group (actor's registered office).
+ * 3) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
  *    voucher tables.
  *
  * Usage (CLI):
@@ -150,6 +151,157 @@ function build_history_line(string $name, string $action, string $section, strin
     return implode(' | ', [$name, $action, $section, $office]);
 }
 
+/** @var list<string> */
+const PROCESS_HISTORY_OFFICE_TABLES = [
+    'vouchers',
+    'voucher_incoming',
+    'voucher_receiving',
+    'voucher_sent',
+    'voucher_archives',
+    'voucher_temp',
+    'voucher_tracking',
+    'voucher_action_logs',
+];
+
+/**
+ * @return array{updated_vouchers: int, updated_rows: int}
+ */
+function fix_process_history_offices(PDO $pdo, bool $apply): array
+{
+    $updatedVouchers = 0;
+    $updatedRows = 0;
+    $bestByProcessingNo = [];
+
+    foreach (PROCESS_HISTORY_OFFICE_TABLES as $table) {
+        try {
+            $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1");
+        } catch (PDOException) {
+            out("Skip {$table}: table not found.");
+            continue;
+        }
+
+        $columns = [];
+        $columnStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+        if ($columnStmt) {
+            while ($columnRow = $columnStmt->fetch(PDO::FETCH_ASSOC)) {
+                $field = trim((string) ($columnRow['Field'] ?? ''));
+                if ($field !== '') {
+                    $columns[$field] = true;
+                }
+            }
+        }
+
+        if (!isset($columns['processing_no'], $columns['process_history'])) {
+            out("Skip {$table}: missing processing_no or process_history.");
+            continue;
+        }
+
+        $selectCols = ['processing_no', 'process_history'];
+        if (isset($columns['voucher_type'])) {
+            $selectCols[] = 'voucher_type';
+        }
+
+        $selectSql = 'SELECT ' . implode(', ', array_map(
+            static fn (string $column): string => '`' . $column . '`',
+            $selectCols
+        )) . " FROM `{$table}` WHERE TRIM(COALESCE(process_history, '')) <> ''";
+        $rows = $pdo->query($selectSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
+
+        out('Scanning ' . count($rows) . " row(s) in {$table} for process_history office labels...");
+
+        foreach ($rows as $row) {
+            $processingNo = trim((string) ($row['processing_no'] ?? ''));
+            $history = normalize_process_history($row['process_history'] ?? null);
+            if ($processingNo === '' || $history === '') {
+                continue;
+            }
+
+            $voucherType = trim((string) ($row['voucher_type'] ?? ''));
+            if (!isset($bestByProcessingNo[$processingNo])) {
+                $bestByProcessingNo[$processingNo] = [
+                    'history' => $history,
+                    'voucher_type' => $voucherType,
+                ];
+                continue;
+            }
+
+            if (strlen($history) > strlen($bestByProcessingNo[$processingNo]['history'])) {
+                $bestByProcessingNo[$processingNo]['history'] = $history;
+            }
+            if ($bestByProcessingNo[$processingNo]['voucher_type'] === '' && $voucherType !== '') {
+                $bestByProcessingNo[$processingNo]['voucher_type'] = $voucherType;
+            }
+        }
+    }
+
+    foreach ($bestByProcessingNo as $processingNo => $data) {
+        $history = (string) ($data['history'] ?? '');
+        $voucherType = (string) ($data['voucher_type'] ?? '');
+        $enriched = voucher_tracking_enrich_process_history_for_return($pdo, $history, $voucherType);
+        if ($enriched === $history) {
+            continue;
+        }
+
+        out("  {$processingNo}: rewrite process_history office labels");
+        $updatedVouchers++;
+
+        foreach (PROCESS_HISTORY_OFFICE_TABLES as $table) {
+            try {
+                $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1");
+            } catch (PDOException) {
+                continue;
+            }
+
+            $columnStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+            $columns = [];
+            if ($columnStmt) {
+                while ($columnRow = $columnStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $field = trim((string) ($columnRow['Field'] ?? ''));
+                    if ($field !== '') {
+                        $columns[$field] = true;
+                    }
+                }
+            }
+            if (!isset($columns['processing_no'], $columns['process_history'])) {
+                continue;
+            }
+
+            $countStmt = $pdo->prepare(
+                "SELECT COUNT(*) FROM `{$table}`
+                 WHERE processing_no = :processing_no
+                   AND TRIM(COALESCE(process_history, '')) <> ''
+                   AND process_history <> :enriched"
+            );
+            $countStmt->bindValue(':processing_no', $processingNo, PDO::PARAM_STR);
+            $countStmt->bindValue(':enriched', $enriched, PDO::PARAM_STR);
+            $countStmt->execute();
+            $rowCount = (int) $countStmt->fetchColumn();
+            if ($rowCount === 0) {
+                continue;
+            }
+
+            out("    {$table}: update {$rowCount} row(s)");
+            if ($apply) {
+                $updateStmt = $pdo->prepare(
+                    "UPDATE `{$table}`
+                     SET process_history = :enriched
+                     WHERE processing_no = :processing_no
+                       AND TRIM(COALESCE(process_history, '')) <> ''"
+                );
+                $updateStmt->bindValue(':enriched', $enriched, PDO::PARAM_STR);
+                $updateStmt->bindValue(':processing_no', $processingNo, PDO::PARAM_STR);
+                $updateStmt->execute();
+            }
+            $updatedRows += $rowCount;
+        }
+    }
+
+    return [
+        'updated_vouchers' => $updatedVouchers,
+        'updated_rows' => $updatedRows,
+    ];
+}
+
 /** @var array<string, list<string>> */
 const AMOUNT_FIX_TABLES = [
     'vouchers' => ['amount'],
@@ -293,7 +445,7 @@ if (!$isCli) {
     echo '<pre style="font-family:monospace">';
 }
 
-out('Maintenance fix: missing Processed by logs + whole-number amount normalization');
+out('Maintenance fix: missing Processed by logs + process_history offices + whole-number amount normalization');
 out('Mode: ' . ($apply ? 'APPLY (updates will be saved)' : 'DRY-RUN (preview only; pass --apply or ?apply=1 to commit)'));
 out(str_repeat('-', 72));
 
@@ -304,6 +456,8 @@ $updatedProcessingTime = 0;
 $skipped = 0;
 $amountRowsFixed = 0;
 $amountColumnsFixed = 0;
+$historyOfficeVouchersFixed = 0;
+$historyOfficeRowsFixed = 0;
 
 try {
     $archiveStmt = $pdo->query("
@@ -419,6 +573,8 @@ try {
         &$skipped,
         &$amountRowsFixed,
         &$amountColumnsFixed,
+        &$historyOfficeVouchersFixed,
+        &$historyOfficeRowsFixed,
         $archives,
         $insertStmt,
         $trackingStmt,
@@ -441,7 +597,13 @@ try {
         $baseHistory = normalize_process_history($archive['process_history'] ?? null);
         $historyLines = parse_history_lines($baseHistory);
         $actionFrom = resolve_action_from($historyLines, $actionBy);
-        $processedLine = build_history_line($actionBy, $action, $actionFrom, $officeFrom);
+        $historyOffice = voucher_tracking_resolve_office_for_history(
+            $pdo,
+            $actionBy,
+            $officeFrom,
+            trim((string) ($archive['office_to'] ?? ''))
+        );
+        $processedLine = build_history_line($actionBy, $action, $actionFrom, $historyOffice);
 
         $targetHistory = history_contains_processed_for($baseHistory, $actionBy)
             ? $baseHistory
@@ -568,7 +730,13 @@ try {
     }
 
     out(str_repeat('-', 72));
-    out('Phase 2: whole-number amounts → two decimal places');
+    out('Phase 2: process_history office labels from user_group');
+    $historyOfficeFix = fix_process_history_offices($pdo, $apply);
+    $historyOfficeVouchersFixed = $historyOfficeFix['updated_vouchers'];
+    $historyOfficeRowsFixed = $historyOfficeFix['updated_rows'];
+
+    out(str_repeat('-', 72));
+    out('Phase 3: whole-number amounts → two decimal places');
     $amountFix = fix_whole_number_amounts($pdo, $apply);
     $amountRowsFixed = $amountFix['updated_rows'];
     $amountColumnsFixed = $amountFix['updated_columns'];
@@ -586,10 +754,10 @@ try {
 
     out(str_repeat('-', 72));
     if (!$apply || $dryRun) {
-        out("Preview complete. Would insert {$insertedLogs} log(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
+        out("Preview complete. Would insert {$insertedLogs} log(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
         out('Re-run with --apply (CLI) or ?apply=1 (browser) to save. Use --dry-run to execute then roll back.');
     } else {
-        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
+        out("Done. Inserted {$insertedLogs} log(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), skipped {$skipped}.");
     }
 } catch (Throwable $e) {
     out('Migration failed: ' . $e->getMessage());

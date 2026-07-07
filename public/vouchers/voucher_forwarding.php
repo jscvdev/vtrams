@@ -134,10 +134,7 @@ $bulkForwardToken = (string) ($_SESSION['token'] ?? '');
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $showForwardCol = !$hideForwardForCashiersUnit;
-$showProcessCol = (
-    (in_array("Accounting Unit", $target) && !in_array("Accountant III", $target))
-    || in_array("Processor", $target)
-);
+$showProcessCol = in_array("Accounting Unit", $target) || in_array("Processor", $target);
 $isAlternateWorkflowRole = $showProcessCol || in_array('ICU', $target, true);
 $loggedUserOffice = voucher_logged_user_office();
 $showTransmitCol = (
@@ -908,13 +905,13 @@ if ($showCashierArchiveCol) {
                             $archiveHtml = '';
                             $treatAsSameOfficeWorkflow = voucher_forwarding_treat_as_same_office_workflow(
                                 (string) ($row['voucher_type'] ?? ''),
-                                (string) ($row['process_history'] ?? ''),
+                                $forwarding_process_history,
                                 $loggedUserOffice
                             );
                             $upstreamRoutingComplete = voucher_forwarding_upstream_routing_complete(
                                 $pdo,
                                 (string) ($row['voucher_type'] ?? ''),
-                                (string) ($row['process_history'] ?? '')
+                                $forwarding_process_history
                             );
                             $canShowProcess = ($roleAccounting || $roleProcessor) && $upstreamRoutingComplete;
 
@@ -926,21 +923,15 @@ if ($showCashierArchiveCol) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
                                     }
                                 }
-                                if ($canShowProcess) {
+                                if ($roleAccounting || $roleProcessor) {
                                     $processHtml = voucher_forwarding_process_action_html($processStatus);
-                                    if ($processProcessed && !$roleAccountantIII) {
-                                        if ($transmitEmpty) {
-                                            $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
-                                        } elseif ($transmitYes) {
-                                            $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
-                                        }
-                                    }
                                 }
-                            } elseif ($roleIcu && $showForwardCol && !$roleCashiers) {
-                                if ($processProcessed && ($transmitEmpty || $transmitDone)) {
-                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
-                                } else {
-                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                if ($canShowProcess && $processProcessed && !$roleAccountantIII) {
+                                    if ($transmitEmpty) {
+                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                    } elseif ($transmitYes) {
+                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                    }
                                 }
                             } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
@@ -952,9 +943,7 @@ if ($showCashierArchiveCol) {
                                         $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
                                     }
                                 }
-                                if ($canShowProcess) {
-                                    $processHtml = voucher_forwarding_process_action_html($processStatus);
-                                }
+                                $processHtml = voucher_forwarding_process_action_html($processStatus);
                                 if ($canShowProcess && $processProcessed && !$roleAccountantIII) {
                                     if ($transmitEmpty) {
                                         $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
@@ -964,6 +953,12 @@ if ($showCashierArchiveCol) {
                                 }
                                 if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
                                     $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-pay" type="button">Pay</button>';
+                                }
+                            } elseif ($roleIcu && $showForwardCol && !$roleCashiers) {
+                                if ($processProcessed && ($transmitEmpty || $transmitDone)) {
+                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                } else {
+                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
                                 }
                             } elseif ($roleCashiers || $roleBudget || $rolePlanning || $roleOfficePenro) {
                                 if (!$roleCashiers && (!$roleBudgetOfficer || !$roleCashier)) {

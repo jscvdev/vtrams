@@ -373,6 +373,34 @@ function voucher_tracking_resolve_action_from_for_history(
 }
 
 /**
+ * Resolve office label for process_history from user_group (actor's registered office).
+ */
+function voucher_tracking_resolve_office_for_history(
+    object $pdo,
+    string $action_by,
+    string $office_from,
+    string $office_to = ''
+): string {
+    $action_by = trim($action_by);
+    if ($action_by !== '') {
+        $user = voucher_tracking_lookup_user_by_display_name($pdo, $action_by);
+        if ($user !== null) {
+            $office = trim((string) ($user['office'] ?? ''));
+            if ($office !== '') {
+                return $office;
+            }
+        }
+    }
+
+    $office_to = trim($office_to);
+    if ($office_to !== '') {
+        return $office_to;
+    }
+
+    return trim($office_from);
+}
+
+/**
  * Rewrite process_history section labels for return-to-previous UI
  * (e.g. legacy "TSD" steps by TSD-ENGP users → "TSD-ENGP").
  */
@@ -412,7 +440,14 @@ function voucher_tracking_enrich_process_history_for_return(
             if (!array_key_exists($userName, $userCache)) {
                 $userCache[$userName] = voucher_tracking_lookup_user_by_display_name($pdo, $userName);
             }
-            $shouldUseTsdEngp = voucher_tracking_user_has_designation($userCache[$userName], 'TSD-ENGP');
+            $user = $userCache[$userName];
+            $shouldUseTsdEngp = voucher_tracking_user_has_designation($user, 'TSD-ENGP');
+            if ($user !== null) {
+                $userOffice = trim((string) ($user['office'] ?? ''));
+                if ($userOffice !== '') {
+                    $parts[3] = $userOffice;
+                }
+            }
         }
 
         if (
@@ -1506,6 +1541,30 @@ function voucher_tracking_history_has_budget_receive(array $lines): bool
     return false;
 }
 
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_has_tsd_engp_receive(array $lines): bool
+{
+    foreach ($lines as $line) {
+        if (stripos($line['action'], 'Received by') === false) {
+            continue;
+        }
+
+        $section = voucher_tracking_normalize_section_label($line['section']);
+        if ($section === 'TSD-ENGP') {
+            return true;
+        }
+
+        $rawSection = strtoupper(trim($line['section']));
+        if (in_array($rawSection, ['TSD', 'ENGP FOCAL PERSON'], true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /** Whether special-access routing sends the voucher directly to accounting roles. */
 function voucher_special_access_routes_to_accounting(object $pdo, string $voucher_type): bool
 {
@@ -1521,7 +1580,26 @@ function voucher_special_access_routes_to_accounting(object $pdo, string $vouche
 }
 
 /**
- * Planning/Budget have received the voucher, or it has direct special-access routing to accounting.
+ * e-NGP special-access routing that stops at TSD-ENGP before accounting (encoder → TSD-ENGP → accounting).
+ */
+function voucher_special_access_routes_via_tsd_engp(object $pdo, string $voucher_type): bool
+{
+    if (!voucher_type_is_engp($voucher_type) || voucher_special_access_routes_to_accounting($pdo, $voucher_type)) {
+        return false;
+    }
+
+    foreach (voucher_special_access_forward_targets($pdo, $voucher_type) as $target) {
+        if (voucher_tracking_normalize_section_label($target) === 'TSD-ENGP') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Planning/Budget have received the voucher, direct special-access to accounting,
+ * or e-NGP has completed the TSD-ENGP hop.
  */
 function voucher_forwarding_upstream_routing_complete(
     object $pdo,
@@ -1533,6 +1611,10 @@ function voucher_forwarding_upstream_routing_complete(
     }
 
     $lines = voucher_tracking_parse_process_history_lines($process_history);
+
+    if (voucher_special_access_routes_via_tsd_engp($pdo, $voucher_type)) {
+        return voucher_tracking_history_has_tsd_engp_receive($lines);
+    }
 
     return voucher_tracking_history_has_planning_receive($lines)
         || voucher_tracking_history_has_budget_receive($lines);
@@ -1896,8 +1978,6 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
         if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Conservation & Development Section')) {
             return 'Conservation & Development Section';
         }
-
-        return '';
     }
 
     if (voucher_designation_limit_office_registered($pdo, $logged_user_office, 'Planning Section')) {

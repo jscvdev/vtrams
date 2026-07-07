@@ -977,8 +977,6 @@ function session_contains_phrase($phrase)
             }
             if (String(row.active_status || '') === 'returned') return true;
             if (/^Returned\s+by:/i.test(String(row.tracking_voucher_status || ''))) return true;
-            if (String(row.forward_return_designation || '').trim() !== '') return true;
-            if (String(row.forward_return_label || '').trim() !== '') return true;
             return false;
         }
 

@@ -182,8 +182,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $pdo,
                             (string) ($voucher_type ?? '')
                         );
+                        $hasSpecialAccessRouting = $specialAccessTargets !== [];
                         $specialAccessTarget = '';
-                        if ($specialAccessTargets !== []) {
+                        if ($hasSpecialAccessRouting) {
                             $pickedTarget = utilities_special_access_normalize_value($forward_return_designation);
                             if (count($specialAccessTargets) > 1) {
                                 if ($pickedTarget !== '' && in_array($pickedTarget, $specialAccessTargets, true)) {
@@ -196,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
 
-                        if ($specialAccessTarget !== '') {
+                        if ($hasSpecialAccessRouting && $specialAccessTarget !== '') {
                             $target_to = $specialAccessTarget;
                             $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
                             $resolved = voucher_forward_receiver_udcs_for_designation($pdo, $target_to, $office_to, $sender_udc);
@@ -205,7 +206,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($resolved['temp_errors']) {
                                 $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
                             }
-                        } elseif ($specialAccessTargets === []) {
+                        }
+
+                        if (!$hasSpecialAccessRouting && trim($receiver_udc) === '') {
                             if (voucher_user_has_designation($target, 'Liaison Officer')) {
                                 // Liaison officers forward upstream to ICU at the processing office,
                                 // even when their office normally routes encoders to another liaison first.

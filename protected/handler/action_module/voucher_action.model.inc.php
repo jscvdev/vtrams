@@ -117,7 +117,8 @@ function voucher_document_user_action(
     // to process_history in all relevant voucher tables.
     if ($inserted) {
         $historySection = voucher_tracking_resolve_action_from_for_history($pdo, $action_by, $action_from);
-        $history_line = trim($action_by) . ' | ' . trim($action) . ' | ' . trim($historySection) . ' | ' . trim($office_from);
+        $historyOffice = voucher_tracking_resolve_office_for_history($pdo, $action_by, $office_from, $office_to);
+        $history_line = trim($action_by) . ' | ' . trim($action) . ' | ' . trim($historySection) . ' | ' . trim($historyOffice);
 
         // Protect against empty lines; still useful to record that something happened
         if ($history_line !== ' |  |  | ') {
