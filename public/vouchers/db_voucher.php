@@ -178,55 +178,94 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
             }
 
             body.dv-printing #printableTable #dv_accounting_body {
-                padding-bottom: 10px;
                 min-height: calc(var(--dv-accounting-min-rows, 8) * var(--dv-accounting-row-height, 30px));
             }
 
             @page {
                 size: portrait;
-                /* auto is the default value, it will fit the content to the available space */
-                margin-top: 5;
+                margin: 0;
             }
 
-            body.dv-printing #printableTable table {
+            body.dv-printing {
+                margin: 0 !important;
+                padding: 8mm 10mm !important;
+            }
+
+            body.dv-printing #printableTable .db-voucher__table {
                 width: 100%;
-                border-collapse: collapse;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+                border-top: 1px solid #000000 !important;
+                border-left: 1px solid #000000 !important;
+            }
+
+            body.dv-printing #printableTable .db-voucher__table th,
+            body.dv-printing #printableTable .db-voucher__table td,
+            body.dv-printing #printableTable .db-voucher__table tr th,
+            body.dv-printing #printableTable .db-voucher__table tr td {
+                border-style: solid !important;
+                border-color: #000000 !important;
+                border-width: 0 1px 1px 0 !important;
+            }
+
+            body.dv-printing #printableTable #dv_accounting_body td,
+            body.dv-printing #printableTable td.no-line,
+            body.dv-printing #printableTable .dv-jev-header,
+            body.dv-printing #printableTable .dv-jev-value {
+                border-top-width: 0 !important;
+                border-bottom-width: 0 !important;
+            }
+
+            body.dv-printing #printableTable #dv_accounting_body tr:last-child td {
+                border-bottom: 1px solid #000000 !important;
+            }
+
+            body.dv-printing #printableTable .db-voucher__table tr.dv-certified-section-start > th {
+                border-top: 1px solid #000000 !important;
+                border-right: 1px solid #000000 !important;
+                border-bottom: 1px solid #000000 !important;
             }
         }
     </style>
     <style>
-        /* Excel-like styling */
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
+        /* Excel-like styling — flat selectors for Edge/Firefox compatibility */
         .printableTable {
             display: none !important;
         }
 
-        #printableTable {
-            .text-centered {
-                text-align: center;
-            }
-
-            .pad-5 {
-                padding: 5px;
-            }
-
-            .pad-2 {
-                padding: 2px;
-            }
-
-            tr {
-                border: none;
-            }
+        #printableTable .db-voucher__table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            border-top: 1px solid #000000;
+            border-left: 1px solid #000000;
         }
 
-        #printableTable th,
-        #printableTable td {
-            border: 2px solid #000;
+        #printableTable .db-voucher__table th,
+        #printableTable .db-voucher__table td,
+        #printableTable .db-voucher__table tr th,
+        #printableTable .db-voucher__table tr td {
+            border-style: solid !important;
+            border-color: #000000 !important;
+            border-width: 0 1px 1px 0 !important;
             text-align: left;
+            box-sizing: border-box;
+        }
+
+        #printableTable .text-centered {
+            text-align: center !important;
+        }
+        
+        #printableTable .pad-5 {
+            padding: 5px;
+        }
+
+        #printableTable .pad-2 {
+            padding: 2px;
+        }
+
+        #printableTable .db-voucher__table tr {
+            border: none;
         }
 
         #printableTable .t1 {
@@ -267,9 +306,35 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
             vertical-align: top;
         }
 
-        #printableTable #dv_accounting_body td {
-            border-top: none !important;
-            border-bottom: none !important;
+        #printableTable td.no-line {
+            border-top-width: 0;
+            border-bottom-width: 0;
+            text-align: left;
+        }
+
+        #printableTable td.signature-fixed {
+            height: 60px;
+        }
+
+        #printableTable .fixed_text_alignment th {
+            text-align: left;
+        }
+
+        #printableTable #dv_accounting_body td,
+        #printableTable .dv-jev-header,
+        #printableTable .dv-jev-value {
+            border-top-width: 0;
+            border-bottom-width: 0;
+        }
+
+        #printableTable #dv_accounting_body tr:last-child td {
+            border-bottom: 1px solid #000000 !important;
+        }
+
+        #printableTable .db-voucher__table tr.dv-certified-section-start > th {
+            border-top: 1px solid #000000 !important;
+            border-right: 1px solid #000000 !important;
+            border-bottom: 1px solid #000000 !important;
         }
 
         #printableTable .dv-accounting-row td {
@@ -282,7 +347,6 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
         }
 
         #printableTable #dv_accounting_body {
-            padding-bottom: 10px;
             min-height: calc(var(--dv-accounting-min-rows, 8) * var(--dv-accounting-row-height, 30px));
         }
 
@@ -295,7 +359,7 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
         }
     </style>
     <div class="printableTable" id="printableTable" style="margin-top: 20px;">
-        <table class="db-voucher__table" id="my-Table">
+        <table class="db-voucher__table" id="my-Table" border="1" cellspacing="0" cellpadding="0">
             <thead class="db-voucher__header">
                 <tr>
                     <th colspan="4" rowspan="3" sty>
@@ -332,7 +396,6 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
                 </tr>
             </thead>
             <tbody>
-                <thead>
                     <tr>
                         <th class="fixed-title pad-5">Mode of Payment</th>
                         <td colspan="4">
@@ -371,13 +434,12 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
                         <th class="fixed-title pad-5">Address</th>
                         <td colspan="4" id="voucher_form_address" style="padding-left: 5px !important; padding-top: 10px; padding-bottom: 10px; font-size: 13px; font-weight: 800"></td>
                     </tr>
-                </thead>
-                <thead>
+                <tr>
                     <th class="text-centered" colspan="2">Particulars</th>
                     <th class="text-centered pad-5">Responsibility Center</th>
                     <th class="text-centered">MFO/PAP</th>
                     <th class="text-centered" colspan="2">AMOUNT</th>
-                </thead>
+                </tr>
                 <tr>
                     <td colspan="2" class="pad-5" id="voucher_form_particulars" style="height: 100px !important; font-size: 13px; font-weight: 400; font-style: italic;"></td>
                     <td class="text-centered"></td>
@@ -427,7 +489,7 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
                 <?php endfor; ?>
             </tbody>
             <tbody>
-                <tr class="fixed_text_alignment">
+                <tr class="fixed_text_alignment dv-certified-section-start">
                     <th colspan="2" class="fixed-title pad-2">C. Certified</th>
                     <th colspan="3" class="pad-2">D. Approved for Payment</th>
                 </tr>
@@ -486,14 +548,14 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
                 </tr>
                 <tr>
                     <th colspan="4" class="pad-2">E. Receipt of Payment</th>
-                    <th style="padding-left: 5px; border-bottom: none !important">JEV No.</th>
+                    <th class="dv-jev-header pad-2" style="padding-left: 5px;">JEV No.</th>
                 </tr>
                 <tr>
                     <th class="text-centered pad-5">Check/ADA No.</th>
                     <td class="pad-5"></td>
                     <td class="pad-5">Date:</td>
                     <td class="pad-5">Bank Name & Account Number:</td>
-                    <td class="pad-5" style="border-top: none !important;"></td>
+                    <td class="pad-5 dv-jev-value"></td>
                 </tr>
                 <tr>
                     <th class="text-centered pad-5">Signature</th>
@@ -515,7 +577,25 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
     </div>
     <script>
         (function () {
+            var dvPrintStyleId = 'dv-print-page-style';
+
+            function ensureDvPrintPageStyle() {
+                if (document.getElementById(dvPrintStyleId)) {
+                    return;
+                }
+
+                var style = document.createElement('style');
+                style.id = dvPrintStyleId;
+                style.media = 'print';
+                style.textContent = [
+                    '@page { size: portrait; margin: 0; }',
+                    'body.dv-printing { margin: 0 !important; padding: 8mm 10mm !important; }',
+                ].join('\n');
+                document.head.appendChild(style);
+            }
+
             function prepareDvPrint() {
+                ensureDvPrintPageStyle();
                 document.documentElement.classList.remove('page-loading');
                 document.documentElement.classList.add('page-loaded');
                 document.body.classList.add('dv-printing');
