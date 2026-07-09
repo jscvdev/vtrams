@@ -459,10 +459,7 @@ $filtered_forward_destination_units = utilities_list_filter_rows(
     'all',
     ['designation']
 );
-$forward_destination_units = utilities_list_limit_initial(
-    $filtered_forward_destination_units,
-    $list_filter['is_filtered']
-);
+$forward_destination_units = $filtered_forward_destination_units;
 
 $all_rules = $rules;
 $rules_for_filter = utilities_list_filter_by_field_value($all_rules, 'voucher_type', $list_filter['voucher_type']);
@@ -472,7 +469,7 @@ $filtered_rules = utilities_list_filter_rows(
     'all',
     ['voucher_type', 'forward_designation']
 );
-$rules = utilities_list_limit_initial($filtered_rules, $list_filter['is_filtered']);
+$rules = $filtered_rules;
 
 $all_return_previous_units = $return_previous_units;
 $filtered_return_previous_units = utilities_list_filter_rows(
@@ -481,10 +478,7 @@ $filtered_return_previous_units = utilities_list_filter_rows(
     'all',
     ['designation']
 );
-$return_previous_units = utilities_list_limit_initial(
-    $filtered_return_previous_units,
-    $list_filter['is_filtered']
-);
+$return_previous_units = $filtered_return_previous_units;
 
 $all_liaison_routing = $liaison_routing;
 $filtered_liaison_routing = utilities_list_filter_rows(
@@ -493,7 +487,7 @@ $filtered_liaison_routing = utilities_list_filter_rows(
     'all',
     ['office_name', 'parent_office_name', 'liaison_office_name', 'assignee_label']
 );
-$liaison_routing = utilities_list_limit_initial($filtered_liaison_routing, $list_filter['is_filtered']);
+$liaison_routing = $filtered_liaison_routing;
 
 $all_offices = $offices;
 $filtered_offices = utilities_list_filter_rows(
@@ -502,7 +496,7 @@ $filtered_offices = utilities_list_filter_rows(
     'all',
     ['office_name']
 );
-$offices_display = utilities_list_limit_initial($filtered_offices, $list_filter['is_filtered']);
+$offices_display = $filtered_offices;
 $office_tree_display = utilities_office_build_tree($offices_display);
 
 $routing_list_total = count($all_forward_destination_units)

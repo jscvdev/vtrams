@@ -349,6 +349,38 @@ function voucher_tracking_workflow_history_designations(): array
     return ['TSD-ENGP'];
 }
 
+/** Designations that count as Accounting Unit for dashboard timing (ICU merged into Accounting). */
+function voucher_tracking_accounting_unit_designations(): array
+{
+    return ['Accounting Unit', 'Processor', 'Accountant III', 'ICU'];
+}
+
+/**
+ * @param array{designation?: string}|null $user
+ */
+function voucher_tracking_user_is_icu_role(?array $user): bool
+{
+    return $user !== null && voucher_tracking_user_has_designation($user, 'ICU');
+}
+
+/**
+ * @param array{designation?: string}|null $user
+ */
+function voucher_tracking_user_is_accounting_unit_role(?array $user): bool
+{
+    if ($user === null) {
+        return false;
+    }
+
+    foreach (voucher_tracking_accounting_unit_designations() as $designation) {
+        if (voucher_tracking_user_has_designation($user, $designation)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * Resolve section label for process_history (prefer workflow designations over generic section).
  */
@@ -366,6 +398,9 @@ function voucher_tracking_resolve_action_from_for_history(
             if (voucher_tracking_user_has_designation($user, $designation)) {
                 return $designation;
             }
+        }
+        if (voucher_tracking_user_is_accounting_unit_role($user)) {
+            return 'Accounting Unit';
         }
     }
 
@@ -435,6 +470,7 @@ function voucher_tracking_enrich_process_history_for_return(
         $section = trim($parts[2]);
         $userName = trim($parts[0]);
         $shouldUseTsdEngp = false;
+        $user = null;
 
         if ($userName !== '') {
             if (!array_key_exists($userName, $userCache)) {
@@ -1142,7 +1178,7 @@ function voucher_user_is_process_unit_member(array $designations): bool
         }
     }
 
-    foreach (['Processor', 'Accountant III', 'Budget Officer'] as $role) {
+    foreach (['Processor', 'Accountant III', 'Budget Officer', 'ICU'] as $role) {
         if (voucher_user_has_designation($designations, $role)) {
             return true;
         }
@@ -2181,6 +2217,8 @@ function voucher_tracking_section_label_map(): array
         'ACCOUNTING UNIT' => 'Accounting Unit',
         'Accountant III' => 'Accounting Unit',
         'ACCOUNTANT III' => 'Accounting Unit',
+        'PROCESSOR' => 'Accounting Unit',
+        'Processor' => 'Accounting Unit',
         'PLANNING' => 'Planning Section',
         'PLANNING SECTION' => 'Planning Section',
         'CONSERVATION & DEVELOPMENT' => 'Conservation & Development Section',
@@ -2192,7 +2230,7 @@ function voucher_tracking_section_label_map(): array
         'PENRO OFFICE' => 'Office of the PENRO',
         'PENRO' => 'Office of the PENRO',
         'OFFICE OF THE PENRO' => 'Office of the PENRO',
-        'ICU' => 'ICU',
+        'ICU' => 'Accounting Unit',
         'MSD' => 'MSD',
         'TSD' => 'TSD',
         'TSD-ENGP' => 'TSD-ENGP',
@@ -2248,6 +2286,69 @@ function voucher_tracking_action_kind(?string $action): string
 }
 
 /**
+ * Dashboard section from the actor's role/designation (preferred over action_from section labels).
+ *
+ * @param array{designation?: string, section?: string}|null $user
+ */
+function voucher_tracking_dashboard_section_from_user_role(?array $user, string $actionFrom = ''): string
+{
+    if ($user === null) {
+        return '';
+    }
+
+    foreach (voucher_tracking_workflow_history_designations() as $designation) {
+        if (!voucher_tracking_user_has_designation($user, $designation)) {
+            continue;
+        }
+        $section = voucher_tracking_normalize_section_label($designation);
+        if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
+            return $section;
+        }
+    }
+
+    if (voucher_tracking_user_is_accounting_unit_role($user)) {
+        return 'Accounting Unit';
+    }
+
+    foreach (array_map('trim', explode(',', (string) ($user['designation'] ?? ''))) as $candidate) {
+        if ($candidate === '') {
+            continue;
+        }
+        if (
+            voucher_tracking_user_has_designation($user, $candidate)
+            && in_array($candidate, voucher_tracking_accounting_unit_designations(), true)
+        ) {
+            continue;
+        }
+        $section = voucher_tracking_normalize_section_label($candidate);
+        if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
+            return $section;
+        }
+    }
+
+    if (voucher_tracking_user_has_designation($user, 'TSD-ENGP')) {
+        $normalizedFrom = voucher_tracking_normalize_section_label($actionFrom);
+        if (in_array(strtoupper($normalizedFrom), ['TSD', 'ENGP FOCAL PERSON', 'TSD-ENGP'], true)) {
+            return 'TSD-ENGP';
+        }
+    }
+
+    $userSection = trim((string) ($user['section'] ?? ''));
+    if ($userSection !== '' && !in_array(strtoupper($userSection), ['ACCOUNTING', 'ACCOUNTING UNIT'], true)) {
+        $section = voucher_tracking_normalize_section_label($userSection);
+        if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
+            return $section;
+        }
+    }
+
+    if (in_array(strtoupper($userSection), ['ACCOUNTING', 'ACCOUNTING UNIT'], true)) {
+        return 'Accounting Unit';
+    }
+
+    return '';
+}
+
+/**
  * Resolve a dashboard section from an action log row (action_from, optional action_by lookup).
  *
  * @param array{action_from?: string, action_by?: string} $row
@@ -2259,6 +2360,20 @@ function voucher_tracking_dashboard_section_from_action_row(
     array &$userCache = []
 ): string {
     $actionFrom = trim((string) ($row['action_from'] ?? ''));
+    $actionBy = trim((string) ($row['action_by'] ?? ''));
+    $user = null;
+
+    if ($pdo !== null && $actionBy !== '') {
+        if (!array_key_exists($actionBy, $userCache)) {
+            $userCache[$actionBy] = voucher_tracking_lookup_user_by_display_name($pdo, $actionBy);
+        }
+        $user = $userCache[$actionBy];
+        $sectionFromRole = voucher_tracking_dashboard_section_from_user_role($user, $actionFrom);
+        if ($sectionFromRole !== '') {
+            return $sectionFromRole;
+        }
+    }
+
     $candidates = $actionFrom !== '' ? [$actionFrom] : [];
     foreach (array_map('trim', explode(',', $actionFrom)) as $token) {
         if ($token !== '' && !in_array($token, $candidates, true)) {
@@ -2268,44 +2383,19 @@ function voucher_tracking_dashboard_section_from_action_row(
 
     foreach ($candidates as $candidate) {
         $section = voucher_tracking_normalize_section_label($candidate);
-        if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
-            return $section;
+        if ($section === '' || !voucher_tracking_is_dashboard_section($section)) {
+            continue;
         }
-    }
 
-    if ($pdo === null) {
-        return voucher_tracking_normalize_section_label($actionFrom);
-    }
-
-    $actionBy = trim((string) ($row['action_by'] ?? ''));
-    if ($actionBy === '') {
-        return voucher_tracking_normalize_section_label($actionFrom);
-    }
-
-    if (!array_key_exists($actionBy, $userCache)) {
-        $userCache[$actionBy] = voucher_tracking_lookup_user_by_display_name($pdo, $actionBy);
-    }
-    $user = $userCache[$actionBy];
-    if ($user === null) {
-        return voucher_tracking_normalize_section_label($actionFrom);
-    }
-
-    $fromUser = array_filter([
-        trim((string) ($user['section'] ?? '')),
-        ...array_map('trim', explode(',', (string) ($user['designation'] ?? ''))),
-    ]);
-    if (voucher_tracking_user_has_designation($user, 'TSD-ENGP')) {
-        $normalizedFrom = voucher_tracking_normalize_section_label($actionFrom);
-        if (in_array(strtoupper($normalizedFrom), ['TSD', 'ENGP FOCAL PERSON', 'TSD-ENGP'], true)) {
-            return 'TSD-ENGP';
+        if ($section === 'Accounting Unit' && $user !== null && !voucher_tracking_user_is_accounting_unit_role($user)) {
+            continue;
         }
+
+        return $section;
     }
 
-    foreach ($fromUser as $candidate) {
-        $section = voucher_tracking_normalize_section_label($candidate);
-        if ($section !== '' && voucher_tracking_is_dashboard_section($section)) {
-            return $section;
-        }
+    if ($user !== null && voucher_tracking_user_is_accounting_unit_role($user)) {
+        return 'Accounting Unit';
     }
 
     return voucher_tracking_normalize_section_label($actionFrom);
@@ -2537,7 +2627,6 @@ function voucher_tracking_dashboard_sections(): array
 {
     return [
         'Planning Section',
-        'ICU',
         'Conservation & Development Section',
         'TSD-ENGP',
         'Budget Unit',
@@ -2571,14 +2660,13 @@ function voucher_tracking_dashboard_breakdown_sections(): array
 }
 
 /**
- * Column order for dashboard per-voucher section breakdown (ICU before Planning).
+ * Column order for dashboard per-voucher section breakdown.
  *
  * @return list<string>
  */
 function voucher_tracking_dashboard_breakdown_voucher_column_sections(): array
 {
     $preferred = [
-        'ICU',
         'Planning Section',
         'TSD-ENGP',
         'Budget Unit',
@@ -2599,7 +2687,6 @@ function voucher_tracking_dashboard_section_labels(): array
 {
     return [
         'Planning Section' => 'Planning',
-        'ICU' => 'ICU',
         'Conservation & Development Section' => 'CDS',
         'TSD-ENGP' => 'TSD-ENGP',
         'Budget Unit' => 'Budget',

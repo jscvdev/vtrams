@@ -145,11 +145,27 @@ function voucher_status_report_line_is_liaison(array $line): bool
     return stripos((string) ($line['section'] ?? ''), 'Liaison') !== false;
 }
 
+function voucher_status_report_line_actor_is_icu(object $pdo, array $line, array &$userCache = []): bool
+{
+    $name = trim((string) ($line['name'] ?? ''));
+    if ($name === '') {
+        return false;
+    }
+
+    if (!array_key_exists($name, $userCache)) {
+        $userCache[$name] = voucher_tracking_lookup_user_by_display_name($pdo, $name);
+    }
+
+    return voucher_tracking_user_is_icu_role($userCache[$name]);
+}
+
 /**
  * @param list<array{name: string, action: string, section: string, office: string}> $lines
  */
-function voucher_status_report_has_liaison_to_main(array $lines, string $processingOffice): bool
+function voucher_status_report_has_liaison_to_main(object $pdo, array $lines, string $processingOffice): bool
 {
+    $userCache = [];
+
     foreach ($lines as $line) {
         if (!voucher_status_report_line_is_forward($line)) {
             continue;
@@ -160,6 +176,7 @@ function voucher_status_report_has_liaison_to_main(array $lines, string $process
         if (
             voucher_tracking_offices_match((string) ($line['office'] ?? ''), $processingOffice)
             || stripos((string) ($line['section'] ?? ''), 'ICU') !== false
+            || voucher_status_report_line_actor_is_icu($pdo, $line, $userCache)
         ) {
             return true;
         }
@@ -169,7 +186,10 @@ function voucher_status_report_has_liaison_to_main(array $lines, string $process
         if (!voucher_status_report_line_is_forward($line)) {
             continue;
         }
-        if (stripos((string) ($line['section'] ?? ''), 'ICU') !== false) {
+        if (
+            stripos((string) ($line['section'] ?? ''), 'ICU') !== false
+            || voucher_status_report_line_actor_is_icu($pdo, $line, $userCache)
+        ) {
             return true;
         }
         if (
@@ -265,7 +285,7 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
     $fromSubOffice = voucher_status_report_office_in_list($officeFrom, $subOffices)
         || voucher_status_report_office_in_list($originOffice, $subOffices);
 
-    if ($fromSubOffice && voucher_status_report_has_liaison_to_main($lines, $processingOffice)) {
+    if ($fromSubOffice && voucher_status_report_has_liaison_to_main($pdo, $lines, $processingOffice)) {
         $categories[] = [
             'key' => 'sub_liaison',
             'label' => 'Sub-office liaison to main office',
