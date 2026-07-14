@@ -479,6 +479,85 @@ function voucher_status_report_filter_by_status(array $entries, string $statusFi
     }));
 }
 
+function voucher_status_report_parse_date_filter(?string $raw): ?string
+{
+    $raw = trim((string) ($raw ?? ''));
+    if ($raw === '') {
+        return null;
+    }
+
+    $dt = DateTime::createFromFormat('Y-m-d', $raw);
+
+    return ($dt !== false && $dt->format('Y-m-d') === $raw) ? $raw : null;
+}
+
+function voucher_status_report_entry_last_update_date(array $entry): ?string
+{
+    $raw = trim((string) ($entry['datetime_status'] ?? ''));
+    if ($raw === '') {
+        $raw = trim((string) ($entry['datetime_encoded'] ?? ''));
+    }
+    if ($raw === '') {
+        return null;
+    }
+
+    $ts = strtotime($raw);
+
+    return $ts !== false ? date('Y-m-d', $ts) : null;
+}
+
+/**
+ * @param list<array<string, mixed>> $entries
+ * @return list<array<string, mixed>>
+ */
+function voucher_status_report_filter_by_date(array $entries, ?string $dateFrom, ?string $dateTo): array
+{
+    $dateFrom = voucher_status_report_parse_date_filter($dateFrom);
+    $dateTo = voucher_status_report_parse_date_filter($dateTo);
+    if ($dateFrom === null && $dateTo === null) {
+        return $entries;
+    }
+
+    if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+        [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+    }
+
+    return array_values(array_filter($entries, static function (array $entry) use ($dateFrom, $dateTo): bool {
+        $entryDate = voucher_status_report_entry_last_update_date($entry);
+        if ($entryDate === null) {
+            return false;
+        }
+        if ($dateFrom !== null && $entryDate < $dateFrom) {
+            return false;
+        }
+        if ($dateTo !== null && $entryDate > $dateTo) {
+            return false;
+        }
+
+        return true;
+    }));
+}
+
+function voucher_status_report_format_date_range_label(?string $dateFrom, ?string $dateTo): string
+{
+    $dateFrom = voucher_status_report_parse_date_filter($dateFrom);
+    $dateTo = voucher_status_report_parse_date_filter($dateTo);
+    if ($dateFrom === null && $dateTo === null) {
+        return '';
+    }
+    if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+        [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+    }
+    if ($dateFrom !== null && $dateTo !== null) {
+        return $dateFrom === $dateTo ? $dateFrom : ($dateFrom . ' to ' . $dateTo);
+    }
+    if ($dateFrom !== null) {
+        return 'From ' . $dateFrom;
+    }
+
+    return 'Through ' . (string) $dateTo;
+}
+
 /**
  * @param list<array<string, mixed>> $entries
  * @return list<array<string, mixed>>

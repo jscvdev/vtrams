@@ -34,6 +34,14 @@ if ($typeFilter !== 'all' && !isset($report_voucher_types[$typeFilter])) {
 $entries = voucher_status_report_filter_by_voucher_type($entries, $typeFilter);
 $summary = voucher_status_report_summarize($entries);
 
+$rawDateFrom = trim((string) ($_GET['date_from'] ?? ''));
+$rawDateTo = trim((string) ($_GET['date_to'] ?? ''));
+$dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
+$dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
+$entries = voucher_status_report_filter_by_date($entries, $dateFromFilter, $dateToFilter);
+$summary = voucher_status_report_summarize($entries);
+$printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
+
 $rawSearch = (string) ($_GET['q'] ?? '');
 $searchTerm = strtolower(trim($rawSearch));
 if ($searchTerm !== '') {
@@ -88,6 +96,9 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
         <?php endif; ?>
         <?php if ($typeFilter !== 'all') : ?>
             <p class="status-report-print-search">Type filter: <?php echo htmlspecialchars((string) ($report_voucher_types[$typeFilter] ?? $typeFilter), ENT_QUOTES, 'UTF-8'); ?></p>
+        <?php endif; ?>
+        <?php if ($printDateRangeLabel !== '') : ?>
+            <p class="status-report-print-search">Date filter (last update): <?php echo htmlspecialchars($printDateRangeLabel, ENT_QUOTES, 'UTF-8'); ?></p>
         <?php endif; ?>
         <div class="status-report-print-summary">
             <div class="status-report-print-summary__item"><span>Total</span><strong><?php echo (int) $summary['total']; ?></strong></div>
@@ -150,6 +161,14 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                         </option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            <div class="status-report-filter-bar__field status-report-filter-bar__field--date">
+                <label for="dateFromFilter">From</label>
+                <input type="date" id="dateFromFilter" name="date_from" value="<?php echo htmlspecialchars($dateFromFilter ?? $rawDateFrom, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Filter from date (last update)">
+            </div>
+            <div class="status-report-filter-bar__field status-report-filter-bar__field--date">
+                <label for="dateToFilter">To</label>
+                <input type="date" id="dateToFilter" name="date_to" value="<?php echo htmlspecialchars($dateToFilter ?? $rawDateTo, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Filter to date (last update)">
             </div>
             <div class="status-report-filter-bar__field status-report-filter-bar__field--grow">
                 <label for="statusReportSearch">Search</label>
@@ -247,13 +266,18 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 min-width: 240px;
             }
 
+            .status-report-filter-bar__field--date {
+                min-width: 150px;
+            }
+
             .status-report-filter-bar__field label {
                 font-size: 14px;
                 font-weight: 500;
             }
 
             .status-report-filter-bar__field select,
-            .status-report-filter-bar__field input[type="text"] {
+            .status-report-filter-bar__field input[type="text"],
+            .status-report-filter-bar__field input[type="date"] {
                 padding: 8px 10px;
                 border-radius: 5px;
                 border: 1px solid rgb(209 213 219 / 1);
