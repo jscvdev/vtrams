@@ -290,6 +290,12 @@ function utilities_signatory_ensure_schema(PDO $pdo): void
     if (!utilities_table_has_column($pdo, 'voucher_signatories', 'office')) {
         $pdo->exec("ALTER TABLE voucher_signatories ADD COLUMN office VARCHAR(255) NOT NULL DEFAULT '' AFTER signatory_key");
     }
+    if (!utilities_table_has_column($pdo, 'voucher_signatories', 'is_default')) {
+        $pdo->exec("ALTER TABLE voucher_signatories ADD COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active");
+    }
+    if (!utilities_table_has_column($pdo, 'voucher_signatories', 'sort_order')) {
+        $pdo->exec("ALTER TABLE voucher_signatories ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER is_default");
+    }
 
     $backfillOffice = utilities_signatory_penro_office();
     if ($backfillOffice === '') {
@@ -309,8 +315,15 @@ function utilities_signatory_ensure_schema(PDO $pdo): void
         && !utilities_table_has_index($pdo, 'voucher_signatories', 'uniq_key_office')) {
         $pdo->exec("ALTER TABLE voucher_signatories DROP INDEX uniq_key");
     }
-    if (!utilities_table_has_index($pdo, 'voucher_signatories', 'uniq_key_office')) {
-        $pdo->exec("ALTER TABLE voucher_signatories ADD UNIQUE KEY uniq_key_office (signatory_key, office)");
+    if (utilities_table_has_index($pdo, 'voucher_signatories', 'uniq_key_office')
+        && !utilities_table_has_index($pdo, 'voucher_signatories', 'uniq_key_office_name')) {
+        $pdo->exec("ALTER TABLE voucher_signatories DROP INDEX uniq_key_office");
+    }
+    if (!utilities_table_has_index($pdo, 'voucher_signatories', 'uniq_key_office_name')) {
+        $pdo->exec("ALTER TABLE voucher_signatories ADD UNIQUE KEY uniq_key_office_name (signatory_key, office, display_name)");
+    }
+    if (!utilities_table_has_index($pdo, 'voucher_signatories', 'idx_office_key_active_sort')) {
+        $pdo->exec("ALTER TABLE voucher_signatories ADD KEY idx_office_key_active_sort (office, signatory_key, is_active, sort_order, display_name)");
     }
 }
 
@@ -521,74 +534,206 @@ function utilities_ada_signatory_set_default(PDO $pdo, int $id, string $optionTy
     $stmt->execute([':id' => $id]);
 }
 
-function utilities_fetch_dv_signatories(PDO $pdo, string $office): array
+function utilities_dv_signatory_set_default(PDO $pdo, int $id, string $signatoryKey, string $office): void
 {
+    $signatoryKey = trim($signatoryKey);
     $office = utilities_signatory_normalize_office($office);
     $stmt = $pdo->prepare("
-        SELECT signatory_key, display_name, position_line1, position_line2, is_active
+        UPDATE voucher_signatories
+        SET is_default = 0
+        WHERE signatory_key = :k AND office = :office
+    ");
+    $stmt->execute([':k' => $signatoryKey, ':office' => $office]);
+    $stmt = $pdo->prepare('UPDATE voucher_signatories SET is_default = 1 WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+}
+
+/** @return list<array<string, mixed>> */
+function utilities_fetch_dv_signatory_rows(PDO $pdo, string $office, ?string $signatoryKey = null): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $sql = "
+        SELECT id, signatory_key, display_name, position_line1, position_line2, is_active, is_default, sort_order
         FROM voucher_signatories
         WHERE office = :office
-        ORDER BY signatory_key ASC
-    ");
-    $stmt->execute([':office' => $office]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    ";
+    $params = [':office' => $office];
+    if ($signatoryKey !== null && $signatoryKey !== '') {
+        $sql .= ' AND signatory_key = :k';
+        $params[':k'] = $signatoryKey;
+    }
+    $sql .= ' ORDER BY signatory_key ASC, sort_order ASC, display_name ASC, id ASC';
 
-    $out = [];
-    foreach ($rows as $row) {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/** @return array<string, list<array<string, mixed>>> */
+function utilities_fetch_dv_signatories(PDO $pdo, string $office): array
+{
+    $grouped = [];
+    foreach (utilities_fetch_dv_signatory_rows($pdo, $office) as $row) {
         $key = (string) ($row['signatory_key'] ?? '');
         if ($key === '') {
             continue;
         }
-        $out[$key] = $row;
+        $grouped[$key][] = $row;
     }
 
-    return $out;
+    return $grouped;
+}
+
+/** @return array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool} */
+function utilities_format_dv_signatory_option(array $row): array
+{
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'key' => (string) ($row['signatory_key'] ?? ''),
+        'name' => trim((string) ($row['display_name'] ?? '')),
+        'pos1' => (string) ($row['position_line1'] ?? ''),
+        'pos2' => (string) ($row['position_line2'] ?? ''),
+        'isDefault' => (int) ($row['is_default'] ?? 0) === 1,
+    ];
+}
+
+/** @return list<array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}> */
+function utilities_fetch_dv_signatory_options_for_office(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $stmt = $pdo->prepare("
+        SELECT id, signatory_key, display_name, position_line1, position_line2, is_default, sort_order
+        FROM voucher_signatories
+        WHERE is_active = 1
+          AND office = :office
+        ORDER BY signatory_key ASC, sort_order ASC, display_name ASC, id ASC
+    ");
+    $stmt->execute([':office' => $office]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $options = [];
+    foreach ($rows as $row) {
+        $option = utilities_format_dv_signatory_option($row);
+        if ($option['key'] !== '' && $option['name'] !== '') {
+            $options[] = $option;
+        }
+    }
+
+    return $options;
+}
+
+/**
+ * Active DV signatory options for an office, merging PENRO/legacy defaults per signatory key.
+ *
+ * @return list<array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}>
+ */
+function utilities_fetch_dv_signatory_options(PDO $pdo, string $office): array
+{
+    $office = utilities_signatory_normalize_office($office);
+    $candidates = utilities_signatory_fallback_office_candidates($pdo, $office);
+    $resolvedKeys = [];
+    $merged = [];
+
+    foreach ($candidates as $candidateOffice) {
+        $byKey = [];
+        foreach (utilities_fetch_dv_signatory_options_for_office($pdo, $candidateOffice) as $option) {
+            $byKey[$option['key']][] = $option;
+        }
+        foreach ($byKey as $key => $options) {
+            if ($key === '' || isset($resolvedKeys[$key])) {
+                continue;
+            }
+            foreach ($options as $option) {
+                $merged[] = $option;
+            }
+            $resolvedKeys[$key] = true;
+        }
+    }
+
+    return $merged;
+}
+
+/**
+ * @return array{
+ *   options: list<array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}>,
+ *   optionsByKey: array<string, list<array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}>>,
+ *   optionsById: array<int, array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}>
+ * }
+ */
+function utilities_fetch_dv_signatory_options_indexed(PDO $pdo, string $office): array
+{
+    $options = utilities_fetch_dv_signatory_options($pdo, $office);
+    $optionsByKey = [];
+    $optionsById = [];
+
+    foreach ($options as $option) {
+        $optionsByKey[$option['key']][] = $option;
+        $optionsById[$option['id']] = $option;
+    }
+
+    return [
+        'options' => $options,
+        'optionsByKey' => $optionsByKey,
+        'optionsById' => $optionsById,
+    ];
+}
+
+/** @param list<string> $roleKeys */
+function utilities_dv_resolve_default_option_id(array $optionsByKey, array $roleKeys, ?string $preferredKey = null): int
+{
+    if ($preferredKey !== null && $preferredKey !== '') {
+        foreach ($optionsByKey[$preferredKey] ?? [] as $option) {
+            if (!empty($option['isDefault'])) {
+                return (int) ($option['id'] ?? 0);
+            }
+        }
+        if (!empty($optionsByKey[$preferredKey][0]['id'])) {
+            return (int) $optionsByKey[$preferredKey][0]['id'];
+        }
+    }
+
+    foreach ($roleKeys as $key) {
+        foreach ($optionsByKey[$key] ?? [] as $option) {
+            if (!empty($option['isDefault'])) {
+                return (int) ($option['id'] ?? 0);
+            }
+        }
+    }
+
+    foreach ($roleKeys as $key) {
+        if (!empty($optionsByKey[$key][0]['id'])) {
+            return (int) $optionsByKey[$key][0]['id'];
+        }
+    }
+
+    return 0;
 }
 
 function utilities_fetch_dv_signatory_map_for_office(PDO $pdo, string $office): array
 {
-    $office = utilities_signatory_normalize_office($office);
-    if ($office === '') {
-        $stmt = $pdo->query("
-            SELECT signatory_key, display_name, position_line1, position_line2
-            FROM voucher_signatories
-            WHERE is_active = 1
-              AND TRIM(COALESCE(office, '')) = ''
-            ORDER BY signatory_key ASC
-        ");
-        $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
-    } else {
-        $stmt = $pdo->prepare("
-            SELECT signatory_key, display_name, position_line1, position_line2
-            FROM voucher_signatories
-            WHERE is_active = 1
-              AND LOWER(TRIM(office)) = LOWER(:office)
-            ORDER BY signatory_key ASC
-        ");
-        $stmt->execute([':office' => $office]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    }
-
-    $out = [];
-    foreach ($rows as $row) {
-        $key = (string) ($row['signatory_key'] ?? '');
-        $name = trim((string) ($row['display_name'] ?? ''));
-        if ($key === '' || $name === '') {
+    $map = [];
+    foreach (utilities_fetch_dv_signatory_options_for_office($pdo, $office) as $option) {
+        $key = $option['key'];
+        if ($key === '') {
             continue;
         }
-        $out[$key] = [
-            'key' => $key,
-            'name' => $name,
-            'pos1' => (string) ($row['position_line1'] ?? ''),
-            'pos2' => (string) ($row['position_line2'] ?? ''),
-        ];
+        if (!isset($map[$key])) {
+            $map[$key] = $option;
+            continue;
+        }
+        if (!empty($option['isDefault'])) {
+            $map[$key] = $option;
+        }
     }
 
-    return $out;
+    return $map;
 }
 
 /**
  * Active DV signatories for an office, merging PENRO/legacy defaults per signatory key.
+ *
+ * @return array<string, array{id: int, key: string, name: string, pos1: string, pos2: string, isDefault: bool}>
  */
 function utilities_fetch_dv_signatory_map(PDO $pdo, string $office): array
 {
@@ -622,11 +767,11 @@ function utilities_dv_signatory_required_keys(): array
 /**
  * True when at least one cert option and accounting + approved signatories exist.
  */
-function utilities_dv_signatory_map_is_printable(array $map): bool
+function utilities_dv_signatory_map_is_printable(array $optionsByKey): bool
 {
-    $hasCert = !empty($map['dv_certified_msd']) || !empty($map['dv_certified_tsd']);
-    $hasAccounting = !empty($map['dv_accounting_certified']);
-    $hasApproved = !empty($map['dv_approved_for_payment']);
+    $hasCert = !empty($optionsByKey['dv_certified_msd']) || !empty($optionsByKey['dv_certified_tsd']);
+    $hasAccounting = !empty($optionsByKey['dv_accounting_certified']);
+    $hasApproved = !empty($optionsByKey['dv_approved_for_payment']);
 
     return $hasCert && $hasAccounting && $hasApproved;
 }

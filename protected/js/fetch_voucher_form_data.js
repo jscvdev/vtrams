@@ -255,24 +255,156 @@ function applyDvSignatories(signatories) {
     storeDvSignatories(signatories);
 }
 
-function getSignatoryByKey(key) {
+function getSignatoryById(id) {
     const cfg = window.DV_SIGNATORY || {};
-    const lookupKey = String(key || '').trim();
-    if (!lookupKey) return null;
+    const lookupId = parseInt(String(id || ''), 10);
+    if (!lookupId) return null;
 
-    const byKey = cfg.optionsByKey;
-    if (byKey && typeof byKey === 'object' && !Array.isArray(byKey) && byKey[lookupKey]) {
-        return byKey[lookupKey];
+    const byId = cfg.optionsById;
+    if (byId && typeof byId === 'object' && !Array.isArray(byId) && byId[lookupId]) {
+        return byId[lookupId];
     }
 
     const options = Array.isArray(cfg.options) ? cfg.options : [];
     for (let i = 0; i < options.length; i++) {
         const opt = options[i];
-        if (opt && String(opt.key || '') === lookupKey) {
+        if (opt && parseInt(String(opt.id || ''), 10) === lookupId) {
             return opt;
         }
     }
     return null;
+}
+
+function getSignatoriesForRole(roleKeys) {
+    const cfg = window.DV_SIGNATORY || {};
+    const keys = Array.isArray(roleKeys) ? roleKeys : [];
+    const options = Array.isArray(cfg.options) ? cfg.options : [];
+    const results = [];
+    const seen = {};
+
+    keys.forEach(function(key) {
+        const bucket = cfg.optionsByKey && cfg.optionsByKey[key];
+        if (Array.isArray(bucket)) {
+            bucket.forEach(function(opt) {
+                const id = String(opt && opt.id || '');
+                if (!id || seen[id]) return;
+                seen[id] = true;
+                results.push(opt);
+            });
+            return;
+        }
+        if (bucket && typeof bucket === 'object') {
+            const id = String(bucket.id || '');
+            if (id && !seen[id]) {
+                seen[id] = true;
+                results.push(bucket);
+            }
+            return;
+        }
+        options.forEach(function(opt) {
+            if (!opt || String(opt.key || '') !== key) return;
+            const id = String(opt.id || '');
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            results.push(opt);
+        });
+    });
+
+    return results;
+}
+
+function getSignatoryByKey(key) {
+    const lookupKey = String(key || '').trim();
+    if (!lookupKey) return null;
+
+    const signatories = getSignatoriesForRole([lookupKey]);
+    if (!signatories.length) return null;
+
+    const defaulted = signatories.find(function(opt) {
+        return opt && opt.isDefault;
+    });
+    return defaulted || signatories[0];
+}
+
+function applyDvSignatoryPayload(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    const cfg = window.DV_SIGNATORY || {};
+    cfg.options = Array.isArray(payload.options) ? payload.options : [];
+    cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
+        ? payload.optionsByKey
+        : {};
+    cfg.optionsById = payload.optionsById && typeof payload.optionsById === 'object' && !Array.isArray(payload.optionsById)
+        ? payload.optionsById
+        : {};
+    if (payload.defaultCertKey) cfg.defaultCertKey = payload.defaultCertKey;
+    if (payload.defaultIds) cfg.defaultIds = payload.defaultIds;
+    if (payload.office) cfg.office = payload.office;
+    window.DV_SIGNATORY = cfg;
+}
+
+function populateDvSignatorySelect(selectEl, roleKeys, labels, defaultId) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const signatories = getSignatoriesForRole(roleKeys);
+    let hasDefault = false;
+    const resolvedDefaultId = parseInt(String(defaultId || ''), 10);
+
+    signatories.forEach(function(optData) {
+        if (!optData || !optData.id) return;
+        const option = document.createElement('option');
+        option.value = String(optData.id);
+        option.dataset.name = optData.name || '';
+        option.dataset.pos1 = optData.pos1 || '';
+        option.dataset.pos2 = optData.pos2 || '';
+        const label = (labels && labels[optData.key]) ? labels[optData.key] : (optData.key || '');
+        option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
+        if (resolvedDefaultId && parseInt(String(optData.id), 10) === resolvedDefaultId) {
+            option.selected = true;
+            hasDefault = true;
+        }
+        selectEl.appendChild(option);
+    });
+
+    if (!hasDefault && selectEl.options.length > 0) {
+        selectEl.selectedIndex = 0;
+    }
+}
+
+function hasDvPrintableSignatoryOptions() {
+    const cfg = window.DV_SIGNATORY || {};
+    const roles = cfg.roles || {};
+    const hasRoleOption = function(roleKeys) {
+        return getSignatoriesForRole(roleKeys).length > 0;
+    };
+    return hasRoleOption(roles.cert) && hasRoleOption(roles.accounting) && hasRoleOption(roles.approved);
+}
+
+function readDvSignatoryFromSelect(selectEl) {
+    if (!selectEl) return { name: '', pos1: '', pos2: '' };
+    const opt = selectEl.selectedOptions && selectEl.selectedOptions[0] ? selectEl.selectedOptions[0] : null;
+    if (!opt) return { name: '', pos1: '', pos2: '' };
+
+    const fromId = getSignatoryById(opt.value);
+    if (fromId) {
+        return { name: fromId.name || '', pos1: fromId.pos1 || '', pos2: fromId.pos2 || '' };
+    }
+
+    return {
+        name: opt.dataset.name || '',
+        pos1: opt.dataset.pos1 || '',
+        pos2: opt.dataset.pos2 || '',
+    };
+}
+
+function populateAllDvSignatorySelects(selectors) {
+    const cfg = window.DV_SIGNATORY || {};
+    const roles = cfg.roles || {};
+    const labels = cfg.labels || {};
+    const defaultIds = cfg.defaultIds || {};
+
+    populateDvSignatorySelect(selectors.cert, roles.cert, labels, defaultIds.cert || 0);
+    populateDvSignatorySelect(selectors.accounting, roles.accounting, labels, defaultIds.accounting || 0);
+    populateDvSignatorySelect(selectors.approved, roles.approved, labels, defaultIds.approved || 0);
 }
 
 function storeDvSignatories(signatories) {
@@ -387,6 +519,14 @@ window.applyDvSignatories = applyDvSignatories;
 window.buildSignatorySelection = buildSignatorySelection;
 window.applyStoredDvSignatories = applyStoredDvSignatories;
 window.storeDvSignatories = storeDvSignatories;
+window.getSignatoryById = getSignatoryById;
+window.getSignatoryByKey = getSignatoryByKey;
+window.getSignatoriesForRole = getSignatoriesForRole;
+window.applyDvSignatoryPayload = applyDvSignatoryPayload;
+window.populateDvSignatorySelect = populateDvSignatorySelect;
+window.hasDvPrintableSignatoryOptions = hasDvPrintableSignatoryOptions;
+window.readDvSignatoryFromSelect = readDvSignatoryFromSelect;
+window.populateAllDvSignatorySelects = populateAllDvSignatorySelects;
 
 window.addEventListener('beforeprint', () => {
     if (document.body.classList.contains('forward-slip-printing')) {

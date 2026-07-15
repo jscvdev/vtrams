@@ -2117,19 +2117,9 @@ function session_contains_phrase($phrase)
         }
 
         function applySignatoryPayload(payload) {
-            if (!payload || typeof payload !== 'object') return;
-            const cfg = getSigCfg();
-            cfg.options = Array.isArray(payload.options) ? payload.options : [];
-            cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
-                ? payload.optionsByKey
-                : {};
-            if (payload.defaultCertKey) {
-                cfg.defaultCertKey = payload.defaultCertKey;
+            if (typeof applyDvSignatoryPayload === 'function') {
+                applyDvSignatoryPayload(payload);
             }
-            if (payload.office) {
-                cfg.office = payload.office;
-            }
-            window.DV_SIGNATORY = cfg;
         }
 
         function populateOfficeSelect(selectedOffice) {
@@ -2156,12 +2146,13 @@ function session_contains_phrase($phrase)
         }
 
         function populateAllSignatorySelects() {
-            const cfg = getSigCfg();
-            const roles = cfg.roles || {};
-            const labels = cfg.labels || {};
-            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
-            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
-            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+            if (typeof populateAllDvSignatorySelects === 'function') {
+                populateAllDvSignatorySelects({
+                    cert: certSelect,
+                    accounting: accountingSelect,
+                    approved: approvedSelect,
+                });
+            }
         }
 
         function fetchSignatoriesForOffice(office) {
@@ -2198,48 +2189,9 @@ function session_contains_phrase($phrase)
         }
 
         function hasPrintableSignatoryOptions() {
-            const cfg = getSigCfg();
-            const roles = cfg.roles || {};
-            const hasRoleOption = function(roleKeys) {
-                const keys = Array.isArray(roleKeys) ? roleKeys : [];
-                return keys.some(function(key) {
-                    return typeof getSignatoryByKey === 'function' && !!getSignatoryByKey(key);
-                });
-            };
-
-            return hasRoleOption(roles.cert) &&
-                hasRoleOption(roles.accounting) &&
-                hasRoleOption(roles.approved);
-        }
-
-        function populateSelect(selectEl, roleKeys, labels, defaultKey) {
-            if (!selectEl) return;
-            selectEl.innerHTML = '';
-            const keys = Array.isArray(roleKeys) ? roleKeys : [];
-            let hasDefault = false;
-
-            keys.forEach(function(key) {
-                const optData = (typeof getSignatoryByKey === 'function')
-                    ? getSignatoryByKey(key)
-                    : null;
-                if (!optData) return;
-                const option = document.createElement('option');
-                option.value = key;
-                option.dataset.name = optData.name || '';
-                option.dataset.pos1 = optData.pos1 || '';
-                option.dataset.pos2 = optData.pos2 || '';
-                const label = (labels && labels[key]) ? labels[key] : key;
-                option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
-                if (defaultKey && key === defaultKey) {
-                    option.selected = true;
-                    hasDefault = true;
-                }
-                selectEl.appendChild(option);
-            });
-
-            if (!hasDefault && selectEl.options.length > 0) {
-                selectEl.selectedIndex = 0;
-            }
+            return typeof hasDvPrintableSignatoryOptions === 'function'
+                ? hasDvPrintableSignatoryOptions()
+                : false;
         }
 
         function closeSignatoryModal() {
@@ -2317,32 +2269,9 @@ function session_contains_phrase($phrase)
         }
 
         function readSignatoryFromSelect(selectEl) {
-            if (!selectEl) {
-                return { name: '', pos1: '', pos2: '' };
-            }
-            const opt = selectEl.selectedOptions && selectEl.selectedOptions[0]
-                ? selectEl.selectedOptions[0]
-                : null;
-            if (!opt) {
-                return { name: '', pos1: '', pos2: '' };
-            }
-
-            const fromKey = (typeof getSignatoryByKey === 'function')
-                ? getSignatoryByKey(opt.value)
-                : null;
-            if (fromKey) {
-                return {
-                    name: fromKey.name || '',
-                    pos1: fromKey.pos1 || '',
-                    pos2: fromKey.pos2 || '',
-                };
-            }
-
-            return {
-                name: opt.dataset.name || '',
-                pos1: opt.dataset.pos1 || '',
-                pos2: opt.dataset.pos2 || '',
-            };
+            return typeof readDvSignatoryFromSelect === 'function'
+                ? readDvSignatoryFromSelect(selectEl)
+                : { name: '', pos1: '', pos2: '' };
         }
 
         function proceedToPrint() {

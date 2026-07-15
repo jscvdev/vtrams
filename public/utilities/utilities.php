@@ -138,25 +138,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $flash = ['type' => 'success', 'msg' => 'Deleted successfully.'];
                         }
                     }
-                } elseif ($scope === 'dv' && $action === 'dv_upsert') {
+                } elseif ($scope === 'dv' && $action === 'add') {
                     $name = normalize_opt_value((string)($_POST['display_name'] ?? ''));
                     $pos1 = normalize_opt_value((string)($_POST['position_line1'] ?? ''));
                     $pos2 = normalize_opt_value((string)($_POST['position_line2'] ?? ''));
-                    $active = isset($_POST['is_active']) ? 1 : 0;
+                    $isDefault = isset($_POST['is_default']) ? 1 : 0;
                     if ($name === '') {
-                        $flash = ['type' => 'error', 'msg' => 'Name is required.'];
+                        $flash = ['type' => 'error', 'msg' => 'Printed name is required.'];
                     } else {
+                        $pdo->beginTransaction();
                         $stmt = $pdo->prepare("
-                            INSERT INTO voucher_signatories (signatory_key, office, display_name, position_line1, position_line2, is_active)
-                            VALUES (:k, :office, :n, :p1, :p2, :a)
-                            ON DUPLICATE KEY UPDATE
-                                display_name = VALUES(display_name),
-                                position_line1 = VALUES(position_line1),
-                                position_line2 = VALUES(position_line2),
-                                is_active = VALUES(is_active)
+                            INSERT INTO voucher_signatories (signatory_key, office, display_name, position_line1, position_line2, is_active, is_default, sort_order)
+                            VALUES (:k, :office, :n, :p1, :p2, 1, :d, 0)
                         ");
-                        $stmt->execute([':k' => $type, ':office' => $formOffice, ':n' => $name, ':p1' => $pos1, ':p2' => $pos2, ':a' => $active]);
-                        $flash = ['type' => 'success', 'msg' => 'DV signatory saved.'];
+                        $stmt->execute([':k' => $type, ':office' => $formOffice, ':n' => $name, ':p1' => $pos1, ':p2' => $pos2, ':d' => $isDefault]);
+                        $newId = (int) $pdo->lastInsertId();
+                        $sort = sort_order_next_position($pdo, 'voucher_signatories', [
+                            'signatory_key' => $type,
+                            'office' => $formOffice,
+                        ]);
+                        sort_order_place_at_position($pdo, 'voucher_signatories', $newId, $sort, [
+                            'signatory_key' => $type,
+                            'office' => $formOffice,
+                        ]);
+                        if ($isDefault === 1) {
+                            utilities_dv_signatory_set_default($pdo, $newId, $type, $formOffice);
+                        }
+                        $pdo->commit();
+                        $flash = ['type' => 'success', 'msg' => 'DV signatory added.'];
+                    }
+                } elseif ($scope === 'dv' && $action === 'update') {
+                    $id = (int)($_POST['id'] ?? 0);
+                    $name = normalize_opt_value((string)($_POST['display_name'] ?? ''));
+                    $pos1 = normalize_opt_value((string)($_POST['position_line1'] ?? ''));
+                    $pos2 = normalize_opt_value((string)($_POST['position_line2'] ?? ''));
+                    $sort = (int)($_POST['sort_order'] ?? 0);
+                    $active = isset($_POST['is_active']) ? 1 : 0;
+                    $isDefault = isset($_POST['is_default']) ? 1 : 0;
+                    if ($id <= 0 || $name === '') {
+                        $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                    } elseif ($active === 0 && $isDefault === 1) {
+                        $flash = ['type' => 'error', 'msg' => 'The default signatory must stay active.'];
+                    } else {
+                        $pdo->beginTransaction();
+                        sort_order_handle_update($pdo, 'voucher_signatories', $id, $sort, [
+                            'signatory_key' => $type,
+                            'office' => $formOffice,
+                        ]);
+                        $stmt = $pdo->prepare("
+                            UPDATE voucher_signatories
+                            SET display_name = :n, position_line1 = :p1, position_line2 = :p2,
+                                sort_order = :s, is_active = :a, is_default = :d
+                            WHERE id = :id AND signatory_key = :k AND office = :office
+                        ");
+                        $stmt->execute([
+                            ':n' => $name, ':p1' => $pos1, ':p2' => $pos2,
+                            ':s' => $sort, ':a' => $active, ':d' => $isDefault,
+                            ':id' => $id, ':k' => $type, ':office' => $formOffice,
+                        ]);
+                        if ($isDefault === 1) {
+                            utilities_dv_signatory_set_default($pdo, $id, $type, $formOffice);
+                        }
+                        $pdo->commit();
+                        $flash = ['type' => 'success', 'msg' => 'DV signatory updated.'];
+                    }
+                } elseif ($scope === 'dv' && $action === 'delete') {
+                    $id = (int)($_POST['id'] ?? 0);
+                    if ($id <= 0) {
+                        $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                    } else {
+                        $check = $pdo->prepare('SELECT is_default FROM voucher_signatories WHERE id = :id AND signatory_key = :k AND office = :office LIMIT 1');
+                        $check->execute([':id' => $id, ':k' => $type, ':office' => $formOffice]);
+                        $row = $check->fetch(PDO::FETCH_ASSOC);
+                        if (!$row) {
+                            $flash = ['type' => 'error', 'msg' => 'Signatory not found.'];
+                        } elseif ((int)($row['is_default'] ?? 0) === 1) {
+                            $flash = ['type' => 'error', 'msg' => 'Cannot delete the default signatory. Set another signatory as default first.'];
+                        } else {
+                            $stmt = $pdo->prepare("DELETE FROM voucher_signatories WHERE id = :id AND signatory_key = :k AND office = :office");
+                            $stmt->execute([':id' => $id, ':k' => $type, ':office' => $formOffice]);
+                            $flash = ['type' => 'success', 'msg' => 'DV signatory deleted.'];
+                        }
                     }
                 } else {
                     $flash = ['type' => 'error', 'msg' => 'Unknown action.'];
@@ -208,7 +270,7 @@ $ada_next_sort = [
     ]),
 ];
 
-// DV signatories (single row per key)
+// DV signatories (multiple active entries per role)
 $dv_keys = [
     'dv_certified_msd' => 'DV A. Certified (MSD)',
     'dv_certified_tsd' => 'DV A. Certified (TSD)',
@@ -216,6 +278,13 @@ $dv_keys = [
     'dv_approved_for_payment' => 'DV D. Approved for Payment',
 ];
 $dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
+$dv_next_sort = [];
+foreach (array_keys($dv_keys) as $dvKey) {
+    $dv_next_sort[$dvKey] = sort_order_next_position($pdo, 'voucher_signatories', [
+        'signatory_key' => $dvKey,
+        'office' => $selected_office,
+    ]);
+}
 ?>
 
 <style>
@@ -702,8 +771,17 @@ $dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
         font-size: 0.6875rem;
     }
 
-    .util-ada-update-form {
-        display: none;
+    .util-dv-add {
+        flex-wrap: wrap;
+    }
+
+    .util-dv-card .util-ada-table th,
+    .util-dv-card .util-ada-table td {
+        font-size: 0.75rem;
+    }
+
+    .util-dv-card .util-ada-value {
+        min-width: 120px;
     }
 
     @media (max-width: 1050px) {
@@ -888,40 +966,124 @@ $dv_signatories = utilities_fetch_dv_signatories($pdo, $selected_office);
 
             <div class="util-dv-section">
                 <p class="util-section-title">Disbursement Voucher (DV) printed template</p>
-                <p class="util-dv-desc">These values populate the printed DV template for the selected office. One active record per role.</p>
+                <p class="util-dv-desc">Configure multiple active signatories per DV section (A, C, and D). Users choose from these options when printing. Mark one signatory per section as default.</p>
                 <div class="util-dv-grid">
                     <?php foreach ($dv_keys as $k => $label):
-                        $row = $dv_signatories[$k] ?? ['display_name' => '', 'position_line1' => '', 'position_line2' => '', 'is_active' => 1];
+                        $rows = $dv_signatories[$k] ?? [];
+                        $nextDvSort = (int) ($dv_next_sort[$k] ?? 0);
                     ?>
                         <div class="util-dv-card util-card">
                             <div class="util-card__head">
                                 <h3><?= htmlspecialchars($label) ?></h3>
                             </div>
                             <div class="util-card__body">
-                                <form method="post">
+                                <form method="post" class="util-add util-ada-add util-dv-add">
                                     <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                                     <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="scope" value="dv">
-                                    <input type="hidden" name="action" value="dv_upsert">
+                                    <input type="hidden" name="action" value="add">
                                     <input type="hidden" name="option_type" value="<?= htmlspecialchars($k) ?>">
                                     <div class="field">
                                         <label>Printed name</label>
-                                        <input class="form-custom-input" type="text" name="display_name" value="<?= htmlspecialchars($row['display_name'] ?? '') ?>" placeholder="e.g., JUAN D. DELA CRUZ" required>
+                                        <input class="form-custom-input" type="text" name="display_name" placeholder="e.g., JUAN D. DELA CRUZ" required>
                                     </div>
                                     <div class="field">
                                         <label>Position line 1</label>
-                                        <input class="form-custom-input" type="text" name="position_line1" value="<?= htmlspecialchars($row['position_line1'] ?? '') ?>" placeholder="e.g., Accountant III">
+                                        <input class="form-custom-input" type="text" name="position_line1" placeholder="e.g., Accountant III">
                                     </div>
                                     <div class="field">
                                         <label>Position line 2</label>
-                                        <input class="form-custom-input" type="text" name="position_line2" value="<?= htmlspecialchars($row['position_line2'] ?? '') ?>" placeholder="e.g., Head Accounting Unit/Authorized Representative">
+                                        <input class="form-custom-input" type="text" name="position_line2" placeholder="e.g., Head Accounting Unit">
+                                    </div>
+                                    <div class="field util-ada-sort-field">
+                                        <label>Sort</label>
+                                        <input class="form-custom-input" type="number" value="<?= $nextDvSort ?>" readonly title="Assigned automatically on add">
                                     </div>
                                     <label class="chk">
-                                        <input type="checkbox" name="is_active" <?= ((int)($row['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
-                                        <span>Active</span>
+                                        <input type="checkbox" name="is_default">
+                                        <span>Default</span>
                                     </label>
-                                    <button class="btn success" type="submit">Save</button>
+                                    <div class="field utl-add-btn-field">
+                                        <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
+                                        <button class="btn primary utl-btn-add" type="submit" title="Add signatory" aria-label="Add signatory">+</button>
+                                    </div>
                                 </form>
+
+                                <table class="util-table util-ada-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Position 1</th>
+                                            <th>Position 2</th>
+                                            <th style="width:56px;">Sort</th>
+                                            <th style="width:58px;">Active</th>
+                                            <th style="width:62px;">Default</th>
+                                            <th style="width:96px; text-align:right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (!$rows): ?>
+                                            <tr>
+                                                <td colspan="7" class="util-empty">No signatories yet. Add one above.</td>
+                                            </tr>
+                                        <?php endif; ?>
+                                        <?php foreach ($rows as $r):
+                                            $rowId = (int) $r['id'];
+                                            $updateFormId = 'dv-opt-update-' . preg_replace('/[^a-z0-9_-]/i', '-', $k) . '-' . $rowId;
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <form method="post" id="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="util-ada-update-form">
+                                                        <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                        <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
+                                                        <input type="hidden" name="scope" value="dv">
+                                                        <input type="hidden" name="action" value="update">
+                                                        <input type="hidden" name="option_type" value="<?= htmlspecialchars($k) ?>">
+                                                        <input type="hidden" name="id" value="<?= $rowId ?>">
+                                                    </form>
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-value" type="text" name="display_name" value="<?= htmlspecialchars($r['display_name'] ?? '') ?>" required>
+                                                </td>
+                                                <td>
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-value" type="text" name="position_line1" value="<?= htmlspecialchars($r['position_line1'] ?? '') ?>">
+                                                </td>
+                                                <td>
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-value" type="text" name="position_line2" value="<?= htmlspecialchars($r['position_line2'] ?? '') ?>">
+                                                </td>
+                                                <td>
+                                                    <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-custom-input util-ada-sort" type="number" name="sort_order" value="<?= (int)($r['sort_order'] ?? 0) ?>">
+                                                </td>
+                                                <td>
+                                                    <label class="chk util-ada-chk">
+                                                        <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" type="checkbox" name="is_active" <?= ((int)($r['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                                        <span>Active</span>
+                                                    </label>
+                                                </td>
+                                                <td>
+                                                    <label class="chk util-ada-chk">
+                                                        <input form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" type="checkbox" name="is_default" <?= ((int)($r['is_default'] ?? 0) === 1) ? 'checked' : '' ?>>
+                                                        <span>Default</span>
+                                                    </label>
+                                                </td>
+                                                <td>
+                                                    <div class="util-row-actions">
+                                                        <button form="<?= htmlspecialchars($updateFormId, ENT_QUOTES, 'UTF-8') ?>" class="btn success" type="submit">Save</button>
+                                                        <?php if ((int)($r['is_default'] ?? 0) !== 1): ?>
+                                                        <form method="post" onsubmit="return confirm('Delete this signatory?');">
+                                                            <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+                                                            <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
+                                                            <input type="hidden" name="scope" value="dv">
+                                                            <input type="hidden" name="action" value="delete">
+                                                            <input type="hidden" name="option_type" value="<?= htmlspecialchars($k) ?>">
+                                                            <input type="hidden" name="id" value="<?= $rowId ?>">
+                                                            <button class="btn danger" type="submit">Delete</button>
+                                                        </form>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     <?php endforeach; ?>

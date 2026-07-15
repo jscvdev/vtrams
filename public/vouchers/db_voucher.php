@@ -15,7 +15,7 @@ function dv_fetch_all_signatories(PDO $pdo, ?string $office = null): array
 {
     $resolvedOffice = utilities_signatory_resolve_office($pdo, $office);
 
-    return utilities_fetch_dv_signatory_map($pdo, $resolvedOffice);
+    return utilities_fetch_dv_signatory_options_indexed($pdo, $resolvedOffice);
 }
 
 $dv_signatory_labels = [
@@ -32,9 +32,19 @@ $dv_signatory_roles = [
 $dv_default_cert_key = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
     ? 'dv_certified_tsd'
     : 'dv_certified_msd';
-$dv_signatory_options = (isset($pdo) && $pdo instanceof PDO)
+$dv_signatory_indexed = (isset($pdo) && $pdo instanceof PDO)
     ? dv_fetch_all_signatories($pdo, utilities_signatory_default_office())
-    : [];
+    : ['options' => [], 'optionsByKey' => [], 'optionsById' => []];
+$dv_signatory_options_by_key = $dv_signatory_indexed['optionsByKey'] ?? [];
+if ($dv_default_cert_key === 'dv_certified_tsd'
+    && empty($dv_signatory_options_by_key['dv_certified_tsd'])
+    && !empty($dv_signatory_options_by_key['dv_certified_msd'])) {
+    $dv_default_cert_key = 'dv_certified_msd';
+} elseif ($dv_default_cert_key === 'dv_certified_msd'
+    && empty($dv_signatory_options_by_key['dv_certified_msd'])
+    && !empty($dv_signatory_options_by_key['dv_certified_tsd'])) {
+    $dv_default_cert_key = 'dv_certified_tsd';
+}
 $dv_can_select_signatory_office = utilities_signatory_can_select_office();
 $dv_signatory_offices = ($dv_can_select_signatory_office && isset($pdo) && $pdo instanceof PDO)
     ? utilities_signatory_fetch_offices($pdo)
@@ -92,11 +102,17 @@ $dv_can_unlock_payee = voucher_user_can_unlock_payee($dv_logged_user_designation
             'accountingMinRows' => 8,
         ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
         window.DV_SIGNATORY = <?= json_encode([
-            'options' => array_values($dv_signatory_options),
-            'optionsByKey' => $dv_signatory_options,
+            'options' => $dv_signatory_indexed['options'] ?? [],
+            'optionsByKey' => $dv_signatory_indexed['optionsByKey'] ?? [],
+            'optionsById' => $dv_signatory_indexed['optionsById'] ?? [],
             'labels' => $dv_signatory_labels,
             'roles' => $dv_signatory_roles,
             'defaultCertKey' => $dv_default_cert_key,
+            'defaultIds' => [
+                'cert' => utilities_dv_resolve_default_option_id($dv_signatory_options_by_key, ['dv_certified_msd', 'dv_certified_tsd'], $dv_default_cert_key),
+                'accounting' => utilities_dv_resolve_default_option_id($dv_signatory_options_by_key, ['dv_accounting_certified']),
+                'approved' => utilities_dv_resolve_default_option_id($dv_signatory_options_by_key, ['dv_approved_for_payment']),
+            ],
             'office' => utilities_signatory_default_office(),
             'canSelectOffice' => $dv_can_select_signatory_office,
             'offices' => $dv_signatory_offices,

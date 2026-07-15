@@ -7,18 +7,27 @@ include('../../protected/core/components/notifications/err_handler_custom_alert.
 require_once __DIR__ . '/../../protected/core/components/notifications/custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
 require_once __DIR__ . '/checklist_config.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
 // Preload DV signatories from database for the printable disbursement voucher.
 if (!function_exists('voucher_get_signatory')) {
     function voucher_get_signatory(PDO $pdo, string $key): array
     {
-        $stmt = $pdo->prepare("
-            SELECT display_name, position_line1, position_line2
-            FROM voucher_signatories
-            WHERE signatory_key = :k AND is_active = 1
-            LIMIT 1
-        ");
-        $stmt->execute([':k' => $key]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $office = utilities_signatory_default_office();
+        $rows = utilities_fetch_dv_signatory_rows($pdo, $office, $key);
+        $row = null;
+        foreach ($rows as $candidate) {
+            if ((int)($candidate['is_active'] ?? 0) !== 1) {
+                continue;
+            }
+            if ((int)($candidate['is_default'] ?? 0) === 1) {
+                $row = $candidate;
+                break;
+            }
+            if ($row === null) {
+                $row = $candidate;
+            }
+        }
+        $row = $row ?? [];
         return [
             'name' => (string)($row['display_name'] ?? ''),
             'pos1' => (string)($row['position_line1'] ?? ''),
@@ -1115,15 +1124,9 @@ function session_contains_phrase($phrase)
         }
 
         function applySignatoryPayload(payload) {
-            if (!payload || typeof payload !== 'object') return;
-            const cfg = getSigCfg();
-            cfg.options = Array.isArray(payload.options) ? payload.options : [];
-            cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
-                ? payload.optionsByKey
-                : {};
-            if (payload.defaultCertKey) cfg.defaultCertKey = payload.defaultCertKey;
-            if (payload.office) cfg.office = payload.office;
-            window.DV_SIGNATORY = cfg;
+            if (typeof applyDvSignatoryPayload === 'function') {
+                applyDvSignatoryPayload(payload);
+            }
         }
 
         function populateOfficeSelect(selectedOffice) {
@@ -1143,37 +1146,14 @@ function session_contains_phrase($phrase)
             if (!officeSelect.value && offices.length) officeSelect.selectedIndex = 0;
         }
 
-        function populateSelect(selectEl, roleKeys, labels, defaultKey) {
-            if (!selectEl) return;
-            selectEl.innerHTML = '';
-            const keys = Array.isArray(roleKeys) ? roleKeys : [];
-            let hasDefault = false;
-            keys.forEach(function(key) {
-                const optData = (typeof getSignatoryByKey === 'function') ? getSignatoryByKey(key) : null;
-                if (!optData) return;
-                const option = document.createElement('option');
-                option.value = key;
-                option.dataset.name = optData.name || '';
-                option.dataset.pos1 = optData.pos1 || '';
-                option.dataset.pos2 = optData.pos2 || '';
-                const label = (labels && labels[key]) ? labels[key] : key;
-                option.textContent = optData.name ? (optData.name + ' — ' + label) : label;
-                if (defaultKey && key === defaultKey) {
-                    option.selected = true;
-                    hasDefault = true;
-                }
-                selectEl.appendChild(option);
-            });
-            if (!hasDefault && selectEl.options.length > 0) selectEl.selectedIndex = 0;
-        }
-
         function populateAllSignatorySelects() {
-            const cfg = getSigCfg();
-            const roles = cfg.roles || {};
-            const labels = cfg.labels || {};
-            populateSelect(certSelect, roles.cert, labels, cfg.defaultCertKey || '');
-            populateSelect(accountingSelect, roles.accounting, labels, roles.accounting && roles.accounting[0] ? roles.accounting[0] : '');
-            populateSelect(approvedSelect, roles.approved, labels, roles.approved && roles.approved[0] ? roles.approved[0] : '');
+            if (typeof populateAllDvSignatorySelects === 'function') {
+                populateAllDvSignatorySelects({
+                    cert: certSelect,
+                    accounting: accountingSelect,
+                    approved: approvedSelect,
+                });
+            }
         }
 
         function fetchSignatoriesForOffice(office) {
@@ -1205,13 +1185,9 @@ function session_contains_phrase($phrase)
         }
 
         function hasPrintableSignatoryOptions() {
-            const roles = getSigCfg().roles || {};
-            const hasRoleOption = function(roleKeys) {
-                return (Array.isArray(roleKeys) ? roleKeys : []).some(function(key) {
-                    return typeof getSignatoryByKey === 'function' && !!getSignatoryByKey(key);
-                });
-            };
-            return hasRoleOption(roles.cert) && hasRoleOption(roles.accounting) && hasRoleOption(roles.approved);
+            return typeof hasDvPrintableSignatoryOptions === 'function'
+                ? hasDvPrintableSignatoryOptions()
+                : false;
         }
 
         function closeSignatoryModal() {
@@ -1269,18 +1245,9 @@ function session_contains_phrase($phrase)
         }
 
         function readSignatoryFromSelect(selectEl) {
-            if (!selectEl) return { name: '', pos1: '', pos2: '' };
-            const opt = selectEl.selectedOptions && selectEl.selectedOptions[0] ? selectEl.selectedOptions[0] : null;
-            if (!opt) return { name: '', pos1: '', pos2: '' };
-            const fromKey = (typeof getSignatoryByKey === 'function') ? getSignatoryByKey(opt.value) : null;
-            if (fromKey) {
-                return { name: fromKey.name || '', pos1: fromKey.pos1 || '', pos2: fromKey.pos2 || '' };
-            }
-            return {
-                name: opt.dataset.name || '',
-                pos1: opt.dataset.pos1 || '',
-                pos2: opt.dataset.pos2 || '',
-            };
+            return typeof readDvSignatoryFromSelect === 'function'
+                ? readDvSignatoryFromSelect(selectEl)
+                : { name: '', pos1: '', pos2: '' };
         }
 
         function proceedToPrint() {
