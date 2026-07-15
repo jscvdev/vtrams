@@ -30,32 +30,12 @@ try {
         $office = utilities_signatory_resolve_office($pdo, utilities_signatory_default_office());
     }
 
-    $optionsByKey = utilities_fetch_dv_signatory_options_indexed($pdo, $office);
-    $defaultCertKey = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
-        ? 'dv_certified_tsd'
-        : 'dv_certified_msd';
-    if ($defaultCertKey === 'dv_certified_tsd' && empty($optionsByKey['optionsByKey']['dv_certified_tsd']) && !empty($optionsByKey['optionsByKey']['dv_certified_msd'])) {
-        $defaultCertKey = 'dv_certified_msd';
-    } elseif ($defaultCertKey === 'dv_certified_msd' && empty($optionsByKey['optionsByKey']['dv_certified_msd']) && !empty($optionsByKey['optionsByKey']['dv_certified_tsd'])) {
-        $defaultCertKey = 'dv_certified_tsd';
-    }
+    $payload = utilities_build_dv_signatory_client_payload($pdo, $office);
 
-    $optionsByKeyGrouped = $optionsByKey['optionsByKey'];
-
-    echo json_encode([
+    echo json_encode(array_merge($payload, [
         'office' => $office,
         'sessionOffice' => utilities_signatory_default_office(),
-        'options' => $optionsByKey['options'],
-        'optionsByKey' => $optionsByKeyGrouped,
-        'optionsById' => $optionsByKey['optionsById'],
-        'defaultCertKey' => $defaultCertKey,
-        'defaultIds' => [
-            'cert' => utilities_dv_resolve_default_option_id($optionsByKeyGrouped, ['dv_certified_msd', 'dv_certified_tsd'], $defaultCertKey),
-            'accounting' => utilities_dv_resolve_default_option_id($optionsByKeyGrouped, ['dv_accounting_certified']),
-            'approved' => utilities_dv_resolve_default_option_id($optionsByKeyGrouped, ['dv_approved_for_payment']),
-        ],
-        'printable' => utilities_dv_signatory_map_is_printable($optionsByKeyGrouped),
-    ], $jsonFlags);
+    ]), $jsonFlags);
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Failed to load signatories'], $jsonFlags);

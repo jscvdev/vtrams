@@ -81,11 +81,29 @@ body {
     background-color: #F7F8FA;
 }
 
-/* No sidebar: use full content width (hstyle defaults to sidebar offset). */
-.kiosk-body #main.main {
+/* No sidebar: full-width, scrollable main — avoid clipping when browser zoom increases. */
+.kiosk-body .main,
+.kiosk-body #main.main,
+.kiosk-body #main.main.main--dashboard {
     width: 100% !important;
-    overflow-y: auto;
+    height: auto !important;
+    min-height: calc(100vh - 4rem);
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    padding-bottom: 2rem;
     -webkit-overflow-scrolling: touch;
+}
+
+.kiosk-body html,
+.kiosk-body body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
 }
 
 /* hstyle hides .main below 600px (sidebar-only mode); kiosk has no sidebar. */
@@ -222,6 +240,7 @@ h2 {
 
 .stepper_container {
     width: 100%;
+    max-width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -232,6 +251,15 @@ h2 {
     box-sizing: border-box;
     background-color: transparent;
     padding: 0.25rem 0 0.5rem;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+}
+
+.kiosk-stepper-card {
+    overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
 }
 
 .head {
@@ -259,7 +287,14 @@ h2 {
 .kiosk-stepper-list {
     display: flex;
     margin-top: 2.5rem;
-    padding: 0;
+    padding: 0 0.5rem 0.5rem;
+    flex-wrap: nowrap;
+    justify-content: center;
+    min-width: min-content;
+    width: max-content;
+    max-width: none;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .kiosk-stepper-list li {
@@ -437,6 +472,7 @@ h2 {
         margin-top: 1.25rem;
         width: 100%;
         max-width: 22rem;
+        min-width: 0;
         margin-left: auto;
         margin-right: auto;
     }
@@ -681,6 +717,15 @@ h2 {
 }
 
 /* —— Kiosk layout (matches voucher dashboard patterns from base.css) —— */
+.kiosk-body .voucher-card,
+.kiosk-body .voucher-dashboard-header,
+.kiosk-body .kiosk-search-card,
+.kiosk-body .kiosk-stepper-card,
+.kiosk-body .kiosk-results-card {
+    max-width: 100%;
+    min-width: 0;
+}
+
 .kiosk-search-card .kiosk-search-hint {
     font-size: 0.9rem;
     color: #555;
@@ -764,6 +809,22 @@ h2 {
 
 .kiosk-results-card .content-wrapper {
     overflow-x: auto;
+    overflow-y: visible;
+    max-height: none;
+}
+
+.kiosk-body .voucher-card--table {
+    flex: none;
+    min-height: 0;
+}
+
+.kiosk-body .voucher-card--table .content-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.kiosk-body .voucher-card--table .content_table {
+    overflow: visible;
 }
 
 .kiosk-select-btn {

@@ -555,9 +555,17 @@ function utilities_fetch_dv_signatory_rows(PDO $pdo, string $office, ?string $si
     $sql = "
         SELECT id, signatory_key, display_name, position_line1, position_line2, is_active, is_default, sort_order
         FROM voucher_signatories
-        WHERE office = :office
+        WHERE 1=1
     ";
-    $params = [':office' => $office];
+    $params = [];
+
+    if ($office === '') {
+        $sql .= " AND TRIM(COALESCE(office, '')) = ''";
+    } else {
+        $sql .= ' AND LOWER(TRIM(office)) = LOWER(:office)';
+        $params[':office'] = $office;
+    }
+
     if ($signatoryKey !== null && $signatoryKey !== '') {
         $sql .= ' AND signatory_key = :k';
         $params[':k'] = $signatoryKey;
@@ -602,15 +610,26 @@ function utilities_format_dv_signatory_option(array $row): array
 function utilities_fetch_dv_signatory_options_for_office(PDO $pdo, string $office): array
 {
     $office = utilities_signatory_normalize_office($office);
-    $stmt = $pdo->prepare("
-        SELECT id, signatory_key, display_name, position_line1, position_line2, is_default, sort_order
-        FROM voucher_signatories
-        WHERE is_active = 1
-          AND office = :office
-        ORDER BY signatory_key ASC, sort_order ASC, display_name ASC, id ASC
-    ");
-    $stmt->execute([':office' => $office]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if ($office === '') {
+        $stmt = $pdo->query("
+            SELECT id, signatory_key, display_name, position_line1, position_line2, is_default, sort_order
+            FROM voucher_signatories
+            WHERE is_active = 1
+              AND TRIM(COALESCE(office, '')) = ''
+            ORDER BY signatory_key ASC, sort_order ASC, display_name ASC, id ASC
+        ");
+        $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT id, signatory_key, display_name, position_line1, position_line2, is_default, sort_order
+            FROM voucher_signatories
+            WHERE is_active = 1
+              AND LOWER(TRIM(office)) = LOWER(:office)
+            ORDER BY signatory_key ASC, sort_order ASC, display_name ASC, id ASC
+        ");
+        $stmt->execute([':office' => $office]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
 
     $options = [];
     foreach ($rows as $row) {
@@ -764,12 +783,82 @@ function utilities_dv_signatory_required_keys(): array
     ];
 }
 
+/** @return array<string, string> */
+function utilities_dv_signatory_labels_map(): array
+{
+    return [
+        'dv_certified_msd' => 'A. Certified (MSD)',
+        'dv_certified_tsd' => 'A. Certified (TSD)',
+        'dv_certified_penro' => 'A. Certified (PENRO)',
+        'dv_accounting_certified' => 'C. Certified (Accounting)',
+        'dv_approved_for_payment' => 'D. Approved for Payment',
+    ];
+}
+
+/** @return array<string, list<string>> */
+function utilities_dv_signatory_roles_map(): array
+{
+    return [
+        'cert' => ['dv_certified_msd', 'dv_certified_tsd', 'dv_certified_penro'],
+        'accounting' => ['dv_accounting_certified'],
+        'approved' => ['dv_approved_for_payment'],
+    ];
+}
+
+/**
+ * @return array{
+ *   options: list<array<string, mixed>>,
+ *   optionsByKey: array<string, list<array<string, mixed>>>,
+ *   optionsById: array<int, array<string, mixed>>,
+ *   labels: array<string, string>,
+ *   roles: array<string, list<string>>,
+ *   defaultCertKey: string,
+ *   defaultIds: array{cert: int, accounting: int, approved: int},
+ *   printable: bool
+ * }
+ */
+function utilities_build_dv_signatory_client_payload(PDO $pdo, string $office): array
+{
+    $indexed = utilities_fetch_dv_signatory_options_indexed($pdo, $office);
+    $optionsByKey = $indexed['optionsByKey'];
+    $defaultCertKey = (($_SESSION['logged_user_division'] ?? '') === 'TSD')
+        ? 'dv_certified_tsd'
+        : 'dv_certified_msd';
+
+    if ($defaultCertKey === 'dv_certified_tsd'
+        && empty($optionsByKey['dv_certified_tsd'])
+        && !empty($optionsByKey['dv_certified_msd'])) {
+        $defaultCertKey = 'dv_certified_msd';
+    } elseif ($defaultCertKey === 'dv_certified_msd'
+        && empty($optionsByKey['dv_certified_msd'])
+        && !empty($optionsByKey['dv_certified_tsd'])) {
+        $defaultCertKey = 'dv_certified_tsd';
+    }
+
+    return [
+        'options' => $indexed['options'],
+        'optionsByKey' => $optionsByKey,
+        'optionsById' => $indexed['optionsById'],
+        'labels' => utilities_dv_signatory_labels_map(),
+        'roles' => utilities_dv_signatory_roles_map(),
+        'defaultCertKey' => $defaultCertKey,
+        'defaultIds' => [
+            'cert' => utilities_dv_resolve_default_option_id($optionsByKey, ['dv_certified_msd', 'dv_certified_tsd', 'dv_certified_penro'], $defaultCertKey),
+            'accounting' => utilities_dv_resolve_default_option_id($optionsByKey, ['dv_accounting_certified']),
+            'approved' => utilities_dv_resolve_default_option_id($optionsByKey, ['dv_approved_for_payment']),
+        ],
+        'printable' => utilities_dv_signatory_map_is_printable($optionsByKey),
+    ];
+}
+
 /**
  * True when at least one cert option and accounting + approved signatories exist.
  */
 function utilities_dv_signatory_map_is_printable(array $optionsByKey): bool
 {
-    $hasCert = !empty($optionsByKey['dv_certified_msd']) || !empty($optionsByKey['dv_certified_tsd']);
+    $hasCert = !empty($optionsByKey['dv_certified_msd'])
+        || !empty($optionsByKey['dv_certified_tsd'])
+        || !empty($optionsByKey['dv_certified_penro']);
     $hasAccounting = !empty($optionsByKey['dv_accounting_certified']);
     $hasApproved = !empty($optionsByKey['dv_approved_for_payment']);
 

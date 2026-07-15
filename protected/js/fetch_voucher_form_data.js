@@ -328,18 +328,87 @@ function getSignatoryByKey(key) {
 
 function applyDvSignatoryPayload(payload) {
     if (!payload || typeof payload !== 'object') return;
-    const cfg = window.DV_SIGNATORY || {};
-    cfg.options = Array.isArray(payload.options) ? payload.options : [];
-    cfg.optionsByKey = payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)
-        ? payload.optionsByKey
-        : {};
-    cfg.optionsById = payload.optionsById && typeof payload.optionsById === 'object' && !Array.isArray(payload.optionsById)
-        ? payload.optionsById
-        : {};
-    if (payload.defaultCertKey) cfg.defaultCertKey = payload.defaultCertKey;
-    if (payload.defaultIds) cfg.defaultIds = payload.defaultIds;
-    if (payload.office) cfg.office = payload.office;
+
+    const existing = window.DV_SIGNATORY || {};
+    const cfg = {
+        options: existing.options || [],
+        optionsByKey: existing.optionsByKey || {},
+        optionsById: existing.optionsById || {},
+        labels: existing.labels || {},
+        roles: existing.roles || {},
+        defaultCertKey: existing.defaultCertKey || '',
+        defaultIds: existing.defaultIds || {},
+        office: existing.office || '',
+        printable: existing.printable === true,
+        canSelectOffice: existing.canSelectOffice,
+        offices: existing.offices || [],
+        penroOffice: existing.penroOffice || '',
+        fetchUrl: existing.fetchUrl || '',
+    };
+
+    if (Array.isArray(payload.options)) {
+        cfg.options = payload.options;
+    }
+    if (payload.optionsByKey && typeof payload.optionsByKey === 'object' && !Array.isArray(payload.optionsByKey)) {
+        cfg.optionsByKey = payload.optionsByKey;
+    }
+    if (payload.optionsById && typeof payload.optionsById === 'object' && !Array.isArray(payload.optionsById)) {
+        cfg.optionsById = payload.optionsById;
+    }
+    if (payload.labels && typeof payload.labels === 'object' && !Array.isArray(payload.labels)) {
+        cfg.labels = payload.labels;
+    }
+    if (payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles)) {
+        cfg.roles = payload.roles;
+    }
+    if (payload.defaultCertKey) {
+        cfg.defaultCertKey = payload.defaultCertKey;
+    }
+    if (payload.defaultIds && typeof payload.defaultIds === 'object') {
+        cfg.defaultIds = payload.defaultIds;
+    }
+    if (payload.office) {
+        cfg.office = payload.office;
+    }
+    if (typeof payload.printable === 'boolean') {
+        cfg.printable = payload.printable;
+    }
+    if (typeof payload.canSelectOffice === 'boolean') {
+        cfg.canSelectOffice = payload.canSelectOffice;
+    }
+    if (Array.isArray(payload.offices)) {
+        cfg.offices = payload.offices;
+    }
+    if (payload.penroOffice) {
+        cfg.penroOffice = payload.penroOffice;
+    }
+    if (payload.fetchUrl) {
+        cfg.fetchUrl = payload.fetchUrl;
+    }
+
     window.DV_SIGNATORY = cfg;
+}
+
+function dvRoleKeys(roleName, fallbackKeys) {
+    const cfg = window.DV_SIGNATORY || {};
+    const roles = cfg.roles || {};
+    const keys = roles[roleName];
+    return Array.isArray(keys) && keys.length ? keys : fallbackKeys;
+}
+
+function dvOptionsExistForRole(roleKeys) {
+    if (getSignatoriesForRole(roleKeys).length > 0) {
+        return true;
+    }
+
+    const byKey = (window.DV_SIGNATORY || {}).optionsByKey || {};
+    return (Array.isArray(roleKeys) ? roleKeys : []).some(function(key) {
+        const bucket = byKey[key];
+        if (Array.isArray(bucket)) {
+            return bucket.length > 0;
+        }
+        return !!(bucket && bucket.id);
+    });
 }
 
 function populateDvSignatorySelect(selectEl, roleKeys, labels, defaultId) {
@@ -372,11 +441,17 @@ function populateDvSignatorySelect(selectEl, roleKeys, labels, defaultId) {
 
 function hasDvPrintableSignatoryOptions() {
     const cfg = window.DV_SIGNATORY || {};
-    const roles = cfg.roles || {};
-    const hasRoleOption = function(roleKeys) {
-        return getSignatoriesForRole(roleKeys).length > 0;
-    };
-    return hasRoleOption(roles.cert) && hasRoleOption(roles.accounting) && hasRoleOption(roles.approved);
+    if (cfg.printable === true) {
+        return true;
+    }
+
+    const certKeys = dvRoleKeys('cert', ['dv_certified_msd', 'dv_certified_tsd', 'dv_certified_penro']);
+    const accountingKeys = dvRoleKeys('accounting', ['dv_accounting_certified']);
+    const approvedKeys = dvRoleKeys('approved', ['dv_approved_for_payment']);
+
+    return dvOptionsExistForRole(certKeys)
+        && dvOptionsExistForRole(accountingKeys)
+        && dvOptionsExistForRole(approvedKeys);
 }
 
 function readDvSignatoryFromSelect(selectEl) {
@@ -398,13 +473,27 @@ function readDvSignatoryFromSelect(selectEl) {
 
 function populateAllDvSignatorySelects(selectors) {
     const cfg = window.DV_SIGNATORY || {};
-    const roles = cfg.roles || {};
     const labels = cfg.labels || {};
     const defaultIds = cfg.defaultIds || {};
 
-    populateDvSignatorySelect(selectors.cert, roles.cert, labels, defaultIds.cert || 0);
-    populateDvSignatorySelect(selectors.accounting, roles.accounting, labels, defaultIds.accounting || 0);
-    populateDvSignatorySelect(selectors.approved, roles.approved, labels, defaultIds.approved || 0);
+    populateDvSignatorySelect(
+        selectors.cert,
+        dvRoleKeys('cert', ['dv_certified_msd', 'dv_certified_tsd', 'dv_certified_penro']),
+        labels,
+        defaultIds.cert || 0
+    );
+    populateDvSignatorySelect(
+        selectors.accounting,
+        dvRoleKeys('accounting', ['dv_accounting_certified']),
+        labels,
+        defaultIds.accounting || 0
+    );
+    populateDvSignatorySelect(
+        selectors.approved,
+        dvRoleKeys('approved', ['dv_approved_for_payment']),
+        labels,
+        defaultIds.approved || 0
+    );
 }
 
 function storeDvSignatories(signatories) {

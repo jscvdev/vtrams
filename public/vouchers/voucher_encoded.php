@@ -1185,9 +1185,23 @@ function session_contains_phrase($phrase)
         }
 
         function hasPrintableSignatoryOptions() {
-            return typeof hasDvPrintableSignatoryOptions === 'function'
-                ? hasDvPrintableSignatoryOptions()
-                : false;
+            if (typeof hasDvPrintableSignatoryOptions === 'function') {
+                return hasDvPrintableSignatoryOptions();
+            }
+
+            const cfg = getSigCfg();
+            if (cfg.printable === true) {
+                return true;
+            }
+
+            const byKey = cfg.optionsByKey || {};
+            const hasCert = (Array.isArray(byKey.dv_certified_msd) && byKey.dv_certified_msd.length)
+                || (Array.isArray(byKey.dv_certified_tsd) && byKey.dv_certified_tsd.length)
+                || (Array.isArray(byKey.dv_certified_penro) && byKey.dv_certified_penro.length);
+            const hasAccounting = Array.isArray(byKey.dv_accounting_certified) && byKey.dv_accounting_certified.length;
+            const hasApproved = Array.isArray(byKey.dv_approved_for_payment) && byKey.dv_approved_for_payment.length;
+
+            return hasCert && hasAccounting && hasApproved;
         }
 
         function closeSignatoryModal() {
@@ -1207,10 +1221,11 @@ function session_contains_phrase($phrase)
                 populateAllSignatorySelects();
                 if (!hasPrintableSignatoryOptions()) {
                     if (typeof showNotify === 'function') {
-                        const officeLabel = String((cfg && cfg.office) || '').trim();
+                        const updatedCfg = getSigCfg();
+                        const officeLabel = String((updatedCfg && updatedCfg.office) || targetOffice || '').trim();
                         const officeHint = officeLabel ? (' (office: ' + officeLabel + ')') : '';
                         showNotify(
-                            'DV signatories are not configured for your office yet' + officeHint + '. A system administrator must set all four DV signatories in Utilities (A. Certified MSD/TSD, C. Accounting, and D. Approved). PENRO defaults are used when an office has no local entries.',
+                            'DV signatories are not configured for your office yet' + officeHint + '. A system administrator must set active DV signatories in Utilities for A. Certified, C. Accounting, and D. Approved. PENRO defaults are used when an office has no local entries.',
                             'warning',
                             5000
                         );

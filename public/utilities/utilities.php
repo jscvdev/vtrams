@@ -56,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowedDvKeys = [
             'dv_certified_msd',
             'dv_certified_tsd',
+            'dv_certified_penro',
             'dv_accounting_certified',
             'dv_approved_for_payment',
         ];
@@ -274,6 +275,7 @@ $ada_next_sort = [
 $dv_keys = [
     'dv_certified_msd' => 'DV A. Certified (MSD)',
     'dv_certified_tsd' => 'DV A. Certified (TSD)',
+    'dv_certified_penro' => 'DV A. Certified (PENRO)',
     'dv_accounting_certified' => 'DV C. Certified (Accounting)',
     'dv_approved_for_payment' => 'DV D. Approved for Payment',
 ];
