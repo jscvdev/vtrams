@@ -2350,6 +2350,7 @@ function voucher_tracking_dashboard_section_from_user_role(?array $user, string 
 
 /**
  * Resolve a dashboard section from an action log row (action_from, optional action_by lookup).
+ * action_from is preferred when it maps to a dashboard section (e.g. CASHIER on receive logs).
  *
  * @param array{action_from?: string, action_by?: string} $row
  * @param array<string, array<string, mixed>|null> $userCache
@@ -2368,10 +2369,6 @@ function voucher_tracking_dashboard_section_from_action_row(
             $userCache[$actionBy] = voucher_tracking_lookup_user_by_display_name($pdo, $actionBy);
         }
         $user = $userCache[$actionBy];
-        $sectionFromRole = voucher_tracking_dashboard_section_from_user_role($user, $actionFrom);
-        if ($sectionFromRole !== '') {
-            return $sectionFromRole;
-        }
     }
 
     $candidates = $actionFrom !== '' ? [$actionFrom] : [];
@@ -2394,8 +2391,15 @@ function voucher_tracking_dashboard_section_from_action_row(
         return $section;
     }
 
-    if ($user !== null && voucher_tracking_user_is_accounting_unit_role($user)) {
-        return 'Accounting Unit';
+    if ($user !== null) {
+        $sectionFromRole = voucher_tracking_dashboard_section_from_user_role($user, $actionFrom);
+        if ($sectionFromRole !== '') {
+            return $sectionFromRole;
+        }
+
+        if (voucher_tracking_user_is_accounting_unit_role($user)) {
+            return 'Accounting Unit';
+        }
     }
 
     return voucher_tracking_normalize_section_label($actionFrom);
@@ -3094,10 +3098,13 @@ function voucher_tracking_section_durations_from_actions(
     }
 
     if ($open !== []) {
-        $fallbackEnd = ($openEndTs !== null && $openEndTs > 0) ? $openEndTs : time();
+        $inProgress = ($openEndTs === null || $openEndTs <= 0);
+        $fallbackEnd = $inProgress ? time() : $openEndTs;
         foreach ($open as $section => $startTs) {
-            $endTs = $fallbackEnd <= $startTs ? time() : $fallbackEnd;
-            voucher_tracking_add_section_duration($totals, $section, $startTs, $endTs);
+            if ($startTs <= 0 || (!$inProgress && $fallbackEnd <= $startTs)) {
+                continue;
+            }
+            voucher_tracking_add_section_duration($totals, $section, $startTs, $fallbackEnd);
         }
     }
 
