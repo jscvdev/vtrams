@@ -466,6 +466,16 @@ function voucher_incoming_return_exists(object $pdo, string $processing_no): boo
     return (bool) $statement->fetchColumn();
 }
 
+function voucher_pending_return_exists(object $pdo, string $processing_no): bool
+{
+    $query = 'SELECT 1 FROM vouchers WHERE processing_no = :processing_no LIMIT 1';
+    $statement = $pdo->prepare($query);
+    $statement->bindParam(':processing_no', $processing_no);
+    $statement->execute();
+
+    return (bool) $statement->fetchColumn();
+}
+
 function voucher_return_fetch_process_history(object $pdo, string $processing_no, string $return_source): string
 {
     $processing_no = trim($processing_no);
@@ -663,7 +673,13 @@ function voucher_retract_fetch_encode_snapshot(object $pdo, string $processing_n
     }
 
     $snapshot = [];
-    $sourceTable = $retract_source === 'forwarding' ? 'voucher_receiving' : 'voucher_incoming';
+    if ($retract_source === 'forwarding') {
+        $sourceTable = 'voucher_receiving';
+    } elseif ($retract_source === 'pending') {
+        $sourceTable = 'vouchers';
+    } else {
+        $sourceTable = 'voucher_incoming';
+    }
 
     try {
         $stmt = $pdo->prepare("SELECT * FROM {$sourceTable} WHERE processing_no = :processing_no LIMIT 1");
@@ -712,6 +728,10 @@ function voucher_retract_source_exists(object $pdo, string $processing_no, strin
 {
     if ($retract_source === 'forwarding') {
         return voucher_receiving_return_exists($pdo, $processing_no);
+    }
+
+    if ($retract_source === 'pending') {
+        return voucher_pending_return_exists($pdo, $processing_no);
     }
 
     return voucher_incoming_return_exists($pdo, $processing_no);

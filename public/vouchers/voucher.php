@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 AuditHelper::logPageView('Vouchers');
 include('../../protected/handler/voucher_forward_module/voucher_forward_errhandler.inc.php');
 include('../../protected/handler/voucher_module/voucher_errhandler.inc.php');
+include('../../protected/handler/voucher_return_module/voucher_return_errhandler.inc.php');
 include('../../protected/core/components/notifications/err_handler_custom_alert.php');
 require_once __DIR__ . '/../../protected/core/components/notifications/custom_alert.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
@@ -14,6 +15,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/voucher_trackin
 include 'db_voucher.php';
 check_voucher_errors();
 check_voucher_forward_errors();
+check_voucher_return_errors();
 
 // Centralized voucher types for checklists and dropdowns (from checklist_config + scanned templates)
 $voucher_types_for_select = checklist_types_with_labels();
@@ -555,6 +557,7 @@ function session_contains_phrase($phrase)
                                 <label for="">Slip Printed Flag</label>
                                 <input type="hidden" name="slip_printed_flag" id="slip_printed_flag" value="0">
                             </div>
+                            <input type="hidden" name="retract_source" id="retract_source" value="pending">
                             <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                         </div>
                     </div>
@@ -564,12 +567,50 @@ function session_contains_phrase($phrase)
                         <button class="btn primary transparent forward-only-control" id="confirm_forward_requirements" type="button">CONFIRM</button>
                         <button class="btn warning transparent forward-only-control" id="print_forward_slip" type="button">PRINT SLIP</button>
                         <button class="btn transparent btn-dynamic" name="forward_voucher" type="submit"></button>
+                        <button type="submit" name="retract_voucher" id="hidden_retract_submit" style="display:none;"></button>
                         <button class="btn secondary transparent" id="close_popup4" type="button">CANCEL</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
+    <!-- Retract Options Popup (same flow as voucher_forwarding.php) -->
+    <div class="popup-form" id="returnOptionsPopup" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p>Retract Voucher</p>
+                <i class="ri-close-fill close-icon" id="close_return_options"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container">
+                        <div class="form-container">
+                            <div class="label-input__container">
+                                <label for="">Retract voucher</label>
+                                <div class="return-destination-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                                    <label class="return-option-label" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="return_destination_popup" value="retract" style="margin-top: 3px;" checked>
+                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset data for re-use.</span></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="label-input__container">
+                                <label for="return_remarks_popup">Remarks (optional)</label>
+                                <textarea id="return_remarks_popup" class="form-custom-multi-input" rows="3" placeholder="Enter remarks for retracting this voucher (optional)"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn warning" id="confirm_return_options" type="button">Retract</button>
+                        <button class="btn secondary transparent" id="cancel_return_options" type="button">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="returnOptionsOverlay" style="display: none;"></div>
     <style>
         #coaOptionsModalForward {
             z-index: 10001;
@@ -811,6 +852,7 @@ function session_contains_phrase($phrase)
                         <th>Remarks</th>
                         <th>Forward</th>
                         <th>Edit</th>
+                        <th>Retract</th>
                         <th>Print</th>
                     </tr>
                 </thead>
@@ -1093,7 +1135,7 @@ function session_contains_phrase($phrase)
             }
         })();
 
-        function handleRowAction(row, name) {
+        function populateEncodedFormFromRow(row) {
             var processing_no = String(row.processing_no || '');
             var payee = String(row.payee || '');
             var address = String(row.address || '');
@@ -1107,8 +1149,6 @@ function session_contains_phrase($phrase)
             var voucher_type = String(row.voucher_type || '');
             var encodedTypeSelect = document.getElementById('encoded_type');
             var hiddenVoucherType = document.getElementById('voucher_type');
-            var slipPrintedInput = document.getElementById('slip_printed_flag');
-            var dynamicBtn = document.querySelector('.btn-dynamic');
             var encodedTypeHidden = document.getElementById('encoded_type_hidden');
             var normalizedAmount = normalizeAmountInput(amount);
 
@@ -1126,6 +1166,35 @@ function session_contains_phrase($phrase)
             if (encodedTypeSelect) encodedTypeSelect.value = voucher_type;
             if (hiddenVoucherType) hiddenVoucherType.value = voucher_type;
             if (encodedTypeHidden) encodedTypeHidden.value = voucher_type;
+
+            var remarksInput = document.getElementById('remarks');
+            if (remarksInput) remarksInput.value = '';
+
+            var retractSourceInput = document.getElementById('retract_source');
+            if (retractSourceInput) retractSourceInput.value = 'pending';
+        }
+
+        function handleRowAction(row, name) {
+            var processing_no = String(row.processing_no || '');
+            var voucher_type = String(row.voucher_type || '');
+            var encodedTypeSelect = document.getElementById('encoded_type');
+            var hiddenVoucherType = document.getElementById('voucher_type');
+            var slipPrintedInput = document.getElementById('slip_printed_flag');
+            var dynamicBtn = document.querySelector('.btn-dynamic');
+            var encodedTypeHidden = document.getElementById('encoded_type_hidden');
+
+            populateEncodedFormFromRow(row);
+
+            if (name === 'btn-retract') {
+                var retractForm = document.getElementById('encoded_voucher_form');
+                if (retractForm) {
+                    retractForm.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                }
+                if (typeof openReturnOptionsPopup === 'function') {
+                    openReturnOptionsPopup();
+                }
+                return;
+            }
 
             if (typeof openPopup === 'function') openPopup();
             else {
@@ -1284,6 +1353,7 @@ function session_contains_phrase($phrase)
                     '<td data-label="voucher_type" class="hidden">' + escapeHtml(row.voucher_type) + '</td>' +
                     '<td data-label=""><button class="btn primary pPop" name="btn-forward" type="button">Forward</button></td>' +
                     '<td data-label=""><button class="btn success pPop" name="btn-edit" type="button">Edit</button></td>' +
+                    '<td data-label=""><button class="btn warning pPop" name="btn-retract" type="button">Retract</button></td>' +
                     '<td data-label=""><button class="btn warning" name="btn-gen-slip" type="button">Print</button></td>';
                 const printBtn = tr.querySelector('button[name="btn-gen-slip"]');
                 if (printBtn) attachPrintHandler(printBtn, row);
@@ -1291,6 +1361,8 @@ function session_contains_phrase($phrase)
                 if (fwdBtn) fwdBtn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); handleRowAction(row, 'btn-forward'); });
                 const editBtn = tr.querySelector('button[name="btn-edit"]');
                 if (editBtn) editBtn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); handleRowAction(row, 'btn-edit'); });
+                const retractBtn = tr.querySelector('button[name="btn-retract"]');
+                if (retractBtn) retractBtn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); handleRowAction(row, 'btn-retract'); });
                 frag.appendChild(tr);
             });
             tableBody.appendChild(frag);
@@ -2072,9 +2144,16 @@ function session_contains_phrase($phrase)
         const forwardForm = document.getElementById('encoded_voucher_form');
         if (forwardForm) {
             forwardForm.addEventListener('submit', function(e) {
-                const dynamicBtn = document.querySelector('.btn-dynamic');
-                const isForward = dynamicBtn && dynamicBtn.getAttribute('name') === 'forward_voucher';
-                if (!isForward) {
+                const isForwardSubmit = typeof window.isEncodedVoucherForwardSubmit === 'function'
+                    ? window.isEncodedVoucherForwardSubmit(e)
+                    : (function() {
+                        var submitter = e && e.submitter;
+                        var submitName = submitter
+                            ? String(submitter.getAttribute('name') || submitter.name || '')
+                            : '';
+                        return submitName === 'forward_voucher';
+                    })();
+                if (!isForwardSubmit) {
                     return true;
                 }
                 const raw = String(hiddenSelected?.value || '').trim();
@@ -2346,6 +2425,65 @@ $forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJs
 ?>
 <script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
+<script>
+    (function() {
+        var popup = document.getElementById('returnOptionsPopup');
+        var overlay = document.getElementById('returnOptionsOverlay');
+        var closeBtn = document.getElementById('close_return_options');
+        var cancelBtn = document.getElementById('cancel_return_options');
+        var confirmBtn = document.getElementById('confirm_return_options');
+        var retractRadio = document.querySelector('input[name="return_destination_popup"][value="retract"]');
+
+        function showPopup() {
+            if (retractRadio) retractRadio.checked = true;
+            if (popup) popup.style.display = 'block';
+            if (overlay) overlay.style.display = 'block';
+        }
+
+        function hidePopup() {
+            if (popup) popup.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+            var remarksField = document.getElementById('return_remarks_popup');
+            if (remarksField) remarksField.value = '';
+        }
+
+        window.openReturnOptionsPopup = showPopup;
+
+        if (closeBtn) closeBtn.addEventListener('click', hidePopup);
+        if (cancelBtn) cancelBtn.addEventListener('click', hidePopup);
+        if (overlay) overlay.addEventListener('click', hidePopup);
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                var selected = document.querySelector('input[name="return_destination_popup"]:checked');
+                if (!selected || selected.value !== 'retract') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Please confirm retract for this voucher.', 'error', 3000);
+                    }
+                    return;
+                }
+
+                var remarksValue = (document.getElementById('return_remarks_popup')?.value || '').trim();
+                var remarksInput = document.querySelector('#encoded_voucher_form .remarks');
+                var form = document.getElementById('encoded_voucher_form');
+
+                if (remarksInput) {
+                    remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
+                }
+                if (form) {
+                    form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                    var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
+                    if (hiddenRetractSubmit) {
+                        hiddenRetractSubmit.click();
+                    } else {
+                        form.submit();
+                    }
+                }
+                hidePopup();
+            });
+        }
+    })();
+</script>
 <?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
 

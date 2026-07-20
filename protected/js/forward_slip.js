@@ -1,3 +1,17 @@
+function getEncodedVoucherSubmitName(event) {
+  const submitter = event && event.submitter;
+  return submitter
+    ? String(submitter.getAttribute('name') || submitter.name || '')
+    : '';
+}
+
+function isEncodedVoucherForwardSubmit(event) {
+  return getEncodedVoucherSubmitName(event) === 'forward_voucher';
+}
+
+window.getEncodedVoucherSubmitName = getEncodedVoucherSubmitName;
+window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
+
 (function () {
   const printBtn = document.getElementById('print_forward_slip');
   if (!printBtn) return;
@@ -565,37 +579,35 @@
   bindNatureOfClaimModalListeners();
   window.openNatureOfClaimModalForSlip = openNatureOfClaimModal;
   window.closeNatureOfClaimModalForSlip = closeNatureOfClaimModal;
+})();
 
+(function () {
   // Enforce: slip must be printed before allowing "Forward" submit
   const forwardForm = document.getElementById('encoded_voucher_form');
-  if (forwardForm) {
-    forwardForm.addEventListener('submit', function (e) {
-      const dynamicBtn = document.querySelector('.btn-dynamic');
-      const isForward =
-        dynamicBtn &&
-        (dynamicBtn.getAttribute('name') === 'forward_voucher' ||
-          dynamicBtn.getAttribute('name') === 'forward_voucher'.toUpperCase());
-
-      if (!isForward) {
-        return true; // Editing, not forwarding
-      }
-
-      const slipFlagInput = document.getElementById('slip_printed_flag');
-      const printed = slipFlagInput && slipFlagInput.value === '1';
-
-      if (!printed) {
-        e.preventDefault();
-        if (typeof showNotify === 'function') {
-          showNotify('Please print the slip before forwarding.', 'warning', 3500);
-        } else {
-          alert('Please print the slip before forwarding.');
-        }
-        return false;
-      }
-
-      return true;
-    });
+  if (!forwardForm) {
+    return;
   }
+
+  forwardForm.addEventListener('submit', function (e) {
+    if (!isEncodedVoucherForwardSubmit(e)) {
+      return true; // Edit, retract, or other actions — not forwarding
+    }
+
+    const slipFlagInput = document.getElementById('slip_printed_flag');
+    const printed = slipFlagInput && slipFlagInput.value === '1';
+
+    if (!printed) {
+      e.preventDefault();
+      if (typeof showNotify === 'function') {
+        showNotify('Please print the slip before forwarding.', 'warning', 3500);
+      } else {
+        alert('Please print the slip before forwarding.');
+      }
+      return false;
+    }
+
+    return true;
+  });
 })();
 
 

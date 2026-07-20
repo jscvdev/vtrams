@@ -12,12 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $retract_source = voucher_post_string($_POST['retract_source'] ?? 'incoming');
         $remarks = voucher_post_string($_POST['remarks'] ?? '');
 
-        $success_redirect = $retract_source === 'forwarding'
-            ? 'voucher_forwarding_return_redirect'
-            : 'voucher_incoming_redirect';
-        $_SESSION['voucher_return_redirect_key'] = $retract_source === 'forwarding'
-            ? 'voucher_forwarding_return_err_redirect'
-            : 'voucher_incoming_return_err_redirect';
+        if ($retract_source === 'forwarding') {
+            $success_redirect = 'voucher_forwarding_return_redirect';
+            $_SESSION['voucher_return_redirect_key'] = 'voucher_forwarding_return_err_redirect';
+        } elseif ($retract_source === 'pending') {
+            $success_redirect = 'voucher_redirect';
+            $_SESSION['voucher_return_redirect_key'] = 'voucher_err_redirect';
+        } else {
+            $success_redirect = 'voucher_incoming_redirect';
+            $_SESSION['voucher_return_redirect_key'] = 'voucher_incoming_return_err_redirect';
+        }
 
         if (!isset($_REQUEST['retract_voucher'])) {
             echo "<script>process_functionAlert('Retract Error: Wrong module used!', '" . $success_redirect . "')</script>";
@@ -148,9 +152,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $invalid_redirect = isset($_POST['retract_source']) && $_POST['retract_source'] === 'forwarding'
-        ? 'voucher_forwarding_return_redirect'
-        : 'voucher_incoming_redirect';
+    $invalid_retract_source = voucher_post_string($_POST['retract_source'] ?? 'incoming');
+    if ($invalid_retract_source === 'forwarding') {
+        $invalid_redirect = 'voucher_forwarding_return_redirect';
+    } elseif ($invalid_retract_source === 'pending') {
+        $invalid_redirect = 'voucher_redirect';
+    } else {
+        $invalid_redirect = 'voucher_incoming_redirect';
+    }
     echo "<script>process_functionAlert('Invalid token!', '" . $invalid_redirect . "')</script>";
     $_SESSION['token'] = generateToken();
     die();
