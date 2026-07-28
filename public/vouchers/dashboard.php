@@ -21,35 +21,58 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $month = isset($_GET['month']) && $_GET['month'] !== 'all' ? (int) $_GET['month'] : null;
     $day = isset($_GET['day']) && $_GET['day'] !== 'all' ? (int) $_GET['day'] : null;
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
+    $search = trim((string) ($_GET['search'] ?? ''));
+    $calculationMode = isset($_GET['calculation']) && (string) $_GET['calculation'] === '1';
+
+    if ($calculationMode && !AccessControl::canAccessCalculationBreakdown()) {
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code(403);
+        echo json_encode(['error' => 'Access denied']);
+        exit;
+    }
 
     try {
-        // Same inclusion rule as voucher_status.php: exclude encoded/pending only (active_status = no).
-        $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
         $params = [];
+        $searchActive = $search !== '';
 
-        if ($voucher_type !== null && $voucher_type !== '') {
-            $query .= ' AND vt.voucher_type = :voucher_type';
-            $params[':voucher_type'] = $voucher_type;
+        if ($calculationMode && $searchActive) {
+            // Full-database search for calculation breakdown (ignores type/office/date filters).
+            $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+            $query .= voucher_tracking_dashboard_search_sql('vt');
+            voucher_tracking_dashboard_bind_search_params($params, $search);
+            $query .= ' ORDER BY COALESCE(NULLIF(vt.datetime_status, \'\'), vt.voucher_date, vt.datetime_encoded) DESC';
+        } else {
+            $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+
+            if ($voucher_type !== null && $voucher_type !== '') {
+                $query .= ' AND vt.voucher_type = :voucher_type';
+                $params[':voucher_type'] = $voucher_type;
+            }
+
+            if ($office !== null && $office !== '') {
+                $query .= ' AND LOWER(TRIM(vt.office_from)) = LOWER(TRIM(:office))';
+                $params[':office'] = $office;
+            }
+
+            if ($searchActive) {
+                $query .= voucher_tracking_dashboard_search_sql('vt');
+                voucher_tracking_dashboard_bind_search_params($params, $search);
+            }
+
+            if ($month !== null && $day !== null && $yearDate !== null) {
+                $query .= ' AND DATE(vt.voucher_date) = :date_filter';
+                $params[':date_filter'] = sprintf('%04d-%02d-%02d', $yearDate, $month, $day);
+            } elseif ($month !== null && $yearDate !== null) {
+                $query .= ' AND MONTH(vt.voucher_date) = :month AND YEAR(vt.voucher_date) = :yearDate';
+                $params[':month'] = $month;
+                $params[':yearDate'] = $yearDate;
+            } elseif ($yearDate !== null) {
+                $query .= ' AND YEAR(vt.voucher_date) = :yearDate';
+                $params[':yearDate'] = $yearDate;
+            }
+
+            $query .= ' ORDER BY vt.voucher_date DESC';
         }
-
-        if ($office !== null && $office !== '') {
-            $query .= ' AND LOWER(TRIM(vt.office_from)) = LOWER(TRIM(:office))';
-            $params[':office'] = $office;
-        }
-
-        if ($month !== null && $day !== null && $yearDate !== null) {
-            $query .= ' AND DATE(vt.voucher_date) = :date_filter';
-            $params[':date_filter'] = sprintf('%04d-%02d-%02d', $yearDate, $month, $day);
-        } elseif ($month !== null && $yearDate !== null) {
-            $query .= ' AND MONTH(vt.voucher_date) = :month AND YEAR(vt.voucher_date) = :yearDate';
-            $params[':month'] = $month;
-            $params[':yearDate'] = $yearDate;
-        } elseif ($yearDate !== null) {
-            $query .= ' AND YEAR(vt.voucher_date) = :yearDate';
-            $params[':yearDate'] = $yearDate;
-        }
-
-        $query .= ' ORDER BY vt.voucher_date DESC';
 
         $stmt = $pdo->prepare($query);
         foreach ($params as $key => $value) {
@@ -58,10 +81,17 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         $stmt->execute();
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $breakdownLimit = null;
+        if ($calculationMode) {
+            $breakdownLimit = $searchActive
+                ? min(count($rows), voucher_tracking_dashboard_calculation_search_limit())
+                : voucher_tracking_dashboard_calculation_recent_limit();
+        }
         $sectionTiming = voucher_tracking_build_section_timing_report(
             $pdo,
             $rows,
-            voucher_tracking_dashboard_breakdown_sections()
+            voucher_tracking_dashboard_breakdown_sections(),
+            $breakdownLimit
         );
         header('Content-Type: application/json; charset=UTF-8');
         echo json_encode([
@@ -316,49 +346,6 @@ if ($scriptName !== '') {
         margin-top: 4px;
     }
 
-    #percentageTable th,
-    #percentageTable td {
-        border-bottom: 1px solid #ddd;
-        padding: 8px;
-    }
-
-    #percentageTable {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-        table-layout: fixed;
-
-        th {
-            color: rgb(75 85 99 / 0.7)
-        }
-
-        td {
-            color: rgb(75 85 99 / 1)
-        }
-
-        th:first-child,
-        td:first-child {
-            width: 55%;
-            word-break: break-word;
-        }
-
-        th:nth-child(2),
-        td:nth-child(2),
-        th:nth-child(3),
-        td:nth-child(3) {
-            width: 22.5%;
-            white-space: nowrap;
-        }
-    }
-
-    #percentageTable thead {
-        background-color: #f9f9f9;
-    }
-
-    #percentageTable tr:hover {
-        background-color: #f1f1f1;
-    }
-
     #sectionSummaryTable th,
     #sectionSummaryTable td,
     #sectionVoucherTable th,
@@ -393,6 +380,41 @@ if ($scriptName !== '') {
     .section-table-scroll {
         overflow-x: auto;
         width: 100%;
+    }
+
+    .dashboard-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .dashboard-tab-btn {
+        border: 1px solid rgb(209 213 219 / 1);
+        background: #fff;
+        color: rgb(75 85 99 / 0.9);
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .dashboard-tab-btn.is-active {
+        background: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    .dashboard-tab-panel {
+        display: none;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .dashboard-tab-panel.is-active {
+        display: flex;
     }
 </style>
 
@@ -474,6 +496,12 @@ if ($scriptName !== '') {
             <button id="applyFiltersBtn">Apply Filters</button>
         </section>
 
+        <nav class="dashboard-tabs" aria-label="Dashboard views">
+            <button type="button" class="dashboard-tab-btn is-active" data-dashboard-tab="analytics">Analytics</button>
+            <button type="button" class="dashboard-tab-btn" data-dashboard-tab="processing">Processing Times</button>
+        </nav>
+
+        <div class="dashboard-tab-panel is-active" id="dashboardTabAnalytics">
         <div class="table-container">
             <div class="stats-card-wrapper" id="overallTable"></div>
         </div>
@@ -496,26 +524,9 @@ if ($scriptName !== '') {
             </div>
         </section>
 
-        <!-- ✅ Modified Section: Percentage Table -->
-        <section class="dashboard-content new_label dashboard-content--full">
-            <div class="chart-container new_label chart-container--table">
-                <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Voucher Type Breakdown in Percentage</h3>
+        </div>
 
-                <table id="percentageTable">
-                    <thead>
-                        <tr>
-                            <th>Voucher Type</th>
-                            <th style="text-align:right;">Count</th>
-                            <th style="text-align:right;">Percentage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- JS will populate this -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
+        <div class="dashboard-tab-panel" id="dashboardTabProcessing">
         <section class="dashboard-content new_label">
             <div class="chart-container new_label">
                 <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Average Processing Time by Section</h3>
@@ -523,7 +534,7 @@ if ($scriptName !== '') {
             </div>
             <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px;">
                 <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Section Processing Time Summary</h3>
-                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers. Includes each re-processing stint after a return (e.g. Accounting returns to Planning and Planning forwards again). Processing time counts Monday through Thursday only (Fridays, Saturdays, and Sundays are excluded).</p>
+                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers. Includes each re-processing stint after a return (e.g. Accounting returns to Planning and Planning forwards again). Encoding and forwarding by a process-section user before receive is excluded. Processing time counts Monday through Thursday only (Fridays, Saturdays, and Sundays are excluded).</p>
                 <table id="sectionSummaryTable">
                     <thead>
                         <tr>
@@ -542,7 +553,7 @@ if ($scriptName !== '') {
         <section class="dashboard-content new_label">
             <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px; width: 100%;">
                 <h3 style="margin-bottom: 8px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Per-Voucher Section Processing Breakdown</h3>
-                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Last 15 most recently processed vouchers (updates automatically).</p>
+                <p id="dashboardVoucherListMeta" style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Showing the 15 most recently processed vouchers for the current filters (updates automatically).</p>
                 <div class="section-table-scroll">
                     <table id="sectionVoucherTable">
                         <thead></thead>
@@ -551,8 +562,10 @@ if ($scriptName !== '') {
                 </div>
             </div>
         </section>
+        </div>
 
     </div>
+</div>
 
     <!--=============== JS ===============-->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -581,6 +594,24 @@ if ($scriptName !== '') {
             const ctxSectionTime = document.getElementById('sectionTimeChart').getContext('2d');
 
             let voucherTypeChart, amountChart, monthlyChart, sectionTimeChart;
+
+            const tabButtons = document.querySelectorAll('.dashboard-tab-btn');
+            const tabPanels = {
+                analytics: document.getElementById('dashboardTabAnalytics'),
+                processing: document.getElementById('dashboardTabProcessing'),
+            };
+
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.getAttribute('data-dashboard-tab');
+                    tabButtons.forEach(b => b.classList.toggle('is-active', b === btn));
+                    Object.entries(tabPanels).forEach(([key, panel]) => {
+                        if (panel) {
+                            panel.classList.toggle('is-active', key === tab);
+                        }
+                    });
+                });
+            });
 
             function processData(data) {
                 const stats = {
@@ -760,25 +791,6 @@ if ($scriptName !== '') {
                         </div>`;
                     overallTableDiv.appendChild(card);
                 });
-
-                // ==== PERCENTAGE TABLE ====
-                const percentageTableBody = document.querySelector('#percentageTable tbody');
-                percentageTableBody.innerHTML = '';
-
-                const sortedVoucherTypes = Object.entries(stats.voucherType)
-                    .sort((a, b) => b[1] - a[1]);
-
-                sortedVoucherTypes.forEach(([voucherType, count]) => {
-                    const percent = stats.totalEntries > 0 ? ((count / stats.totalEntries) * 100).toFixed(2) : '0.00';
-                    const row = document.createElement('tr');
-                    row.innerHTML = `<td>${voucherType}</td><td style="text-align:right;">${count}</td><td style="text-align:right;">${percent}%</td>`;
-                    percentageTableBody.appendChild(row);
-                });
-
-                const totalRow = document.createElement('tr');
-                totalRow.style.fontWeight = 'bold';
-                totalRow.innerHTML = `<td>Total</td><td style="text-align:right;">${stats.totalEntries}</td><td style="text-align:right;">100%</td>`;
-                percentageTableBody.appendChild(totalRow);
             }
 
             function updateSectionTiming(sectionTiming) {
@@ -793,6 +805,13 @@ if ($scriptName !== '') {
                     ? timing.by_voucher_sections
                     : sections;
                 const byVoucher = Array.isArray(timing.by_voucher) ? timing.by_voucher : [];
+                const voucherListMeta = document.getElementById('dashboardVoucherListMeta');
+                if (voucherListMeta) {
+                    const limit = timing.by_voucher_limit || byVoucher.length || 15;
+                    voucherListMeta.textContent = byVoucher.length > 0
+                        ? `Showing the ${byVoucher.length} most recently processed voucher(s) for the current filters (limit ${limit}; updates automatically).`
+                        : 'No per-voucher section timing data for the current filters.';
+                }
 
                 if (sectionTimeChart) sectionTimeChart.destroy();
                 const sectionLabels = summary.map(row => row.section || 'Unknown');
@@ -915,9 +934,10 @@ if ($scriptName !== '') {
 
             function applyVoucherData(data) {
                 if (Array.isArray(data)) {
-                    updateCharts(data);
+                    console.error('Voucher data fetch returned unexpected array payload');
+                    updateCharts([]);
                     updateSectionTiming(null);
-                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
+                    setRefreshStatus('Update failed · retrying…');
                     return;
                 }
                 if (data && Array.isArray(data.rows)) {
@@ -965,7 +985,7 @@ if ($scriptName !== '') {
                     .then(data => callback(data))
                     .catch(err => {
                         console.error('Error fetching voucher data:', err);
-                        callback([]);
+                        callback(null);
                     });
             }
 

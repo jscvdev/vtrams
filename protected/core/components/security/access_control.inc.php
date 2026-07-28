@@ -205,6 +205,7 @@ class AccessControl
     {
         return [
             'dashboard.php' => 'canAccessOverviewReports',
+            'dashboard_calculation_breakdown.php' => 'canAccessCalculationBreakdown',
             'voucher_status.php' => 'canAccessVoucherOverviewPages',
             'voucher_system_logs.php' => 'canAccessVoucherOverviewPages',
             'voucher_status_report.php' => 'canAccessOverviewReports',
@@ -223,6 +224,14 @@ class AccessControl
     public static function canAccessLiaisonReturnedVouchers(): bool
     {
         return self::hasRole('Liaison Officer') || self::hasRole('System Admin');
+    }
+
+    /**
+     * Processing time calculation breakdown (System Admin tools).
+     */
+    public static function canAccessCalculationBreakdown(): bool
+    {
+        return self::canAccessSystemUtilities();
     }
 
     /**

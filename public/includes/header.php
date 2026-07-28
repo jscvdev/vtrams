@@ -300,6 +300,15 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php endif; ?>
                                 <?php if ($can_view_system_utilities): ?>
                                     <div class="sidebar-link-container">
+                                        <a href="../vouchers/dashboard_calculation_breakdown.php" class="sidebar__link">
+                                            <i class="ri-time-line"></i>
+                                            <span class="sidebar__link-name">Calculation Breakdown</span>
+                                            <span class="sidebar__link-floating">Calculation Breakdown</span>
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($can_view_system_utilities): ?>
+                                    <div class="sidebar-link-container">
                                         <a href="../utilities/utilities.php" class="sidebar__link">
                                             <i class="ri-quill-pen-line"></i>
                                             <span class="sidebar__link-name">Signatories</span>
