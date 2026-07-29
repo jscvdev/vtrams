@@ -107,116 +107,339 @@ $qsAudit = $rawQ !== '' ? ('&q=' . rawurlencode($rawQ)) : '';
 if (!isset($displayTotal)) {
     $displayTotal = 0;
 }
+$startEntry = $displayTotal > 0 ? (($currentPage - 1) * $rowsPerPage) + 1 : 0;
+$endEntry = $displayTotal > 0 ? min($currentPage * $rowsPerPage, $displayTotal) : 0;
+
+$auditActionPillClass = static function (string $action): string {
+    $normalized = strtolower(trim($action));
+    if ($normalized === '') {
+        return 'audit-pill--neutral';
+    }
+    if (
+        str_contains($normalized, 'error')
+        || str_contains($normalized, 'delete')
+        || str_contains($normalized, 'clear')
+        || str_contains($normalized, 'fail')
+    ) {
+        return 'audit-pill--danger';
+    }
+    if (str_contains($normalized, 'login') || str_contains($normalized, 'logout')) {
+        return 'audit-pill--info';
+    }
+    if (str_contains($normalized, 'create') || str_contains($normalized, 'add') || str_contains($normalized, 'insert')) {
+        return 'audit-pill--success';
+    }
+    if (str_contains($normalized, 'update') || str_contains($normalized, 'edit') || str_contains($normalized, 'export')) {
+        return 'audit-pill--warning';
+    }
+
+    return 'audit-pill--neutral';
+};
 ?>
+<?php require __DIR__ . '/../utilities/partials/utilities_premium_base.php'; ?>
 <style>
-.audit-header-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    margin-left: auto;
-}
-.audit-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s;
-    white-space: nowrap;
-}
-.audit-btn i { font-size: 1.1rem; }
-.audit-btn--export {
-    background: #0B5ED7;
-    color: #fff;
-    box-shadow: 0 2px 4px rgba(11, 94, 215, 0.3);
-}
-.audit-btn--export:hover {
-    background: #0a52c0;
-    box-shadow: 0 3px 8px rgba(11, 94, 215, 0.35);
-}
-.audit-btn--clear30 {
-    background: #FF7043;
-    color: #fff;
-    box-shadow: 0 2px 4px rgba(255, 112, 67, 0.3);
-}
-.audit-btn--clear30:hover {
-    background: #e86335;
-    box-shadow: 0 3px 8px rgba(255, 112, 67, 0.35);
-}
-.audit-btn--clearall {
-    background: #BB2D3B;
-    color: #fff;
-    box-shadow: 0 2px 4px rgba(187, 45, 59, 0.3);
-}
-.audit-btn--clearall:hover {
-    background: #a02632;
-    box-shadow: 0 3px 8px rgba(187, 45, 59, 0.35);
-}
+    .audit-page .audit-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        padding: 1rem 1.25rem;
+    }
+
+    .audit-page .audit-stat {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .audit-page .audit-stat__label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 8px;
+    }
+
+    .audit-page .audit-stat__label i {
+        font-size: 14px;
+        color: #6366f1;
+    }
+
+    .audit-page .audit-stat__value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+
+    .audit-page .audit-stat--today {
+        background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+    }
+
+    .audit-page .audit-stat--users {
+        background: linear-gradient(180deg, #f0fdf4 0%, #fff 100%);
+    }
+
+    .audit-page .audit-stat--errors {
+        background: linear-gradient(180deg, #fef2f2 0%, #fff 100%);
+    }
+
+    .audit-page .util-header-btn--export {
+        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+        color: #fff;
+    }
+
+    .audit-page .util-header-btn--export:hover {
+        filter: brightness(1.05);
+    }
+
+    .audit-page .util-header-btn--clear30 {
+        background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+        color: #fff;
+    }
+
+    .audit-page .util-header-btn--clear30:hover {
+        filter: brightness(1.05);
+    }
+
+    .audit-page .util-header-btn--clearall {
+        background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+        color: #fff;
+    }
+
+    .audit-page .util-header-btn--clearall:hover {
+        filter: brightness(1.05);
+    }
+
+    .audit-page .audit-filter-card {
+        padding: 1rem 1.25rem;
+    }
+
+    .audit-page .audit-filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 0.75rem 1rem;
+    }
+
+    .audit-page .audit-filter-field {
+        flex: 1 1 280px;
+        min-width: 0;
+    }
+
+    .audit-page .audit-filter-field label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: 0.375rem;
+    }
+
+    .audit-page .audit-filter-field input[type="text"] {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #d4dbe6;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.875rem;
+        min-height: 42px;
+        box-sizing: border-box;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .audit-page .audit-filter-field input[type="text"]:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .audit-page .audit-filter-hint {
+        margin: 0.75rem 0 0;
+        font-size: 0.8125rem;
+        color: #64748b;
+    }
+
+    .audit-page .audit-table-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 1rem 1.25rem 0;
+        flex-wrap: wrap;
+    }
+
+    .audit-page .audit-table-meta {
+        margin: 0;
+        font-size: 0.8125rem;
+        color: #64748b;
+    }
+
+    .audit-page .voucher-card--table {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .audit-page .voucher-card--table .content-wrapper {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        max-height: none;
+        padding: 0 1.25rem;
+    }
+
+    .audit-page .audit-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
+    .audit-page .audit-pill--neutral {
+        background: #eef2ff;
+        color: #3730a3;
+    }
+
+    .audit-page .audit-pill--info {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .audit-page .audit-pill--success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .audit-page .audit-pill--warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .audit-page .audit-pill--danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .audit-page .audit-cell-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.8125rem;
+        color: #334155;
+    }
+
+    .audit-page .audit-cell-desc {
+        max-width: 320px;
+        white-space: normal;
+        line-height: 1.45;
+        color: #334155;
+    }
+
+    .audit-page .audit-cell-uri {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8125rem;
+        color: #64748b;
+    }
+
+    .audit-page .audit-table-empty {
+        display: flex;
+        width: 100%;
+        min-height: 220px;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        gap: 8px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+    }
+
+    .audit-page .audit-table-empty i {
+        font-size: 2rem;
+        color: #cbd5e1;
+    }
+
+    .audit-page .voucher-pagination-footer {
+        padding: 0.75rem 1.25rem 1rem;
+        margin-top: auto;
+        flex-shrink: 0;
+    }
 </style>
-<div class="main main--dashboard" id="main">
+<div class="main main--voucher-dashboard util-premium-page audit-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Auditing</h1>
-        <div class="audit-header-actions">
-            <a href="<?php echo htmlspecialchars($auditCtrlUrl); ?>?action=export" class="audit-btn audit-btn--export" download>
-                <i class="ri-download-line"></i> Export CSV
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Auditing</h1>
+            <p class="voucher-dashboard-subtitle">System audit trail — user actions, page views, and security events across the application.</p>
+        </div>
+        <div class="voucher-dashboard-header__actions">
+            <a href="<?php echo htmlspecialchars($auditCtrlUrl, ENT_QUOTES, 'UTF-8'); ?>?action=export" class="util-header-btn util-header-btn--export" download>
+                <i class="ri-download-line" aria-hidden="true"></i> Export CSV
             </a>
-            <button type="button" class="audit-btn audit-btn--clear30" id="btnClear30" title="Delete logs older than 30 days">
-                <i class="ri-delete-bin-6-line"></i> Clear logs (30 days)
+            <button type="button" class="util-header-btn util-header-btn--clear30" id="btnClear30" title="Delete logs older than 30 days">
+                <i class="ri-delete-bin-6-line" aria-hidden="true"></i> Clear 30 days
             </button>
-            <button type="button" class="audit-btn audit-btn--clearall" id="btnClearAll" title="Delete all audit logs">
-                <i class="ri-delete-bin-2-line"></i> Clear all logs
+            <button type="button" class="util-header-btn util-header-btn--clearall" id="btnClearAll" title="Delete all audit logs">
+                <i class="ri-delete-bin-2-line" aria-hidden="true"></i> Clear all
             </button>
         </div>
     </header>
 
-    <div class="voucher-card voucher-card--filter">
-        <div class="filter-download_container">
-            <div class="filter_options_container">
-                <div class="filter-container">
-                    <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
-                </div>
+    <div class="voucher-card audit-stats-card">
+        <div class="audit-stats">
+            <div class="audit-stat">
+                <span class="audit-stat__label"><i class="ri-database-2-line" aria-hidden="true"></i>Total logs</span>
+                <strong class="audit-stat__value"><?php echo number_format((int) $stats['total_logs']); ?></strong>
             </div>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                <span class="text-xsm">Total: <strong><?php echo (int) $stats['total_logs']; ?></strong></span>
-                <span class="text-xsm">Today: <strong><?php echo (int) $stats['today_logs']; ?></strong></span>
-                <span class="text-xsm">Active users (7d): <strong><?php echo (int) $stats['active_users']; ?></strong></span>
-                <span class="text-xsm">Errors: <strong><?php echo (int) $stats['error_logs']; ?></strong></span>
+            <div class="audit-stat audit-stat--today">
+                <span class="audit-stat__label"><i class="ri-calendar-check-line" aria-hidden="true"></i>Today</span>
+                <strong class="audit-stat__value"><?php echo number_format((int) $stats['today_logs']); ?></strong>
+            </div>
+            <div class="audit-stat audit-stat--users">
+                <span class="audit-stat__label"><i class="ri-group-line" aria-hidden="true"></i>Active users (7d)</span>
+                <strong class="audit-stat__value"><?php echo number_format((int) $stats['active_users']); ?></strong>
+            </div>
+            <div class="audit-stat audit-stat--errors">
+                <span class="audit-stat__label"><i class="ri-error-warning-line" aria-hidden="true"></i>Errors</span>
+                <strong class="audit-stat__value"><?php echo number_format((int) $stats['error_logs']); ?></strong>
             </div>
         </div>
     </div>
 
+    <div class="voucher-card voucher-card--filter audit-filter-card">
+        <div class="audit-filter-row">
+            <div class="audit-filter-field">
+                <label for="filterInput">Search audit trail</label>
+                <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Description, action, user, IP, request URI…" autocomplete="off">
+            </div>
+        </div>
+        <p class="audit-filter-hint">Press Enter to search. Showing up to <?php echo (int) $maxBrowse; ?> most recent matching entries.</p>
+    </div>
+
     <div class="voucher-card voucher-card--table">
-        <h2 class="voucher-card-title">Audit Trail</h2>
-        <style>
-            /* Make the table area scroll, keep pager stuck to bottom of card */
-            .voucher-card--table {
-                position: relative;
-                display: flex;
-                flex-direction: column;
-            }
-
-            .voucher-card--table .content-wrapper {
-                flex: 1;
-                min-height: 0;
-                overflow: auto;
-                max-height: 70vh;
-            }
-
-            .voucher-pagination-footer {
-                position: sticky;
-                bottom: 0;
-                z-index: 5;
-                background: #fff;
-                border-top: 1px solid rgba(229, 231, 235, 1);
-                padding: 10px 0 0;
-            }
-        </style>
+        <div class="audit-table-head">
+            <h2 class="voucher-card-title" style="margin:0;">Audit Trail</h2>
+            <p class="audit-table-meta">
+                <?php if ($displayTotal < 1) : ?>
+                    No entries to display
+                <?php else : ?>
+                    <?php echo number_format($endEntry); ?> of <?php echo number_format($totalRows); ?> shown
+                <?php endif; ?>
+            </p>
+        </div>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="auditTable">
                 <thead>
@@ -232,9 +455,8 @@ if (!isset($displayTotal)) {
                     </tr>
                 </thead>
                 <tbody id="auditTableBody">
-                    <?php if (!empty($auditLogs)): ?>
-                        <?php foreach ($auditLogs as $log): 
-                            // Extract processing_no from column or additional_data JSON
+                    <?php if (!empty($auditLogs)) : ?>
+                        <?php foreach ($auditLogs as $log) :
                             $processingNo = $log['processing_no'] ?? null;
                             if (empty($processingNo) && !empty($log['additional_data'])) {
                                 $additionalData = json_decode($log['additional_data'], true);
@@ -242,30 +464,32 @@ if (!isset($displayTotal)) {
                                     $processingNo = $additionalData['processing_no'];
                                 }
                             }
-                            $processingNoDisplay = !empty($processingNo) ? htmlspecialchars($processingNo) : '—';
+                            $actionType = (string) ($log['action_type'] ?? '');
+                            $pillClass = $auditActionPillClass($actionType);
                         ?>
                             <tr>
-                                <td data-label="created_at"><?php echo htmlspecialchars($log['created_at'] ?? ''); ?></td>
+                                <td data-label="created_at" class="audit-cell-mono"><?php echo htmlspecialchars($log['created_at'] ?? ''); ?></td>
                                 <td data-label="username"><?php echo htmlspecialchars($log['username'] ?? '—'); ?></td>
                                 <td data-label="user_display_name"><?php echo htmlspecialchars($log['user_display_name'] ?? '—'); ?></td>
-                                <td data-label="action_type"><?php echo htmlspecialchars($log['action_type'] ?? ''); ?></td>
-                                <td data-label="description" class="status"><?php echo htmlspecialchars($log['description'] ?? ''); ?></td>
-                                <td data-label="processing_no"><?php echo $processingNoDisplay; ?></td>
-                                <td data-label="ip_address"><?php echo htmlspecialchars($log['ip_address'] ?? '—'); ?></td>
-                                <td data-label="request_uri" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?php echo htmlspecialchars($log['request_uri'] ?? ''); ?>"><?php echo htmlspecialchars($log['request_uri'] ?? '—'); ?></td>
+                                <td data-label="action_type">
+                                    <span class="audit-pill <?php echo htmlspecialchars($pillClass, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($actionType); ?></span>
+                                </td>
+                                <td data-label="description" class="audit-cell-desc"><?php echo htmlspecialchars($log['description'] ?? ''); ?></td>
+                                <td data-label="processing_no" class="audit-cell-mono"><?php echo !empty($processingNo) ? htmlspecialchars((string) $processingNo) : '—'; ?></td>
+                                <td data-label="ip_address" class="audit-cell-mono"><?php echo htmlspecialchars($log['ip_address'] ?? '—'); ?></td>
+                                <td data-label="request_uri" class="audit-cell-uri" title="<?php echo htmlspecialchars($log['request_uri'] ?? ''); ?>"><?php echo htmlspecialchars($log['request_uri'] ?? '—'); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
             </table>
-            <div class="no-display" style="<?php echo (count($auditLogs) < 1) ? 'display:flex; width: 100%; height: 80px; justify-content: center; align-items: center; font-weight: 500; color: dimgray;' : 'display:none;'; ?>">
-                <p>NO DATA TO DISPLAY</p>
-            </div>
+            <?php if (count($auditLogs) < 1) : ?>
+                <div class="audit-table-empty">
+                    <i class="ri-file-search-line" aria-hidden="true"></i>
+                    <p>No data to display</p>
+                </div>
+            <?php endif; ?>
         </div>
-        <?php
-        $startEntry = $displayTotal > 0 ? (($currentPage - 1) * $rowsPerPage) + 1 : 0;
-        $endEntry = $displayTotal > 0 ? min($currentPage * $rowsPerPage, $displayTotal) : 0;
-        ?>
         <div class="voucher-pagination-footer">
             <div class="pagination">
                 <div class="pagination_container pagination_container--modern">

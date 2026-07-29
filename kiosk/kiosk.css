@@ -45,9 +45,9 @@
             hsla(241, 71%, 41%, 0.9),
             hsla(219, 74%, 34%, 0.9),
             hsla(224, 47%, 39%, 0.9));
-    --gradient-test: linear-gradient(90deg,
-            hsla(0, 75%, 40%, 0.9),
-            rgb(131, 117, 70));
+            --gradient-test: linear-gradient(90deg,
+            hsla(231, 100%, 21%, 0.9),
+            rgb(53, 53, 53));
     --gradient-beta: linear-gradient(90deg,
             hsla(163, 40%, 42%, 0.9),
             hsla(147, 56%, 42%, 0.9),

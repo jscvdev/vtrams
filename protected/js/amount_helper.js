@@ -22,7 +22,8 @@ function formatAmountDisplay(raw) {
     if (normalized === '') return '';
     var parts = normalized.split('.');
     var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts.length > 1 ? intPart + '.' + parts[1] : intPart;
+    var formatted = parts.length > 1 ? intPart + '.' + parts[1] : intPart;
+    return '₱' + formatted;
 }
 
 function sanitizeAmountInputField(input) {

@@ -13,52 +13,76 @@ $report_offices = utilities_signatory_fetch_offices($pdo);
 $scope = voucher_status_report_scope($pdo, trim((string) ($_SESSION['logged_user_office'] ?? '')));
 
 $rawOffice = trim((string) ($_GET['office'] ?? 'all'));
-$officeFilter = ($rawOffice === '' || strcasecmp($rawOffice, 'all') === 0) ? null : utilities_signatory_resolve_office($pdo, $rawOffice);
-
-$entries = voucher_status_report_fetch_entries($pdo, $scope, $officeFilter);
-$summary = voucher_status_report_summarize($entries);
-
 $rawStatus = trim((string) ($_GET['status'] ?? 'all'));
+$rawType = trim((string) ($_GET['voucher_type'] ?? 'all'));
+$rawDateFrom = trim((string) ($_GET['date_from'] ?? ''));
+$rawDateTo = trim((string) ($_GET['date_to'] ?? ''));
+$rawSearch = (string) ($_GET['q'] ?? '');
+$rawShow = trim((string) ($_GET['show'] ?? ''));
+
 $statusFilter = in_array(strtolower($rawStatus), ['all', 'processing', 'paid', 'returned'], true)
     ? strtolower($rawStatus)
     : 'all';
-$entries = voucher_status_report_filter_by_status($entries, $statusFilter);
-$summary = voucher_status_report_summarize($entries);
 
 $report_voucher_types = checklist_types_with_labels();
-$rawType = trim((string) ($_GET['voucher_type'] ?? 'all'));
 $typeFilter = ($rawType === '' || strcasecmp($rawType, 'all') === 0) ? 'all' : $rawType;
 if ($typeFilter !== 'all' && !isset($report_voucher_types[$typeFilter])) {
     $typeFilter = 'all';
 }
-$entries = voucher_status_report_filter_by_voucher_type($entries, $typeFilter);
-$summary = voucher_status_report_summarize($entries);
 
-$rawDateFrom = trim((string) ($_GET['date_from'] ?? ''));
-$rawDateTo = trim((string) ($_GET['date_to'] ?? ''));
-$dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
-$dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
-$entries = voucher_status_report_filter_by_date($entries, $dateFromFilter, $dateToFilter);
-$summary = voucher_status_report_summarize($entries);
-$printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
+$isDefaultPreview = !voucher_status_report_has_active_query([
+    'office' => $rawOffice,
+    'status' => $statusFilter,
+    'voucher_type' => $typeFilter,
+    'date_from' => $rawDateFrom,
+    'date_to' => $rawDateTo,
+    'q' => $rawSearch,
+    'show' => $rawShow,
+]);
+$defaultPreviewLimit = voucher_status_report_default_limit();
 
-$rawSearch = (string) ($_GET['q'] ?? '');
-$searchTerm = strtolower(trim($rawSearch));
-if ($searchTerm !== '') {
-    $entries = array_values(array_filter($entries, static function (array $entry) use ($searchTerm): bool {
-        $haystack = strtolower(implode(' ', [
-            (string) ($entry['processing_no'] ?? ''),
-            (string) ($entry['payee'] ?? ''),
-            (string) ($entry['dv_no'] ?? ''),
-            (string) ($entry['ors_no'] ?? ''),
-            (string) ($entry['origin_office'] ?? ''),
-            (string) ($entry['status_label'] ?? ''),
-            (string) ($entry['category_label'] ?? ''),
-        ]));
+$officeFilter = ($rawOffice === '' || strcasecmp($rawOffice, 'all') === 0) ? null : utilities_signatory_resolve_office($pdo, $rawOffice);
 
-        return str_contains($haystack, $searchTerm);
-    }));
+if ($isDefaultPreview) {
+    $summary = voucher_status_report_compute_summary($pdo, $scope, $officeFilter);
+    $entries = voucher_status_report_fetch_entries($pdo, $scope, $officeFilter, voucher_status_report_default_limit());
+    $dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
+    $dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
+    $printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
+    $searchTerm = strtolower(trim($rawSearch));
+} else {
+    $entries = voucher_status_report_fetch_entries($pdo, $scope, $officeFilter, 0);
     $summary = voucher_status_report_summarize($entries);
+
+    $entries = voucher_status_report_filter_by_status($entries, $statusFilter);
+    $summary = voucher_status_report_summarize($entries);
+
+    $entries = voucher_status_report_filter_by_voucher_type($entries, $typeFilter);
+    $summary = voucher_status_report_summarize($entries);
+
+    $dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
+    $dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
+    $entries = voucher_status_report_filter_by_date($entries, $dateFromFilter, $dateToFilter);
+    $summary = voucher_status_report_summarize($entries);
+    $printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
+
+    $searchTerm = strtolower(trim($rawSearch));
+    if ($searchTerm !== '') {
+        $entries = array_values(array_filter($entries, static function (array $entry) use ($searchTerm): bool {
+            $haystack = strtolower(implode(' ', [
+                (string) ($entry['processing_no'] ?? ''),
+                (string) ($entry['payee'] ?? ''),
+                (string) ($entry['dv_no'] ?? ''),
+                (string) ($entry['ors_no'] ?? ''),
+                (string) ($entry['origin_office'] ?? ''),
+                (string) ($entry['status_label'] ?? ''),
+                (string) ($entry['category_label'] ?? ''),
+            ]));
+
+            return str_contains($haystack, $searchTerm);
+        }));
+        $summary = voucher_status_report_summarize($entries);
+    }
 }
 
 $entriesJson = json_encode($entries, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
@@ -66,6 +90,9 @@ $selectedOfficeValue = $officeFilter ?? 'all';
 $printOfficeLabel = $selectedOfficeValue === 'all' ? 'All Offices' : (string) $selectedOfficeValue;
 $printGeneratedAt = date('Y-m-d H:i:s');
 $pageTitleHelperName = $header_text ?? 'Status Report';
+$statusReportRowMetaLabel = $isDefaultPreview
+    ? 'Showing latest ' . count($entries) . ' of ' . (int) $summary['total'] . ' tracked (by last update)'
+    : count($entries) . ' voucher' . (count($entries) === 1 ? '' : 's') . ' shown';
 ?>
 <div class="main main--voucher-dashboard" id="main">
     <header class="voucher-dashboard-header no-print">
@@ -175,6 +202,9 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 <input type="text" id="statusReportSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Processing no., payee, office, status…" autocomplete="off">
             </div>
             <button type="submit" class="status-report-filter-bar__apply">Apply Filters</button>
+            <?php if ($isDefaultPreview) : ?>
+                <a class="status-report-filter-bar__apply status-report-filter-bar__show-all" href="?show=all">Show All</a>
+            <?php endif; ?>
             <div class="status-report-filter-bar__field status-report-filter-bar__field--print-limit">
                 <label for="statusReportPrintLimitMode">Print rows</label>
                 <div class="status-report-print-limit-controls">
@@ -192,7 +222,12 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
     <div class="voucher-card voucher-card--table status-report-table-card">
         <div class="status-report-table-head no-print">
             <h2 class="voucher-card-title" style="margin:0;">Transmitted Vouchers</h2>
-            <p class="status-report-table-meta" id="statusReportRowMeta"><?php echo count($entries); ?> voucher<?php echo count($entries) === 1 ? '' : 's'; ?> shown</p>
+            <div class="status-report-table-head__meta">
+                <p class="status-report-table-meta" id="statusReportRowMeta"><?php echo htmlspecialchars($statusReportRowMetaLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+                <?php if ($isDefaultPreview) : ?>
+                    <p class="status-report-table-hint">Stat cards reflect all tracked vouchers. The table shows the latest <?php echo (int) voucher_status_report_default_limit(); ?> only for faster loading — use search, filters, or <strong>Show All</strong> for the full list.</p>
+                <?php endif; ?>
+            </div>
         </div>
         <style>
             .status-report-stats {
@@ -377,6 +412,20 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 color: #fff;
             }
 
+            .status-report-filter-bar__show-all {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                text-decoration: none;
+                background-color: #fff;
+                color: #0d6efd;
+                border: 1px solid #0d6efd;
+            }
+
+            .status-report-filter-bar__show-all:hover {
+                background-color: #eff6ff;
+            }
+
             .status-report-filter-bar__print {
                 background-color: #fff;
                 color: rgb(75 85 99 / 0.9);
@@ -389,6 +438,23 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 justify-content: space-between;
                 gap: 12px;
                 margin-bottom: 12px;
+                flex-wrap: wrap;
+            }
+
+            .status-report-table-head__meta {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 4px;
+            }
+
+            .status-report-table-hint {
+                margin: 0;
+                font-size: 11px;
+                color: rgb(100 116 139 / 0.95);
+                max-width: 420px;
+                text-align: right;
+                line-height: 1.4;
             }
 
             .status-report-table-meta {
