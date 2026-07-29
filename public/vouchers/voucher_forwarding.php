@@ -839,20 +839,20 @@ if ($showCashierArchiveCol) {
                 flex-wrap: nowrap;
                 align-items: center;
                 justify-content: flex-end;
-                gap: 2px;
+                gap: 4px;
             }
 
             #my-Table .voucher-table-actions-group .btn {
                 display: inline-flex !important;
                 align-items: center;
                 justify-content: center;
-                width: 28px !important;
-                min-width: 28px !important;
-                height: 28px !important;
-                min-height: 28px !important;
+                width: 36px !important;
+                min-width: 36px !important;
+                height: 36px !important;
+                min-height: 36px !important;
                 padding: 0 !important;
                 border: 1px solid #e2e8f0 !important;
-                border-radius: 6px !important;
+                border-radius: 8px !important;
                 background: #ffffff !important;
                 color: #64748b !important;
                 box-shadow: none !important;
@@ -863,7 +863,7 @@ if ($showCashierArchiveCol) {
             }
 
             #my-Table .voucher-table-actions-group .btn i {
-                font-size: 15px;
+                font-size: 18px;
                 line-height: 1;
             }
 

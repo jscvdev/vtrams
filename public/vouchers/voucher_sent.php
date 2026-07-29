@@ -589,20 +589,20 @@ $totalRows = $displayTotal;
                 flex-wrap: nowrap;
                 align-items: center;
                 justify-content: flex-end;
-                gap: 2px;
+                gap: 4px;
             }
 
             #my-Table .voucher-table-actions-group .voucher-table-action-btn {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 28px;
-                min-width: 28px;
-                height: 28px;
-                min-height: 28px;
+                width: 36px;
+                min-width: 36px;
+                height: 36px;
+                min-height: 36px;
                 padding: 0;
                 border: 1px solid #e2e8f0;
-                border-radius: 6px;
+                border-radius: 8px;
                 background: #ffffff;
                 color: #64748b;
                 box-shadow: none;
@@ -613,7 +613,7 @@ $totalRows = $displayTotal;
             }
 
             #my-Table .voucher-table-actions-group .voucher-table-action-btn i {
-                font-size: 15px;
+                font-size: 18px;
                 line-height: 1;
             }
 
