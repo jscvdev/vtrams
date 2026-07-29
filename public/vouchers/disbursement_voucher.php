@@ -29,12 +29,12 @@ function session_contains_phrase($phrase)
     <div class="filter-download_container">
         <div class="filter_options_container">
             <div>
-                <input type="text" id="filterInput" placeholder="Search">
+                <input type="text" id="filterInput" placeholder="search">
             </div>
         </div>
         <a class="btn-add popupForm-add" id="openPopup">New document</a>
     </div>
-    <div class="popup-form" id="popupForm2">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm2">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p>New Document</p>
@@ -107,7 +107,7 @@ function session_contains_phrase($phrase)
         </div>
     </div>
 
-    <div class="popup-form" id="popupForm">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="form_title">Forward Document</p>
@@ -540,7 +540,7 @@ function session_contains_phrase($phrase)
             </form>
         </div>
     </div>
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
     <table class="table content_table" id="my-Table">
         <thead>
             <th>Processing No.</th>

@@ -333,6 +333,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$uacs_tab_ids = ['mappings', 'tags'];
+$active_uacs_tab = 'mappings';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $uacs_post_action = (string) ($_POST['action'] ?? '');
+    if (str_starts_with($uacs_post_action, 'emp_tag_')) {
+        $active_uacs_tab = 'tags';
+    }
+} else {
+    $uacs_tab_param = (string) ($_GET['tab'] ?? '');
+    if (in_array($uacs_tab_param, $uacs_tab_ids, true)) {
+        $active_uacs_tab = $uacs_tab_param;
+    }
+}
 ?>
 
 <style>
@@ -355,7 +369,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .uacs-page .voucher-card-title { font-size: 1.125rem; font-weight: 700; padding: 1rem 1.25rem; margin: 0; border-bottom: 1px solid var(--util-border); background: linear-gradient(180deg, #fff 0%, #f8fafc 100%); display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
     .uacs-page .voucher-card-title__label { display: inline-flex; align-items: center; gap: 0.5rem; }
     .uacs-page .voucher-card-title .ri-icon { font-size: 1.25rem; color: var(--util-accent); }
-    .uacs-page .content-wrapper { padding: var(--util-pad-y) var(--util-pad-x); max-width: 100%; box-sizing: border-box; }
+    .uacs-page .content-wrapper {
+        padding: 0;
+        overflow: hidden;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
     .util-alert { padding: 0.875rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; border: 1px solid transparent; }
     .util-alert.success { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
     .util-alert.error { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
@@ -430,27 +452,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </style>
 <?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
-<div class="main main--dashboard uacs-page" id="main">
+<div class="main main--voucher-dashboard util-premium-page uacs-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">UACS Codes</h1>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">UACS Codes</h1>
+            <p class="voucher-dashboard-subtitle">Map employee tags and sub-UACS codes per voucher type for accounting classification.</p>
+        </div>
     </header>
 
     <?php
     $list_filter_mode = 'voucher_type';
     $list_voucher_types = $list_uacs_type_options;
-    $list_placeholder = 'Search voucher type, tag, UACS, or account title';
+    $list_placeholder = 'search';
     $list_form_id = 'uacsListFilterForm';
+    $list_hidden_fields = ['tab' => $active_uacs_tab];
     require __DIR__ . '/partials/list_filter_toolbar.php';
     ?>
 
-    <?php if ($flash): ?>
-        <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
-            <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
-            <?= htmlspecialchars($flash['msg']) ?>
-        </div>
-    <?php endif; ?>
-
-    <div class="voucher-card">
+    <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">
             <span class="voucher-card-title__label">
                 <i class="ri-barcode-box-line ri-icon"></i>
@@ -458,7 +477,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </span>
             <span class="uacs-stat"><?= (int) $scope_visible ?> scope<?= $scope_visible === 1 ? '' : 's' ?></span>
         </h2>
-        <div class="content-wrapper">
+        <div class="content-wrapper util-content-with-subtabs">
+            <?php if ($flash): ?>
+                <div class="util-flash-wrap">
+                    <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
+                        <?= htmlspecialchars($flash['msg']) ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="util-subtabs-toolbar">
+                <div class="util-subtabs-bar" role="tablist" aria-label="UACS sections">
+                    <button type="button" class="util-subtab-btn<?= $active_uacs_tab === 'mappings' ? ' is-active' : '' ?>" role="tab" data-util-tab="mappings" aria-selected="<?= $active_uacs_tab === 'mappings' ? 'true' : 'false' ?>">UACS mappings</button>
+                    <button type="button" class="util-subtab-btn<?= $active_uacs_tab === 'tags' ? ' is-active' : '' ?>" role="tab" data-util-tab="tags" aria-selected="<?= $active_uacs_tab === 'tags' ? 'true' : 'false' ?>">Employee tags</button>
+                </div>
+                <p class="util-subtabs-hint">Each tab uses the full panel for an unobstructed view.</p>
+            </div>
+
+            <div class="util-subtab-panels">
+                <div class="util-subtab-panel<?= $active_uacs_tab === 'mappings' ? ' is-active' : '' ?>" data-util-panel="mappings">
+                    <div class="util-subtab-panel__body">
             <p class="util-desc">
                 Map 10-digit UACS codes by <strong>voucher type</strong>. Leave tag blank for a type-wide default, or pick an
                 <strong>employee tag</strong> to scope the mapping to that tag on the same voucher type. Sub UACS rows
@@ -529,7 +568,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php if ($blocks_visible === 0): ?>
                 <p class="util-empty"><?= ($list_filter['is_filtered'] || $list_filter['q'] !== '') ? 'No UACS mappings match your filter.' : 'No UACS mappings yet. Add one above.' ?></p>
             <?php endif; ?>
+                    </div>
+                </div>
 
+                <div class="util-subtab-panel<?= $active_uacs_tab === 'tags' ? ' is-active' : '' ?>" data-util-panel="tags">
+                    <div class="util-subtab-panel__body">
             <h3 class="util-section-title">Employee Tags</h3>
             <p class="util-desc">
                 Tags appear in User Management. UACS codes are configured above per voucher type and optional tag.
@@ -599,10 +642,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<?php
+$util_subtabs_initial_tab = $active_uacs_tab;
+$util_subtabs_valid_tabs = $uacs_tab_ids;
+require __DIR__ . '/partials/util_subtabs_script.php';
+?>
 <script>
 (function () {
     var tagSelect = document.getElementById('add_tag_name');

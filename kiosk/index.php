@@ -13,7 +13,7 @@
                     <form action="" id="searchForm" class="search-form" autocomplete="off">
                         <label for="filterInput" class="visually-hidden">Processing number or payee</label>
                         <input type="text" id="filterInput" name="query"
-                            placeholder="PN-26-01-0001 or payee name">
+                            placeholder="search">
                     </form>
                 </div>
                 <button type="submit" form="searchForm" class="btn warning btn-flex btn-nowrap btn-pad voucher-dashboard-btn-primary kiosk-search-btn">

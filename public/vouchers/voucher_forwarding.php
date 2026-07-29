@@ -317,6 +317,161 @@ if ($showCashierArchiveCol) {
             border-color: #8fb2ff;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
+
+        /* Row burger menu (View / Status Report History) */
+        .voucher-row-menu-cell {
+            width: 44px;
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .voucher-row-menu {
+            position: relative;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .voucher-row-menu-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            color: #4b5563;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease, transform 120ms ease;
+        }
+
+        .voucher-row-menu-trigger:hover,
+        .voucher-row-menu.is-open .voucher-row-menu-trigger {
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            border-color: #c7d7fe;
+            color: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.16);
+            transform: translateY(-1px);
+        }
+
+        .voucher-row-menu-trigger i {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .voucher-row-menu-dropdown {
+            position: fixed;
+            z-index: 501;
+            width: 128px;
+            min-width: 128px;
+            max-width: 128px;
+            padding: 4px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .voucher-row-menu-dropdown.is-open {
+            display: block;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 32px;
+            margin: 0;
+            padding: 6px 8px !important;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            box-shadow: none;
+            box-sizing: border-box;
+            transition: background 120ms ease, color 120ms ease;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn i {
+            width: 16px;
+            flex: 0 0 16px;
+            font-size: 15px;
+            color: #6b7280;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn span {
+            flex: 1 1 auto;
+            line-height: 1.2;
+            text-align: left;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn:hover {
+            background: #f3f6fb;
+            color: #1d4ed8;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn:hover i {
+            color: #2563eb;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            width: 100%;
+            min-height: 32px;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 8px;
+            box-sizing: border-box;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: 0.01em;
+            color: #374151;
+            text-decoration: none;
+            background: transparent;
+            cursor: pointer;
+            transition: background 120ms ease, color 120ms ease;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link i {
+            width: 16px;
+            flex: 0 0 16px;
+            font-size: 15px;
+            color: #6b7280;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link span {
+            flex: 1 1 auto;
+            text-align: left;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover {
+            background: #f3f6fb;
+            color: #1d4ed8;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover i {
+            color: #2563eb;
+        }
     </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
@@ -355,13 +510,13 @@ if ($showCashierArchiveCol) {
                         </label>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search document ID or title" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <div class="popup-form" id="popupForm">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="form_title">Forward Document</p>
@@ -580,10 +735,10 @@ if ($showCashierArchiveCol) {
             </form>
         </div>
     </div>
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
 
     <!-- Return Options Popup -->
-    <div class="popup-form" id="returnOptionsPopup" style="display: none;">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="returnOptionsPopup" style="display: none;">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p>Return Voucher</p>
@@ -631,7 +786,7 @@ if ($showCashierArchiveCol) {
             </div>
         </div>
     </div>
-    <div class="overlay" id="returnOptionsOverlay" style="display: none;"></div>
+    <div class="overlay voucher-premium-overlay" id="returnOptionsOverlay" style="display: none;"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">Forwarding Summary</h2>
         <style>
@@ -639,13 +794,87 @@ if ($showCashierArchiveCol) {
                 position: relative;
                 display: flex;
                 flex-direction: column;
+                flex: 1;
+                min-height: 0;
+            }
+
+            .main.main--voucher-dashboard {
+                height: calc(100dvh - 4rem);
+                max-height: calc(100dvh - 4rem);
+                overflow: hidden;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem;
+            }
+
+            .main--voucher-dashboard .voucher-card--table {
+                flex: 1;
+                min-height: 0;
             }
 
             .voucher-card--table .content-wrapper {
                 flex: 1;
                 min-height: 0;
                 overflow: auto;
-                max-height: 70vh;
+                max-height: none;
+            }
+
+            #my-Table .voucher-table-actions-cell {
+                width: 1%;
+                white-space: nowrap;
+                vertical-align: middle;
+                padding: 4px 6px !important;
+                text-align: right;
+            }
+
+            .voucher-table-actions-group {
+                display: inline-flex;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 2px;
+            }
+
+            #my-Table .voucher-table-actions-group .btn {
+                display: inline-flex !important;
+                align-items: center;
+                justify-content: center;
+                width: 28px !important;
+                min-width: 28px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                padding: 0 !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                background: #ffffff !important;
+                color: #64748b !important;
+                box-shadow: none !important;
+                font-size: 0 !important;
+                line-height: 1;
+                cursor: pointer;
+                transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+            }
+
+            #my-Table .voucher-table-actions-group .btn i {
+                font-size: 15px;
+                line-height: 1;
+            }
+
+            #my-Table .voucher-table-actions-group .btn span {
+                display: none;
+            }
+
+            #my-Table .voucher-table-actions-group .btn:hover {
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #475569 !important;
+                transform: none;
+            }
+
+            #my-Table .voucher-table-actions-group .btn:active {
+                background: #e2e8f0 !important;
             }
 
             .voucher-table-empty-hint {
@@ -780,35 +1009,12 @@ if ($showCashierArchiveCol) {
                         <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
                             <th class="voucher-bulk-select-cell" aria-label="Select for bulk forward"></th>
                         <?php endif; ?>
+                        <th class="voucher-row-menu-cell" aria-label="Menu"></th>
                         <th>Processing No.</th>
-                        <th>ORS No.</th>
-                        <th>DV No.</th>
-                        <th>ADA/Check No.</th>
                         <th>Payee Name</th>
-                        <th>Address</th>
-                        <th>Particulars</th>
                         <th>Amount</th>
-                        <th>Voucher Date</th>
-                        <th>Type</th>
-                        <th>Date/Time Forwarded</th>
                         <th>Remarks</th>
-                        <th>Return</th>
-                        <?php if ($showEditCol) : ?>
-                            <th>Edit</th>
-                        <?php endif; ?>
-                        <?php if ($showForwardCol) : ?>
-                            <th id="forward_header">Forward</th>
-                        <?php endif; ?>
-                        <?php if ($showProcessCol) : ?>
-                            <th id="forward_header">Process</th>
-                        <?php endif; ?>
-                        <?php if ($showTransmitCol) : ?>
-                            <th id="forward_header">Transmit</th>
-                        <?php endif; ?>
-                        <th>History</th>
-                        <?php if ($showCashierArchiveCol) : ?>
-                            <th id="forward_header">Pay</th>
-                        <?php endif; ?>
+                        <th class="voucher-table-actions-cell">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -826,13 +1032,30 @@ if ($showCashierArchiveCol) {
                                     <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
                                 </td>
                             <?php endif; ?>
+                            <td class="voucher-row-menu-cell" data-label="">
+                                <div class="voucher-row-menu">
+                                    <button type="button" class="voucher-row-menu-trigger" aria-label="Row actions" aria-haspopup="true" aria-expanded="false">
+                                        <i class="ri-more-2-fill" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="voucher-row-menu-dropdown" role="menu">
+                                        <button class="btn tertiary voucher-row-menu-item" name="btn-history" type="button" role="menuitem">
+                                            <i class="ri-eye-line" aria-hidden="true"></i>
+                                            <span>View</span>
+                                        </button>
+                                        <a class="voucher-row-menu-link" href="voucher_status_report.php?q=<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" role="menuitem">
+                                            <i class="ri-history-line" aria-hidden="true"></i>
+                                            <span>History</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
                             <td data-label="processing_no"><?php echo $row['processing_no']; ?></td>
-                            <td data-label="ors_no"><?php echo $row['ors_no']; ?></td>
-                            <td data-label="dv_no"><?php echo $row['dv_no']; ?></td>
-                            <td data-label="ada_check_no"><?php echo $row['ada_check_no']; ?></td>
+                            <td data-label="ors_no" class="hidden"><?php echo $row['ors_no']; ?></td>
+                            <td data-label="dv_no" class="hidden"><?php echo $row['dv_no']; ?></td>
+                            <td data-label="ada_check_no" class="hidden"><?php echo $row['ada_check_no']; ?></td>
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
-                            <td data-label="address" class="status"><?php echo $row['address']; ?></td>
-                            <td data-label="particulars"><?php echo $row['particulars']; ?></td>
+                            <td data-label="address" class="hidden status"><?php echo $row['address']; ?></td>
+                            <td data-label="particulars" class="hidden"><?php echo $row['particulars']; ?></td>
                             <?php
                             $baseAmount = (string) ($row['amount'] ?? '');
                             $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
@@ -840,9 +1063,9 @@ if ($showCashierArchiveCol) {
                             $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
                             ?>
                             <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
-                            <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
-                            <td data-label="datetime_forwarded"><?php echo $row['datetime_forwarded']; ?></td>
+                            <td data-label="voucher_date" class="hidden"><?php echo $row['voucher_date']; ?></td>
+                            <td data-label="voucher_type_display" class="hidden voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
+                            <td data-label="datetime_forwarded" class="hidden"><?php echo $row['datetime_forwarded']; ?></td>
                             <td data-label="sender_remarks" class="return-remarks-cell">
                                 <?php
                                 $fwd_remarks_raw = isset($row['sender_remarks']) ? trim((string)$row['sender_remarks']) : '';
@@ -870,7 +1093,6 @@ if ($showCashierArchiveCol) {
 
                                 <?php endif; ?>
                             </td>
-                            <td data-label="return"><button class="btn warning" name="btn-return" type="button">Return</button></td>
                             <?php
                             $processStatus     = $row['process_status'] ?? '';
                             $transmitStatus    = $row['transmit'] ?? '';
@@ -892,13 +1114,7 @@ if ($showCashierArchiveCol) {
                             $rolePlanningChief = in_array("Planning Section Chief", $target);
                             $roleOfficePenro   = in_array("Office of the PENRO", $target);
                             $roleIcu           = in_array("ICU", $target, true);
-                            ?>
 
-                            <?php if ($showEditCol) : ?>
-                                <td data-label="edit"><button class="btn danger pPop" id="openPopup" name="btn-edit_amount" type="button">Edit</button></td>
-                            <?php endif; ?>
-
-                            <?php
                             $forwardHtml = '';
                             $processHtml = '';
                             $transmitHtml = '';
@@ -918,9 +1134,9 @@ if ($showCashierArchiveCol) {
                             if ($isAlternateWorkflowRole && !$treatAsSameOfficeWorkflow) {
                                 if ($showForwardCol && !$roleCashiers) {
                                     if ($canShowProcess && $processProcessed && ($transmitEmpty || $transmitDone)) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } else {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     }
                                 }
                                 if ($roleAccounting || $roleProcessor) {
@@ -928,54 +1144,54 @@ if ($showCashierArchiveCol) {
                                 }
                                 if ($canShowProcess && $processProcessed && !$roleAccountantIII) {
                                     if ($transmitEmpty) {
-                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                        $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-transmit" type="button" aria-label="Transmit" title="Transmit"><i class="ri-share-forward-line" aria-hidden="true"></i><span>Transmit</span></button>';
                                     } elseif ($transmitYes) {
-                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                        $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-re_transmit" type="button" aria-label="Re-transmit" title="Re-transmit"><i class="ri-refresh-line" aria-hidden="true"></i><span>Re-transmit</span></button>';
                                     }
                                 }
                             } elseif ($roleAccounting || $roleProcessor) {
                                 if (!$roleCashiers) {
                                     if ($processProcessed && $roleAccountantIII) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($processProcessed && ($transmitEmpty || $transmitDone)) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } else {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     }
                                 }
                                 $processHtml = voucher_forwarding_process_action_html($processStatus);
                                 if ($canShowProcess && $processProcessed && !$roleAccountantIII) {
                                     if ($transmitEmpty) {
-                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                        $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-transmit" type="button" aria-label="Transmit" title="Transmit"><i class="ri-share-forward-line" aria-hidden="true"></i><span>Transmit</span></button>';
                                     } elseif ($transmitYes) {
-                                        $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                        $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-re_transmit" type="button" aria-label="Re-transmit" title="Re-transmit"><i class="ri-refresh-line" aria-hidden="true"></i><span>Re-transmit</span></button>';
                                     }
                                 }
                                 if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
-                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-pay" type="button">Pay</button>';
+                                    $archiveHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-pay" type="button" aria-label="Pay" title="Pay"><i class="ri-wallet-3-line" aria-hidden="true"></i><span>Pay</span></button>';
                                 }
                             } elseif ($roleIcu && $showForwardCol && !$roleCashiers) {
                                 if ($processProcessed && ($transmitEmpty || $transmitDone)) {
-                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()">Forward</button>';
+                                    $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" onclick="hideProcessors()" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                 } else {
-                                    $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                    $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                 }
                             } elseif ($roleCashiers || $roleBudget || $rolePlanning || $roleOfficePenro) {
                                 if (!$roleCashiers && (!$roleBudgetOfficer || !$roleCashier)) {
                                     if ($roleBudget && $transmitEmpty) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($roleBudget && $transmitDone) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideBudgetOfficerChief()" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" onclick="hideBudgetOfficerChief()" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($roleCashiers && $transmitDone) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hideCashierOfficerChief()" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" onclick="hideCashierOfficerChief()" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($roleCashiers && $transmitEmpty) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($roleOfficePenro && ($transmitEmpty || $transmitDone)) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($rolePlanning && $transmitEmpty) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     } elseif ($rolePlanning && $transmitDone) {
-                                        $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" onclick="hidePlanningOfficerChief()" type="button">Forward</button>';
+                                        $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" onclick="hidePlanningOfficerChief()" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                                     }
                                 }
                                 if (
@@ -983,36 +1199,43 @@ if ($showCashierArchiveCol) {
                                     || ($roleOfficePenro && $transmitEmpty)
                                     || ($rolePlanning && !$rolePlanningChief && $transmitEmpty)
                                 ) {
-                                    $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-transmit" type="button">Transmit</button>';
+                                    $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-transmit" type="button" aria-label="Transmit" title="Transmit"><i class="ri-share-forward-line" aria-hidden="true"></i><span>Transmit</span></button>';
                                 } elseif (
                                     ($roleBudget && !$roleBudgetOfficer && $transmitYes)
                                     || ($roleOfficePenro && $transmitYes)
                                     || ($rolePlanning && !$rolePlanningChief && $transmitYes)
                                 ) {
-                                    $transmitHtml = '<button class="btn warning pPop" id="openPopup" name="btn-re_transmit" type="button">Re-transmit</button>';
+                                    $transmitHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-re_transmit" type="button" aria-label="Re-transmit" title="Re-transmit"><i class="ri-refresh-line" aria-hidden="true"></i><span>Re-transmit</span></button>';
                                 }
                                 if (($roleCashiers || $roleCashier) && ($transmitEmpty || $transmitYes)) {
-                                    $archiveHtml = '<button class="btn danger pPop" id="openPopup" name="btn-pay" type="button">Pay</button>';
+                                    $archiveHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-pay" type="button" aria-label="Pay" title="Pay"><i class="ri-wallet-3-line" aria-hidden="true"></i><span>Pay</span></button>';
                                 }
                             } elseif (!$roleCashiers) {
-                                $forwardHtml = '<button class="btn primary pPop" id="openPopup" name="btn-forward" type="button">Forward</button>';
+                                $forwardHtml = '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-forward" type="button" aria-label="Forward" title="Forward"><i class="ri-send-plane-line" aria-hidden="true"></i><span>Forward</span></button>';
                             }
                             ?>
-                            <?php if ($showForwardCol) : ?>
-                                <td data-label="forward"><?php echo $forwardHtml; ?></td>
-                            <?php endif; ?>
-                            <?php if ($showProcessCol) : ?>
-                                <td data-label="process"><?php echo $processHtml; ?></td>
-                            <?php endif; ?>
-                            <?php if ($showTransmitCol) : ?>
-                                <td data-label="transmit"><?php echo $transmitHtml; ?></td>
-                            <?php endif; ?>
-                            <td data-label="history">
-                                <button class="btn tertiary" name="btn-history" type="button">View</button>
+                            <td class="voucher-table-actions-cell" data-label="actions">
+                                <div class="voucher-table-actions-group">
+                                    <button class="btn voucher-table-action-btn voucher-table-action-btn--return" name="btn-return" type="button" aria-label="Return" title="Return"><i class="ri-arrow-go-back-line" aria-hidden="true"></i><span>Return</span></button>
+                                    <?php if ($showEditCol) : ?>
+                                        <button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-edit_amount" type="button" aria-label="Edit" title="Edit"><i class="ri-edit-line" aria-hidden="true"></i><span>Edit</span></button>
+                                    <?php endif; ?>
+                                    <?php
+                                    if ($showForwardCol && $forwardHtml !== '') {
+                                        echo $forwardHtml;
+                                    }
+                                    if ($showProcessCol && $processHtml !== '') {
+                                        echo $processHtml;
+                                    }
+                                    if ($showTransmitCol && $transmitHtml !== '') {
+                                        echo $transmitHtml;
+                                    }
+                                    if ($showCashierArchiveCol && $archiveHtml !== '') {
+                                        echo $archiveHtml;
+                                    }
+                                    ?>
+                                </div>
                             </td>
-                            <?php if ($showCashierArchiveCol) : ?>
-                                <td data-label="pay"><?php echo $archiveHtml; ?></td>
-                            <?php endif; ?>
                             <td data-label="amount_original" class="hidden"><?php echo $row['amount']; ?></td>
                             <td data-label="combined_remarks" class="hidden"><?php echo $row['remarks']; ?></td>
                             <td data-label="tin_employee_no" class="hidden"><?php echo $row['tin_employee_no']; ?></td>
@@ -1187,6 +1410,164 @@ if ($showCashierArchiveCol) {
                 closeDropdown();
             }
         });
+    })();
+</script>
+<script>
+    (function() {
+        var table = document.getElementById('my-Table');
+        if (!table) return;
+
+        var contentWrapper = table.closest('.content-wrapper');
+
+        function getMenuDropdown(menu) {
+            return menu._portedDropdown || menu.querySelector('.voucher-row-menu-dropdown');
+        }
+
+        function resetRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            if (!dropdown) return;
+
+            dropdown.classList.remove('is-open');
+            dropdown.style.top = '';
+            dropdown.style.left = '';
+            dropdown.style.width = '';
+            dropdown.style.minWidth = '';
+            dropdown.style.maxWidth = '';
+
+            if (menu._portedDropdown) {
+                menu.appendChild(dropdown);
+                menu._portedDropdown = null;
+            }
+
+            dropdown._ownerRow = null;
+        }
+
+        function positionRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            var trigger = menu.querySelector('.voucher-row-menu-trigger');
+            if (!dropdown || !trigger) return;
+
+            if (!menu._portedDropdown) {
+                menu._portedDropdown = dropdown;
+                dropdown._ownerRow = menu.closest('tr');
+                document.body.appendChild(dropdown);
+            }
+
+            dropdown.classList.add('is-open');
+
+            var rect = trigger.getBoundingClientRect();
+            var dropdownWidth = dropdown.offsetWidth || 128;
+            var centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+            dropdown.style.top = (rect.bottom + 4) + 'px';
+
+            var dropdownRect = dropdown.getBoundingClientRect();
+            if (dropdownRect.bottom > window.innerHeight - 8) {
+                dropdown.style.top = Math.max(8, rect.top - dropdownRect.height - 4) + 'px';
+            }
+            dropdownWidth = dropdownRect.width || dropdownWidth;
+            centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+        }
+
+        function syncOpenRowMenu() {
+            var openMenu = table.querySelector('.voucher-row-menu.is-open');
+            if (openMenu) {
+                positionRowMenuDropdown(openMenu);
+            }
+        }
+
+        function closeAllRowMenus(exceptMenu) {
+            table.querySelectorAll('.voucher-row-menu.is-open').forEach(function(menu) {
+                if (exceptMenu && menu === exceptMenu) {
+                    return;
+                }
+                menu.classList.remove('is-open');
+                resetRowMenuDropdown(menu);
+                var trigger = menu.querySelector('.voucher-row-menu-trigger');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        table.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.voucher-row-menu-trigger');
+            if (trigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                var menu = trigger.closest('.voucher-row-menu');
+                if (!menu) return;
+                var willOpen = !menu.classList.contains('is-open');
+                closeAllRowMenus(willOpen ? menu : null);
+                menu.classList.toggle('is-open', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                if (willOpen) {
+                    positionRowMenuDropdown(menu);
+                } else {
+                    resetRowMenuDropdown(menu);
+                }
+                return;
+            }
+
+            if (e.target.closest('[name="btn-history"]') || e.target.closest('.voucher-row-menu-link')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.voucher-row-menu') && !e.target.closest('.voucher-row-menu-dropdown')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAllRowMenus();
+            }
+        });
+
+        if (contentWrapper) {
+            contentWrapper.addEventListener('scroll', syncOpenRowMenu, { passive: true });
+        }
+
+        window.addEventListener('resize', syncOpenRowMenu);
+    })();
+</script>
+<script>
+    (function() {
+        var main = document.getElementById('main');
+        var tableCard = document.querySelector('.voucher-card--table');
+        var tableWrapper = tableCard ? tableCard.querySelector('.content-wrapper') : null;
+        if (!main || !tableCard || !tableWrapper) return;
+
+        var layoutTimer = null;
+
+        function fitTableViewport() {
+            var wrapperTop = tableWrapper.getBoundingClientRect().top;
+            var pagination = tableCard.querySelector('.voucher-pagination-footer');
+            var paginationHeight = pagination ? pagination.offsetHeight : 0;
+            var available = window.innerHeight - wrapperTop - paginationHeight - 20;
+            tableWrapper.style.maxHeight = Math.max(160, available) + 'px';
+        }
+
+        function scheduleLayoutSync() {
+            if (layoutTimer) {
+                clearTimeout(layoutTimer);
+            }
+            layoutTimer = setTimeout(fitTableViewport, 80);
+        }
+
+        window.addEventListener('resize', scheduleLayoutSync);
+        window.addEventListener('load', scheduleLayoutSync);
+
+        if (window.ResizeObserver) {
+            var layoutObserver = new ResizeObserver(scheduleLayoutSync);
+            layoutObserver.observe(main);
+            layoutObserver.observe(tableCard);
+        }
+
+        scheduleLayoutSync();
     })();
 </script>
 <?php if ($invalidSearch): ?>
@@ -1738,6 +2119,14 @@ if ($showCashierArchiveCol) {
         button.addEventListener('click', function() {
             // Get the row associated with the clicked button
             var row = this.closest('tr');
+            if (!row) {
+                var portaledDropdown = this.closest('.voucher-row-menu-dropdown');
+                if (portaledDropdown && portaledDropdown._ownerRow) {
+                    row = portaledDropdown._ownerRow;
+                }
+            }
+            if (!row) return;
+
             var name = this.name.toString();
 
             // Extract data from the row
@@ -2172,254 +2561,7 @@ if ($showCashierArchiveCol) {
 </script>
 
 <!-- History / Remarks Modal -->
-<style>
-    /* Process Voucher: root-level second stack above Pay Voucher (#popupForm z-index 9999) */
-    .overlay.overlay-archive-process {
-        display: none;
-        position: fixed;
-        width: 100%;
-        height: 100%;
-        top: 0;
-        left: 0;
-        background: rgba(0, 0, 0, 0.4);
-        z-index: 10000;
-    }
-
-    #archiveAdaForm.fwd-process-document-modal.popup-form {
-        z-index: 10001;
-        position: fixed;
-        isolation: isolate;
-    }
-
-    /* History modal (modernized) */
-    #historyModal .popupForm-box__container {
-        max-width: 920px;
-        border-radius: 14px;
-        overflow: hidden;
-    }
-
-    #historyModal .popupForm-header__container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 18px;
-        border-bottom: 1px solid #e9ecef;
-        background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
-    }
-
-    #historyModal .popupForm-header__container p {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 700;
-        letter-spacing: 0.2px;
-        color: #1f2937;
-    }
-
-    #historyModal .close-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
-        background: #f3f4f6;
-        color: #374151;
-        transition: background 0.15s ease;
-    }
-
-    #historyModal .close-icon:hover {
-        background: #e5e7eb;
-    }
-
-    #historyModal .box-body__container {
-        padding: 16px 18px;
-        display: block;
-        background: #fff;
-    }
-
-    #historyModal .hist-topbar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 12px;
-        flex-wrap: wrap;
-    }
-
-    #historyModal .hist-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        background: #fafafa;
-    }
-
-    #historyModal .hist-pill label {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-    }
-
-    #historyModal #hist_processing_no {
-        width: 170px;
-        height: 34px;
-        padding: 6px 10px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        border-radius: 10px;
-        border: 1px solid #d1d5db;
-        background: #fff;
-    }
-
-    #historyModal .hist-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-
-    #historyModal .hist-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        background: #ffffff;
-        padding: 12px;
-        box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
-    }
-
-    #historyModal .hist-card--full {
-        grid-column: 1 / -1;
-    }
-
-    #historyModal .hist-card-title {
-        margin: 0 0 8px 0;
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: #6b7280;
-    }
-
-    #historyModal .hist-content {
-        min-height: 56px;
-        max-height: 220px;
-        overflow: auto;
-        padding: 10px 10px;
-        border-radius: 10px;
-        background: #f9fafb;
-        border: 1px solid #eef2f7;
-        white-space: pre-wrap;
-        line-height: 1.45;
-        color: #111827;
-        font-size: 13px;
-    }
-
-    #historyModal .hist-content--tall {
-        max-height: 280px;
-        min-height: 140px;
-    }
-
-    /* Ensure process history stays readable in a fixed viewport */
-    #historyModal #hist_process_history {
-        overflow-y: auto;
-        overflow-x: hidden;
-        scrollbar-width: thin;
-    }
-
-    /* Process history list (USER : action : section/unit) */
-    #historyModal .hist-content--process-list {
-        white-space: normal;
-        padding: 12px;
-    }
-
-    #historyModal .hist-process-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    #historyModal .hist-process-item {
-        display: flex;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 6px 10px;
-        padding: 10px 12px;
-        background: #fff;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.4;
-        color: #111827;
-    }
-
-    #historyModal .hist-process-item__part {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        white-space: normal;
-    }
-
-    #historyModal .hist-process-item__part i {
-        font-size: 15px;
-        color: #6b7280;
-        flex-shrink: 0;
-    }
-
-    #historyModal .hist-process-item__part span {
-        white-space: normal;
-        word-break: break-word;
-    }
-
-    #historyModal .hist-process-item__part--user i {
-        color: #4f46e5;
-    }
-
-    #historyModal .hist-process-item__part--action i {
-        color: #059669;
-    }
-
-    #historyModal .hist-process-item__part--section i {
-        color: #b45309;
-    }
-
-    #historyModal .hist-process-sep {
-        color: #d1d5db;
-        font-weight: 700;
-        user-select: none;
-    }
-
-    #historyModal .popupForm-footer__container {
-        border-top: 1px solid #eef2f7;
-        background: #fbfbfd;
-        padding: 12px 18px;
-    }
-
-    #historyModal .footer-button__container {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-    }
-
-    /* Responsive */
-    @media (max-width: 840px) {
-        #historyModal .hist-grid {
-            grid-template-columns: 1fr;
-        }
-
-        #historyModal #hist_processing_no {
-            width: 100%;
-        }
-
-        #historyModal .hist-pill {
-            width: 100%;
-            justify-content: space-between;
-        }
-    }
-</style>
-
-<div class="popup-form" id="historyModal" style="display:none;">
+<div class="popup-form voucher-premium-modal voucher-history-modal" id="historyModal" style="display:none;">
     <div class="popupForm-box__container">
         <div class="popupForm-header__container">
             <p>History &amp; Remarks</p>
@@ -2458,7 +2600,7 @@ if ($showCashierArchiveCol) {
         </div>
     </div>
 </div>
-<div class="overlay" id="historyOverlay" style="display:none;"></div>
+<div class="overlay voucher-premium-overlay" id="historyOverlay" style="display:none;"></div>
 
 <script>
     (function() {
@@ -2918,7 +3060,7 @@ if ($showCashierArchiveCol) {
     </script>
     <!-- Process Voucher: end-of-body so it is not inside #main / #popupForm; second layer uses #overlayArchiveProcess + higher z-index -->
     <div class="overlay overlay-archive-process" id="overlayArchiveProcess" style="display: none;" aria-hidden="true"></div>
-    <div class="popup-form fwd-process-document-modal" id="archiveAdaForm" style="display: none;">
+    <div class="popup-form voucher-premium-modal popup-form--compact fwd-process-document-modal" id="archiveAdaForm" style="display: none;">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="archive_process_form_title">Process Voucher</p>

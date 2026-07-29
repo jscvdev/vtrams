@@ -18,215 +18,34 @@ if ($scriptName !== '') {
     $fetch_voucher_data_url = rtrim(dirname($scriptName), '/') . '/dashboard.php?fetch=voucher_tracking&calculation=1';
 }
 ?>
-<style>
-    .main_dashboard {
-        overflow-y: scroll;
-    }
-
-    .main-content {
-        flex: 1;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        width: 100%;
-        height: 100%;
-    }
-
-    .filter_options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        align-items: center;
-        background-color: #fff;
-        padding: 16px 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        color: rgb(75 85 99 / 0.9);
-    }
-
-    .filter_options > div {
-        display: flex;
-        flex-direction: row;
-        font-size: 14px;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .filter_options select {
-        padding: 6px;
-        border-radius: 5px;
-        border: 1px solid #ccc;
-        border-color: rgb(209 213 219 / 1);
-    }
-
-    .filter_options input[type="search"],
-    .filter_options input[type="text"].calculation-search-input {
-        padding: 6px 10px;
-        border-radius: 5px;
-        border: 1px solid rgb(209 213 219 / 1);
-        font-size: 14px;
-        box-sizing: border-box;
-    }
-
-    .filter_options .filter-search-wrap {
-        flex: 1 1 100%;
-        width: 100%;
-        min-width: 0;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .filter_options .filter-search-wrap label {
-        flex: 0 0 auto;
-        white-space: nowrap;
-    }
-
-    .filter_options .filter-search-wrap .calculation-search-input {
-        flex: 1 1 200px;
-        min-width: 0;
-        max-width: 100%;
-    }
-
-    .filter_options .filter-search-btn {
-        flex: 0 0 auto;
-        white-space: nowrap;
-        padding: 6px 14px;
-        border: 1px solid #0d6efd;
-        background-color: #0d6efd;
-        color: #fff;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 14px;
-        line-height: 1.2;
-        height: 32px;
-        align-self: center;
-    }
-
-    .filter_options .filter-search-btn:hover {
-        background-color: #0b5ed7;
-        border-color: #0b5ed7;
-    }
-
-    .filter_options button#applyFiltersBtn {
-        background-color: #0d6efd;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 5px;
-        height: fit-content;
-        align-self: flex-end;
-    }
-
-    .chart-container {
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-    }
-
-    .chart-container.chart-container--table {
-        height: auto;
-        min-height: auto;
-    }
-
-    .section-table-scroll {
-        overflow-x: auto;
-        width: 100%;
-    }
-
-    #calculationBreakdownTable th,
-    #calculationBreakdownTable td,
-    #calculationEventsTable th,
-    #calculationEventsTable td,
-    #calculationSegmentsTable th,
-    #calculationSegmentsTable td {
-        border-bottom: 1px solid #ddd;
-        padding: 8px;
-        font-size: 12px;
-        vertical-align: top;
-    }
-
-    #calculationBreakdownTable,
-    #calculationEventsTable,
-    #calculationSegmentsTable {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    #calculationBreakdownTable thead th,
-    #calculationEventsTable thead th,
-    #calculationSegmentsTable thead th {
-        background-color: #f9f9f9;
-        color: rgb(75 85 99 / 0.7);
-    }
-
-    .calculation-rules-list {
-        margin: 0;
-        padding-left: 18px;
-        color: rgb(75 85 99 / 0.85);
-        font-size: 13px;
-        line-height: 1.5;
-    }
-
-    .calculation-meta {
-        margin: 0 0 12px;
-        color: rgb(75 85 99 / 0.75);
-        font-size: 12px;
-    }
-
-    .calculation-detail-block {
-        margin-top: 16px;
-        padding-top: 12px;
-        border-top: 1px solid #eee;
-    }
-
-    .calculation-detail-block h4 {
-        margin: 0 0 8px;
-        color: rgb(75 85 99 / 0.9);
-        font-size: 14px;
-    }
-
-    .calculation-trace-btn {
-        border: 1px solid rgb(209 213 219 / 1);
-        background: #fff;
-        color: rgb(75 85 99 / 0.9);
-        padding: 4px 10px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 12px;
-    }
-
-    .calculation-trace-btn:hover {
-        background: #f3f4f6;
-    }
-</style>
-
-<div class="main" id="main">
-    <div class="main-content main_dashboard">
-        <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px;">
-            <div>
-                <h1 style="margin-bottom:6px;">Processing Time Calculation Breakdown</h1>
-                <p style="color: rgb(75 85 99 / 0.9); margin:0;">How section and total processing times are derived from action logs and tracking data</p>
-            </div>
-            <p id="dashboardRefreshStatus" style="color: rgb(75 85 99 / 0.75); font-size: 12px; margin: 0;">Loading…</p>
+<?php require __DIR__ . '/../utilities/partials/list_filter_styles.php'; ?>
+<div class="main main--voucher-dashboard util-premium-page calc-page" id="main">
+    <header class="voucher-dashboard-header">
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Processing Time Calculation Breakdown</h1>
+            <p class="voucher-dashboard-subtitle">How section and total processing times are derived from action logs and tracking data.</p>
         </div>
+        <div class="voucher-dashboard-header__actions">
+            <p id="dashboardRefreshStatus">Loading…</p>
+        </div>
+    </header>
 
-        <section class="filter_options">
-            <div>
-                <label>Voucher Type:</label>
+    <div class="voucher-card voucher-card--filter">
+        <div class="calc-filter-grid">
+            <div class="calc-filter-field">
+                <label for="voucherTypeFilter">Voucher type</label>
                 <select id="voucherTypeFilter">
-                    <option value="all" selected>All Types</option>
+                    <option value="all" selected>All types</option>
                     <?php foreach ($dashboard_voucher_types as $type_value => $type_label): ?>
                         <option value="<?= htmlspecialchars((string) $type_value, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $type_label, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <div>
-                <label for="officeFilter">Office:</label>
+            <div class="calc-filter-field">
+                <label for="officeFilter">Office</label>
                 <select id="officeFilter">
-                    <option value="all" selected>All Offices</option>
+                    <option value="all" selected>All offices</option>
                     <?php foreach ($dashboard_offices as $office_name): ?>
                         <option value="<?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>">
                             <?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>
@@ -235,10 +54,10 @@ if ($scriptName !== '') {
                 </select>
             </div>
 
-            <div>
-                <label>Date (MDY):</label>
-                <div style="display: flex; gap: 5px;">
-                    <select id="monthFilter" style="width: 80px;">
+            <div class="calc-filter-field">
+                <label>Date (MDY)</label>
+                <div style="display:flex;gap:0.375rem;">
+                    <select id="monthFilter" style="width:5.5rem;">
                         <option value="all" selected>Month</option>
                         <option value="01">Jan</option>
                         <option value="02">Feb</option>
@@ -253,7 +72,7 @@ if ($scriptName !== '') {
                         <option value="11">Nov</option>
                         <option value="12">Dec</option>
                     </select>
-                    <select id="dayFilter" style="width: 70px;">
+                    <select id="dayFilter" style="width:4.5rem;">
                         <option value="all" selected>Day</option>
                         <?php
                         for ($i = 1; $i <= 31; $i++) {
@@ -262,7 +81,7 @@ if ($scriptName !== '') {
                         }
                         ?>
                     </select>
-                    <select id="yearDateFilter" style="width: 80px;">
+                    <select id="yearDateFilter" style="width:5rem;">
                         <option value="all" selected>Year</option>
                         <?php
                         $currentYear = (int) date('Y');
@@ -274,21 +93,35 @@ if ($scriptName !== '') {
                 </div>
             </div>
 
-            <button id="applyFiltersBtn">Apply Filters</button>
-
-            <div class="filter-search-wrap">
-                <label for="calculationSearchInput">Search database:</label>
-                <input type="search" id="calculationSearchInput" class="calculation-search-input" placeholder="Processing no., payee, DV no., ORS no." autocomplete="off">
-                <button type="button" id="calculationSearchBtn" class="filter-search-btn">Search</button>
+            <div class="calc-filter-actions">
+                <button type="button" class="btn primary" id="applyFiltersBtn">Apply filters</button>
             </div>
-        </section>
 
-        <section class="chart-container chart-container--table">
-            <p class="calculation-meta">Data sources: <code>voucher_action_logs</code>, <code>voucher_tracking</code>, and user role mapping (<code>user_group</code>).</p>
-            <ul id="calculationRulesList" class="calculation-rules-list"></ul>
-            <div class="calculation-detail-block">
+            <div class="calc-filter-search">
+                <div class="calc-filter-field">
+                    <label for="calculationSearchInput">Search database</label>
+                    <div class="calc-filter-search-row">
+                        <input type="search" id="calculationSearchInput" placeholder="Processing no., payee, DV no…" autocomplete="off">
+                        <button type="button" id="calculationSearchBtn" class="btn secondary">Search</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="voucher-card voucher-card--table">
+        <h2 class="voucher-card-title">
+            <span class="voucher-card-title__label">
+                <i class="ri-time-line ri-icon"></i>
+                Calculation breakdown
+            </span>
+        </h2>
+        <div class="content-wrapper content-wrapper--padded">
+            <p class="calc-meta">Data sources: <code>voucher_action_logs</code>, <code>voucher_tracking</code>, and user role mapping (<code>user_group</code>).</p>
+            <ul id="calculationRulesList" class="calc-rules-list"></ul>
+            <div class="calc-detail-block">
                 <h4>Voucher calculation detail</h4>
-                <p class="calculation-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Use Search database to look up any voucher across the system (ignores filters above).</p>
+                <p class="calc-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Use Search database to look up any voucher across the system (ignores filters above).</p>
                 <div class="section-table-scroll">
                     <table id="calculationBreakdownTable">
                         <thead>
@@ -304,9 +137,9 @@ if ($scriptName !== '') {
                     </table>
                 </div>
             </div>
-            <div class="calculation-detail-block" id="calculationDetailPanel" style="display:none;">
+            <div class="calc-detail-block" id="calculationDetailPanel" style="display:none;">
                 <h4 id="calculationDetailTitle">Action log trace</h4>
-                <p class="calculation-meta" id="calculationTotalMeta"></p>
+                <p class="calc-meta" id="calculationTotalMeta"></p>
                 <div class="section-table-scroll">
                     <table id="calculationEventsTable">
                         <thead>
@@ -321,7 +154,7 @@ if ($scriptName !== '') {
                         <tbody></tbody>
                     </table>
                 </div>
-                <div class="calculation-detail-block">
+                <div class="calc-detail-block">
                     <h4>Counted time segments</h4>
                     <div class="section-table-scroll">
                         <table id="calculationSegmentsTable">
@@ -340,7 +173,7 @@ if ($scriptName !== '') {
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
     </div>
 </div>
 

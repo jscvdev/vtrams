@@ -287,6 +287,17 @@ foreach (array_keys($dv_keys) as $dvKey) {
         'office' => $selected_office,
     ]);
 }
+
+$active_util_tab = 'ada';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $post_scope = (string) ($_POST['scope'] ?? 'ada');
+    $active_util_tab = ($post_scope === 'dv') ? 'dv' : 'ada';
+} else {
+    $tab_param = (string) ($_GET['tab'] ?? '');
+    if (in_array($tab_param, ['ada', 'dv'], true)) {
+        $active_util_tab = $tab_param;
+    }
+}
 ?>
 
 <style>
@@ -350,8 +361,50 @@ foreach (array_keys($dv_keys) as $dvKey) {
         color: var(--util-accent);
     }
 
-    .utl-page .content-wrapper {
-        padding: 1.25rem;
+    .utl-page .util-dv-section {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .util-signatory-add-panel .util-add label {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 0.3rem;
+    }
+
+    .util-signatory-add-panel .form-custom-input {
+        background: #fff;
+        border-color: #dbe3ef;
+    }
+
+    .util-signatory-add-panel .util-ada-add:not(.util-dv-add) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 64px auto auto;
+        gap: 0.625rem 0.75rem;
+        align-items: end;
+    }
+
+    .util-signatory-add-panel .util-ada-add:not(.util-dv-add) .field {
+        min-width: 0;
+        margin: 0;
+    }
+
+    .util-signatory-add-panel .util-ada-add:not(.util-dv-add) .util-ada-sort-field {
+        max-width: none;
+    }
+
+    .util-signatory-add-panel .util-ada-add:not(.util-dv-add) .chk {
+        align-self: end;
+        padding-bottom: 0.45rem;
+        white-space: nowrap;
+    }
+
+    .util-signatory-add-panel .util-ada-add:not(.util-dv-add) .utl-add-btn-field {
+        align-self: end;
     }
 
     .util-alert {
@@ -406,34 +459,74 @@ foreach (array_keys($dv_keys) as $dvKey) {
         border-radius: var(--util-radius);
         overflow: hidden;
         box-shadow: var(--util-shadow);
-        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     }
 
-    .util-card:hover {
-        box-shadow: var(--util-shadow-lg);
+    .util-card:hover,
+    .util-signatory-card:hover {
+        box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
         border-color: #cbd5e1;
     }
 
-    .util-card__head {
-        padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--util-border);
-        background: linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
+    .util-signatory-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px -4px rgba(15, 23, 42, 0.08);
     }
 
-    .util-card__head h3 {
-        margin: 0;
+    .util-signatory-card .util-card__head {
+        padding: 0.875rem 1.125rem;
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eef2ff 100%);
+        position: relative;
+    }
+
+    .util-signatory-card .util-card__head::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+        border-radius: 0 2px 2px 0;
+    }
+
+    .util-signatory-card .util-card__head h3 {
         font-size: 0.9375rem;
         font-weight: 700;
-        color: var(--util-text);
+        color: #0f172a;
         letter-spacing: -0.01em;
+        padding-left: 0.375rem;
     }
 
-    .util-card__body {
-        padding: 1.25rem;
+    .util-signatory-card .util-card__body {
+        padding: 1rem 1.125rem 1.125rem;
+        background: #fff;
+    }
+
+    .util-signatory-add-panel {
+        padding: 0.875rem;
+        margin-bottom: 1rem;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+
+    .util-signatory-add-panel .util-add {
+        margin-bottom: 0;
+    }
+
+    .util-signatory-add-label {
+        display: block;
+        margin: 0 0 0.625rem;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
     }
 
     .util-add {
@@ -568,10 +661,17 @@ foreach (array_keys($dv_keys) as $dvKey) {
         text-align: center;
     }
 
+    .util-signatory-card .util-empty {
+        padding: 1.25rem;
+        font-size: 0.8125rem;
+        color: #94a3b8;
+        font-style: italic;
+    }
+
     .util-dv-section {
-        margin-top: 2rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--util-border);
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
     }
 
     .util-dv-desc {
@@ -583,42 +683,21 @@ foreach (array_keys($dv_keys) as $dvKey) {
 
     .util-dv-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(280px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.25rem;
     }
 
-    .util-dv-card {
-        background: #fafbfc;
-        border: 1px solid var(--util-border);
-        border-radius: 12px;
-        overflow: hidden;
+    .util-dv-card.util-signatory-card {
+        background: #fff;
     }
 
-    .util-dv-card .util-card__head {
-        background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
-        padding: 0.875rem 1rem;
-    }
-
-    .util-dv-card .util-card__head h3 {
-        font-size: 0.8125rem;
+    .util-dv-card.util-signatory-card .util-card__head h3 {
+        font-size: 0.875rem;
+        line-height: 1.35;
     }
 
     .util-dv-card .util-card__body {
-        padding: 1rem;
-    }
-
-    .util-dv-card .field {
-        margin-bottom: 0.75rem;
-    }
-
-    .util-dv-card .field:last-of-type {
-        margin-bottom: 0;
-    }
-
-    .util-dv-card .btn.success {
-        border-radius: 8px;
-        font-weight: 600;
-        margin-top: 0.5rem;
+        padding: 1rem 1.125rem 1.125rem;
     }
 
     .utl-page .form-custom-input {
@@ -648,6 +727,10 @@ foreach (array_keys($dv_keys) as $dvKey) {
         flex-wrap: wrap;
         margin: 0;
         margin-left: auto;
+        padding: 0.375rem 0.625rem;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
     }
 
     .util-office-switch label {
@@ -687,18 +770,28 @@ foreach (array_keys($dv_keys) as $dvKey) {
     }
 
     .utl-btn-add {
-        width: 2.5rem;
-        height: 2.5rem;
-        min-width: 2.5rem;
+        width: 2.375rem;
+        height: 2.375rem;
+        min-width: 2.375rem;
         padding: 0;
-        border-radius: 8px;
+        border-radius: 10px;
         font-weight: 700;
-        font-size: 1.375rem;
+        font-size: 1.25rem;
         line-height: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+        background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+        border: none;
+        color: #fff;
+        box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+        transition: filter 0.15s ease, transform 0.15s ease;
+    }
+
+    .utl-btn-add:hover {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
     }
 
     .util-inline input[type="text"].util-sub-title-input {
@@ -774,16 +867,161 @@ foreach (array_keys($dv_keys) as $dvKey) {
     }
 
     .util-dv-add {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "name name name"
+            "pos1 pos2 sort"
+            "default default add";
+        gap: 0.625rem 0.75rem;
+        align-items: end;
     }
 
-    .util-dv-card .util-ada-table th,
-    .util-dv-card .util-ada-table td {
-        font-size: 0.75rem;
+    .util-dv-add .util-dv-field--name { grid-area: name; }
+    .util-dv-add .util-dv-field--pos1 { grid-area: pos1; }
+    .util-dv-add .util-dv-field--pos2 { grid-area: pos2; }
+    .util-dv-add .util-dv-field--sort { grid-area: sort; max-width: none; }
+    .util-dv-add .util-dv-field--default { grid-area: default; align-self: end; padding-bottom: 0.45rem; }
+    .util-dv-add .util-dv-field--add { grid-area: add; justify-self: end; }
+
+    .util-dv-add .field {
+        min-width: 0;
+        margin: 0;
     }
 
-    .util-dv-card .util-ada-value {
-        min-width: 120px;
+    .util-signatory-card .util-table-wrap {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        background: #fff;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .util-signatory-card .util-table {
+        margin: 0;
+    }
+
+    .util-signatory-card .util-table thead th {
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 1px solid #e2e8f0;
+        padding: 0.625rem 0.5rem;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        color: #64748b;
+    }
+
+    .util-signatory-card .util-table tbody td {
+        padding: 0.5rem;
+        vertical-align: middle;
+        background: #fff;
+    }
+
+    .util-signatory-card .util-table tbody tr:not(:last-child) td {
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .util-signatory-card .util-table tbody tr:hover td {
+        background: #fafbff;
+    }
+
+    .util-signatory-card .form-custom-input {
+        min-height: 34px;
+        padding: 0.4rem 0.625rem;
+        font-size: 0.8125rem;
+        border-radius: 8px;
+        border-color: #e2e8f0;
+        background: #f8fafc;
+    }
+
+    .util-signatory-card .form-custom-input:focus {
+        background: #fff;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    .util-signatory-card .util-ada-sort {
+        text-align: center;
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+    }
+
+    .util-signatory-card .util-ada-chk {
+        position: relative;
+        justify-content: center;
+        font-size: 0.6875rem;
+        color: #64748b;
+    }
+
+    .util-signatory-card .util-ada-chk span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .util-signatory-card .util-row-actions .btn {
+        min-width: 0;
+        padding: 0.35rem 0.625rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        border-radius: 8px;
+        letter-spacing: 0.02em;
+    }
+
+    .util-signatory-card .util-row-actions .btn.success {
+        background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+        border: none;
+        color: #fff;
+        box-shadow: 0 1px 2px rgba(5, 150, 105, 0.2);
+    }
+
+    .util-signatory-card .util-row-actions .btn.danger {
+        background: #fff;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+        box-shadow: none;
+    }
+
+    .util-signatory-card .util-row-actions .btn.danger:hover {
+        background: #fef2f2;
+        border-color: #fca5a5;
+    }
+
+    .util-signatory-card .util-ada-value {
+        min-width: 100px;
+    }
+
+    .util-signatory-card .util-table.util-ada-table {
+        min-width: 640px;
+    }
+
+    .util-card__head {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--util-border);
+        background: linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .util-card__head h3 {
+        margin: 0;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--util-text);
+        letter-spacing: -0.01em;
+    }
+
+    .util-card__body {
+        padding: 1.25rem;
     }
 
     @media (max-width: 1050px) {
@@ -799,6 +1037,27 @@ foreach (array_keys($dv_keys) as $dvKey) {
             grid-template-columns: 1fr;
         }
 
+        .util-dv-add {
+            grid-template-columns: 1fr 1fr;
+            grid-template-areas:
+                "name name"
+                "pos1 pos2"
+                "sort default"
+                "add add";
+        }
+
+        .util-dv-add .util-dv-field--add {
+            justify-self: start;
+        }
+
+        .util-signatory-add-panel .util-ada-add:not(.util-dv-add) {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .util-signatory-add-panel .util-ada-add:not(.util-dv-add) .field:first-of-type {
+            grid-column: 1 / -1;
+        }
+
         .util-office-switch {
             width: 100%;
             margin-left: 0;
@@ -810,11 +1069,29 @@ foreach (array_keys($dv_keys) as $dvKey) {
             max-width: none;
         }
     }
+
+    @media (max-width: 720px) {
+        .util-dv-add {
+            grid-template-columns: 1fr;
+            grid-template-areas:
+                "name"
+                "pos1"
+                "pos2"
+                "sort"
+                "default"
+                "add";
+        }
+    }
 </style>
 
-<div class="main main--dashboard utl-page" id="main">
+<?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
+
+<div class="main main--voucher-dashboard util-premium-page utl-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Signatories</h1>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Signatories</h1>
+            <p class="voucher-dashboard-subtitle">Manage LDDAP-ADA signatory options and voucher defaults per office.</p>
+        </div>
     </header>
 
     <div class="voucher-card voucher-card--table">
@@ -824,6 +1101,7 @@ foreach (array_keys($dv_keys) as $dvKey) {
                 LDDAP-ADA Signatory | Voucher Options
             </span>
             <form method="get" class="util-office-switch" id="utilitiesOfficeForm">
+                <input type="hidden" name="tab" id="utilitiesOfficeTab" value="<?= htmlspecialchars($active_util_tab, ENT_QUOTES, 'UTF-8') ?>" data-util-tab-sync>
                 <label for="utilities_office_select">Office</label>
                 <div class="field">
                     <select class="form-custom-input" name="office" id="utilities_office_select" onchange="this.form.submit()">
@@ -842,14 +1120,31 @@ foreach (array_keys($dv_keys) as $dvKey) {
                 </div>
             </form>
         </h2>
-        <div class="content-wrapper">
+        <div class="content-wrapper util-content-with-subtabs">
             <?php if ($flash): ?>
-                <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
-                    <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
-                    <?= htmlspecialchars($flash['msg']) ?>
+                <div class="util-flash-wrap">
+                    <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
+                        <?= htmlspecialchars($flash['msg']) ?>
+                    </div>
                 </div>
             <?php endif; ?>
 
+            <div class="util-subtabs-toolbar">
+                <div class="util-subtabs-bar" role="tablist" aria-label="Signatory sections">
+                    <button type="button" class="util-subtab-btn<?= $active_util_tab === 'ada' ? ' is-active' : '' ?>" role="tab" id="utilSubtabAda" data-util-tab="ada" aria-selected="<?= $active_util_tab === 'ada' ? 'true' : 'false' ?>" aria-controls="utilSubtabPanelAda">
+                        LDDAP-ADA options
+                    </button>
+                    <button type="button" class="util-subtab-btn<?= $active_util_tab === 'dv' ? ' is-active' : '' ?>" role="tab" id="utilSubtabDv" data-util-tab="dv" aria-selected="<?= $active_util_tab === 'dv' ? 'true' : 'false' ?>" aria-controls="utilSubtabPanelDv">
+                        DV printed template
+                    </button>
+                </div>
+                <p class="util-subtabs-hint">Each tab uses the full panel — switch tabs for an unobstructed view.</p>
+            </div>
+
+            <div class="util-subtab-panels">
+                <div class="util-subtab-panel<?= $active_util_tab === 'ada' ? ' is-active' : '' ?>" id="utilSubtabPanelAda" role="tabpanel" aria-labelledby="utilSubtabAda" data-util-panel="ada">
+                    <div class="util-subtab-panel__body">
             <p class="util-section-title">Dropdown options for LDDAP-ADA process</p>
             <p class="util-dv-desc">Mark one option per dropdown as default. Defaults are pre-selected when processing vouchers for this office.</p>
             <div class="util-grid">
@@ -863,7 +1158,7 @@ foreach (array_keys($dv_keys) as $dvKey) {
                     $sectionDefault = $ada_option_defaults[$type] ?? '';
                     $nextAdaSort = (int) ($ada_next_sort[$type] ?? 0);
                 ?>
-                    <div class="util-card">
+                    <div class="util-card util-signatory-card">
                         <div class="util-card__head">
                             <h3>
                                 <?= htmlspecialchars(ada_opt_label($type)) ?>
@@ -873,6 +1168,8 @@ foreach (array_keys($dv_keys) as $dvKey) {
                             </h3>
                         </div>
                         <div class="util-card__body">
+                            <div class="util-signatory-add-panel">
+                                <span class="util-signatory-add-label">Add new option</span>
                             <form method="post" class="util-add util-ada-add">
                                 <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                                 <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
@@ -895,7 +1192,9 @@ foreach (array_keys($dv_keys) as $dvKey) {
                                     <button class="btn primary utl-btn-add" type="submit" title="Add entry" aria-label="Add entry">+</button>
                                 </div>
                             </form>
+                            </div>
 
+                            <div class="util-table-wrap">
                             <table class="util-table util-ada-table">
                                 <thead>
                                     <tr>
@@ -961,11 +1260,16 @@ foreach (array_keys($dv_keys) as $dvKey) {
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
             </div>
+                    </div>
+                </div>
 
+                <div class="util-subtab-panel<?= $active_util_tab === 'dv' ? ' is-active' : '' ?>" id="utilSubtabPanelDv" role="tabpanel" aria-labelledby="utilSubtabDv" data-util-panel="dv">
+                    <div class="util-subtab-panel__body">
             <div class="util-dv-section">
                 <p class="util-section-title">Disbursement Voucher (DV) printed template</p>
                 <p class="util-dv-desc">Configure multiple active signatories per DV section (A, C, and D). Users choose from these options when printing. Mark one signatory per section as default.</p>
@@ -974,43 +1278,47 @@ foreach (array_keys($dv_keys) as $dvKey) {
                         $rows = $dv_signatories[$k] ?? [];
                         $nextDvSort = (int) ($dv_next_sort[$k] ?? 0);
                     ?>
-                        <div class="util-dv-card util-card">
+                        <div class="util-dv-card util-card util-signatory-card">
                             <div class="util-card__head">
                                 <h3><?= htmlspecialchars($label) ?></h3>
                             </div>
                             <div class="util-card__body">
+                                <div class="util-signatory-add-panel">
+                                    <span class="util-signatory-add-label">Add signatory</span>
                                 <form method="post" class="util-add util-ada-add util-dv-add">
                                     <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                                     <input type="hidden" name="office" value="<?= htmlspecialchars($selected_office, ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="scope" value="dv">
                                     <input type="hidden" name="action" value="add">
                                     <input type="hidden" name="option_type" value="<?= htmlspecialchars($k) ?>">
-                                    <div class="field">
+                                    <div class="field util-dv-field--name">
                                         <label>Printed name</label>
                                         <input class="form-custom-input" type="text" name="display_name" placeholder="e.g., JUAN D. DELA CRUZ" required>
                                     </div>
-                                    <div class="field">
+                                    <div class="field util-dv-field--pos1">
                                         <label>Position line 1</label>
                                         <input class="form-custom-input" type="text" name="position_line1" placeholder="e.g., Accountant III">
                                     </div>
-                                    <div class="field">
+                                    <div class="field util-dv-field--pos2">
                                         <label>Position line 2</label>
                                         <input class="form-custom-input" type="text" name="position_line2" placeholder="e.g., Head Accounting Unit">
                                     </div>
-                                    <div class="field util-ada-sort-field">
+                                    <div class="field util-ada-sort-field util-dv-field--sort">
                                         <label>Sort</label>
                                         <input class="form-custom-input" type="number" value="<?= $nextDvSort ?>" readonly title="Assigned automatically on add">
                                     </div>
-                                    <label class="chk">
+                                    <label class="chk util-dv-field--default">
                                         <input type="checkbox" name="is_default">
                                         <span>Default</span>
                                     </label>
-                                    <div class="field utl-add-btn-field">
+                                    <div class="field utl-add-btn-field util-dv-field--add">
                                         <label class="utl-field-spacer" aria-hidden="true">&nbsp;</label>
                                         <button class="btn primary utl-btn-add" type="submit" title="Add signatory" aria-label="Add signatory">+</button>
                                     </div>
                                 </form>
+                                </div>
 
+                                <div class="util-table-wrap">
                                 <table class="util-table util-ada-table">
                                     <thead>
                                         <tr>
@@ -1086,9 +1394,13 @@ foreach (array_keys($dv_keys) as $dvKey) {
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
+                                </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
+                </div>
+            </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1096,6 +1408,12 @@ foreach (array_keys($dv_keys) as $dvKey) {
 </div>
 
 <script src="../../protected/js/main.js"></script>
+<?php
+$util_subtabs_initial_tab = $active_util_tab;
+$util_subtabs_valid_tabs = ['ada', 'dv'];
+$util_subtabs_sync_input_id = 'utilitiesOfficeTab';
+require __DIR__ . '/partials/util_subtabs_script.php';
+?>
 </body>
 
 </html>

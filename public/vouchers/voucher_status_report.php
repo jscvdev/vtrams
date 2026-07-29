@@ -554,141 +554,6 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                 color: #065f46;
             }
 
-            #statusReportModal .popupForm-box__container {
-                max-width: 920px;
-                border-radius: 14px;
-            }
-
-            #statusReportModal .status-breakdown-hero {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: space-between;
-                gap: 12px;
-                padding: 16px;
-                border-radius: 14px;
-                background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-                border: 1px solid #e5e7eb;
-                margin-bottom: 14px;
-            }
-
-            #statusReportModal .status-breakdown-hero__main {
-                min-width: 220px;
-            }
-
-            #statusReportModal .status-breakdown-hero__title {
-                margin: 0 0 4px;
-                font-size: 20px;
-                font-weight: 700;
-                color: #111827;
-            }
-
-            #statusReportModal .status-breakdown-hero__subtitle {
-                margin: 0;
-                font-size: 13px;
-                color: #4b5563;
-            }
-
-            #statusReportModal .status-breakdown-hero__subtitle + .status-breakdown-hero__subtitle {
-                margin-top: 4px;
-            }
-
-            #statusReportModal .status-breakdown-grid {
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 12px;
-            }
-
-            #statusReportModal .status-breakdown-card {
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px;
-                background: #fff;
-            }
-
-            #statusReportModal .status-breakdown-card--full {
-                grid-column: 1 / -1;
-            }
-
-            #statusReportModal .status-breakdown-title {
-                margin: 0 0 8px;
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.06em;
-                color: #6b7280;
-            }
-
-            #statusReportModal .status-breakdown-content {
-                font-size: 13px;
-                line-height: 1.45;
-                color: #111827;
-                white-space: pre-wrap;
-            }
-
-            #statusReportModal .status-history-list {
-                list-style: none;
-                margin: 0;
-                padding: 0;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-                max-height: 280px;
-                overflow: auto;
-            }
-
-            #statusReportModal .status-history-item {
-                padding: 10px 12px;
-                border: 1px solid #e5e7eb;
-                border-radius: 10px;
-                background: #fafafa;
-                font-size: 13px;
-            }
-
-            #statusReportModal .status-section-breakdown-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 13px;
-            }
-
-            #statusReportModal .status-section-breakdown-scroll {
-                overflow-x: auto;
-            }
-
-            #statusReportModal .status-section-breakdown-table th,
-            #statusReportModal .status-section-breakdown-table td {
-                padding: 8px 10px;
-                border: 1px solid #e5e7eb;
-                text-align: right;
-                white-space: nowrap;
-            }
-
-            #statusReportModal .status-section-breakdown-table th {
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.06em;
-                color: #6b7280;
-                background: #f9fafb;
-                text-align: center;
-            }
-
-            #statusReportModal .status-section-breakdown-table tbody td {
-                text-align: center;
-                color: #111827;
-            }
-
-            #statusReportModal .status-section-breakdown-table th.status-section-breakdown-tpt,
-            #statusReportModal .status-section-breakdown-table td.status-section-breakdown-tpt {
-                background: #f3f4f6;
-                font-weight: 700;
-            }
-
-            #statusReportModal .status-section-breakdown-note {
-                margin: 8px 0 0;
-                font-size: 11px;
-                color: #6b7280;
-            }
-
             .status-report-table-wrap {
                 overflow: auto;
                 max-height: 70vh;
@@ -922,45 +787,48 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
     </div>
 </div>
 
-<div class="popup-form" id="statusReportModal" style="display:none;">
+<div class="popup-form voucher-premium-modal status-breakdown-modal" id="statusReportModal" style="display:none;">
     <div class="popupForm-box__container">
         <div class="popupForm-header__container">
             <p id="statusReportModalTitle">Status Breakdown</p>
-            <i class="ri-close-fill close-icon" id="close_status_report_modal"></i>
+            <i class="ri-close-fill close-icon" id="close_status_report_modal" role="button" tabindex="0" aria-label="Close status breakdown"></i>
         </div>
         <div class="f-container">
             <div class="box-body__container">
                 <div class="status-breakdown-hero">
                     <div class="status-breakdown-hero__main">
+                        <p class="status-breakdown-hero__eyebrow">Voucher Details</p>
                         <p class="status-breakdown-hero__title" id="sr_processing_no"></p>
-                        <p class="status-breakdown-hero__subtitle" id="sr_voucher_type"></p>
-                        <p class="status-breakdown-hero__subtitle" id="sr_payee"></p>
+                        <div class="status-breakdown-hero__meta">
+                            <p class="status-breakdown-hero__subtitle"><i class="ri-file-list-3-line" aria-hidden="true"></i><span id="sr_voucher_type"></span></p>
+                            <p class="status-breakdown-hero__subtitle"><i class="ri-user-3-line" aria-hidden="true"></i><span id="sr_payee"></span></p>
+                        </div>
                     </div>
-                    <div id="sr_status_pill"></div>
+                    <div class="status-breakdown-hero__pill" id="sr_status_pill"></div>
                 </div>
                 <div class="status-breakdown-grid">
                     <div class="status-breakdown-card">
-                        <p class="status-breakdown-title">Origin Office</p>
+                        <p class="status-breakdown-title"><i class="ri-building-2-line" aria-hidden="true"></i>Origin Office</p>
                         <div class="status-breakdown-content" id="sr_origin"></div>
                     </div>
                     <div class="status-breakdown-card">
-                        <p class="status-breakdown-title">Amount</p>
+                        <p class="status-breakdown-title"><i class="ri-money-dollar-circle-line" aria-hidden="true"></i>Amount</p>
                         <div class="status-breakdown-content" id="sr_amount"></div>
                     </div>
                     <div class="status-breakdown-card">
-                        <p class="status-breakdown-title">Route Type</p>
+                        <p class="status-breakdown-title"><i class="ri-route-line" aria-hidden="true"></i>Route Type</p>
                         <div class="status-breakdown-content" id="sr_route_type"></div>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
-                        <p class="status-breakdown-title">Latest Action</p>
+                        <p class="status-breakdown-title"><i class="ri-time-line" aria-hidden="true"></i>Latest Action</p>
                         <div class="status-breakdown-content" id="sr_latest"></div>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full" id="sr_latest_remarks_card" style="display:none;">
-                        <p class="status-breakdown-title">Latest Remarks</p>
+                        <p class="status-breakdown-title"><i class="ri-chat-3-line" aria-hidden="true"></i>Latest Remarks</p>
                         <div class="status-breakdown-content" id="sr_latest_remarks"></div>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full" id="sr_section_breakdown_card" style="display:none;">
-                        <p class="status-breakdown-title">Section Processing Breakdown</p>
+                        <p class="status-breakdown-title"><i class="ri-bar-chart-grouped-line" aria-hidden="true"></i>Section Processing Breakdown</p>
                         <div class="status-section-breakdown-scroll">
                             <table class="status-section-breakdown-table">
                                 <thead id="sr_section_breakdown_head"></thead>
@@ -970,7 +838,7 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
                         <p class="status-section-breakdown-note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
-                        <p class="status-breakdown-title">Complete Process History</p>
+                        <p class="status-breakdown-title"><i class="ri-history-line" aria-hidden="true"></i>Complete Process History</p>
                         <ul class="status-history-list" id="sr_history"></ul>
                     </div>
                 </div>
@@ -983,11 +851,12 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
         </div>
     </div>
 </div>
-<div class="overlay" id="statusReportOverlay" style="display:none;"></div>
+<div class="overlay voucher-premium-overlay" id="statusReportOverlay" style="display:none;"></div>
 
 <script>
     (function() {
         const entries = <?php echo $entriesJson ?: '[]'; ?>;
+        const initialQuery = <?php echo json_encode(trim($rawSearch), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
         const voucherTypeLabels = <?php echo json_encode($report_voucher_types, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
         const modal = document.getElementById('statusReportModal');
         const overlay = document.getElementById('statusReportOverlay');
@@ -1161,6 +1030,44 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             card.style.display = '';
         }
 
+        function findEntryForAutoOpen() {
+            const query = String(initialQuery || '').trim();
+            if (query === '' || !Array.isArray(entries) || entries.length === 0) {
+                return null;
+            }
+
+            const queryLower = query.toLowerCase();
+            const exactMatch = entries.find(function(entry) {
+                return String(entry.processing_no || '').trim().toLowerCase() === queryLower;
+            });
+            if (exactMatch) {
+                return exactMatch;
+            }
+
+            if (entries.length === 1) {
+                return entries[0];
+            }
+
+            return entries.find(function(entry) {
+                return String(entry.processing_no || '').trim().toLowerCase().includes(queryLower);
+            }) || null;
+        }
+
+        function highlightBreakdownRow(processingNo) {
+            const normalized = String(processingNo || '').trim();
+            if (normalized === '') {
+                return;
+            }
+
+            document.querySelectorAll('.status-report-row').forEach(function(row) {
+                const isMatch = String(row.getAttribute('data-processing-no') || '').trim() === normalized;
+                row.classList.toggle('status-report-row--highlight', isMatch);
+                if (isMatch) {
+                    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+            });
+        }
+
         function openBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
             document.getElementById('statusReportModalTitle').textContent = 'Status Breakdown';
@@ -1186,13 +1093,19 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
             }
             renderSectionBreakdown(entry);
             document.getElementById('sr_history').innerHTML = renderHistoryList(entry.process_history || '');
+            highlightBreakdownRow(entry.processing_no || '');
             modal.style.display = 'block';
             overlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
         }
 
         function closeBreakdown() {
             if (modal) modal.style.display = 'none';
             if (overlay) overlay.style.display = 'none';
+            document.body.style.overflow = '';
+            document.querySelectorAll('.status-report-row--highlight').forEach(function(row) {
+                row.classList.remove('status-report-row--highlight');
+            });
         }
 
         document.querySelectorAll('.status-report-row').forEach(function(row) {
@@ -1255,11 +1168,31 @@ $pageTitleHelperName = $header_text ?? 'Status Report';
         syncSelectAllState();
         syncSelectStatusText();
 
+        const autoOpenEntry = findEntryForAutoOpen();
+        if (autoOpenEntry) {
+            openBreakdown(autoOpenEntry);
+        }
+
         ['close_status_report_modal', 'close_status_report_modal_btn'].forEach(function(id) {
             const el = document.getElementById(id);
-            if (el) el.addEventListener('click', closeBreakdown);
+            if (!el) return;
+            el.addEventListener('click', closeBreakdown);
+            if (id === 'close_status_report_modal') {
+                el.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        closeBreakdown();
+                    }
+                });
+            }
         });
         if (overlay) overlay.addEventListener('click', closeBreakdown);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal && modal.style.display === 'block') {
+                closeBreakdown();
+            }
+        });
 
         const printBtn = document.getElementById('statusReportPrintBtn');
         if (printBtn) {

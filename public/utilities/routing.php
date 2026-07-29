@@ -606,6 +606,29 @@ function routing_forward_destinations_for_select(array $destinations, string $st
 
     return $destinations;
 }
+
+$routing_tab_ids = ['forward', 'return', 'liaison', 'hierarchy'];
+$active_routing_tab = 'forward';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $routing_post_action = (string) ($_POST['action'] ?? '');
+    if (str_starts_with($routing_post_action, 'return_previous_')) {
+        $active_routing_tab = 'return';
+    } elseif (str_starts_with($routing_post_action, 'liaison_routing_')) {
+        $active_routing_tab = 'liaison';
+    } elseif (str_starts_with($routing_post_action, 'office_')) {
+        $active_routing_tab = 'hierarchy';
+    } elseif (
+        str_starts_with($routing_post_action, 'forward_destination_')
+        || str_starts_with($routing_post_action, 'rule_')
+    ) {
+        $active_routing_tab = 'forward';
+    }
+} else {
+    $routing_tab_param = (string) ($_GET['tab'] ?? '');
+    if (in_array($routing_tab_param, $routing_tab_ids, true)) {
+        $active_routing_tab = $routing_tab_param;
+    }
+}
 ?>
 
 <style>
@@ -983,35 +1006,40 @@ function routing_forward_destinations_for_select(array $destinations, string $st
     .rt-page .util-office-flow strong { color: var(--util-text); }
 
     .rt-page .util-routing-section + .util-routing-section {
-        margin-top: 2rem;
-        padding-top: 2rem;
-        border-top: 1px solid var(--util-border);
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .rt-page .content-wrapper {
+        padding: 0;
+        overflow: hidden;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
     }
 </style>
 <?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
-<div class="main main--dashboard rt-page" id="main">
+<div class="main main--voucher-dashboard util-premium-page rt-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Routing</h1>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Routing</h1>
+            <p class="voucher-dashboard-subtitle">Configure direct-forward rules and office hierarchy for voucher workflow routing.</p>
+        </div>
     </header>
 
     <?php
     $list_total = $routing_list_total;
     $list_visible = $routing_list_visible;
-    $list_placeholder = 'Search destinations, voucher types, offices…';
+    $list_placeholder = 'search';
     $list_form_id = 'routingListFilterForm';
     $list_filter_mode = 'voucher_type';
     $list_voucher_types = $list_type_options;
     $list_type_filter_label = 'Voucher type';
+    $list_hidden_fields = ['tab' => $active_routing_tab];
     require __DIR__ . '/partials/list_filter_toolbar.php';
     ?>
-
-    <?php if ($flash): ?>
-        <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>" style="margin-bottom:1.25rem;">
-            <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
-            <?= htmlspecialchars($flash['msg'], ENT_QUOTES, 'UTF-8') ?>
-        </div>
-    <?php endif; ?>
 
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">
@@ -1020,7 +1048,29 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                 Direct Forward Routing &amp; Office Hierarchy
             </span>
         </h2>
-        <div class="content-wrapper">
+        <div class="content-wrapper util-content-with-subtabs">
+            <?php if ($flash): ?>
+                <div class="util-flash-wrap">
+                    <div class="util-alert <?= htmlspecialchars($flash['type'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= $flash['type'] === 'success' ? '<i class="ri-checkbox-circle-fill"></i>' : ($flash['type'] === 'error' ? '<i class="ri-error-warning-fill"></i>' : '<i class="ri-information-fill"></i>') ?>
+                        <?= htmlspecialchars($flash['msg'], ENT_QUOTES, 'UTF-8') ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="util-subtabs-toolbar">
+                <div class="util-subtabs-bar" role="tablist" aria-label="Routing sections">
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'forward' ? ' is-active' : '' ?>" role="tab" data-util-tab="forward" aria-selected="<?= $active_routing_tab === 'forward' ? 'true' : 'false' ?>">Direct forward</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'return' ? ' is-active' : '' ?>" role="tab" data-util-tab="return" aria-selected="<?= $active_routing_tab === 'return' ? 'true' : 'false' ?>">Return to previous</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'liaison' ? ' is-active' : '' ?>" role="tab" data-util-tab="liaison" aria-selected="<?= $active_routing_tab === 'liaison' ? 'true' : 'false' ?>">Liaison offices</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'hierarchy' ? ' is-active' : '' ?>" role="tab" data-util-tab="hierarchy" aria-selected="<?= $active_routing_tab === 'hierarchy' ? 'true' : 'false' ?>">Office hierarchy</button>
+                </div>
+                <p class="util-subtabs-hint">Each tab uses the full panel for an unobstructed view.</p>
+            </div>
+
+            <div class="util-subtab-panels">
+                <div class="util-subtab-panel<?= $active_routing_tab === 'forward' ? ' is-active' : '' ?>" data-util-panel="forward">
+                    <div class="util-subtab-panel__body">
             <section class="util-routing-section">
             <p class="util-section-title">Direct forward routing</p>
             <p class="util-dv-desc">
@@ -1200,7 +1250,11 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                 </div>
             </div>
             </section>
+                    </div>
+                </div>
 
+                <div class="util-subtab-panel<?= $active_routing_tab === 'return' ? ' is-active' : '' ?>" data-util-panel="return">
+                    <div class="util-subtab-panel__body">
             <section class="util-routing-section">
             <p class="util-section-title">Return to previous process</p>
             <p class="util-dv-desc">
@@ -1285,7 +1339,11 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                 </div>
             </div>
             </section>
+                    </div>
+                </div>
 
+                <div class="util-subtab-panel<?= $active_routing_tab === 'liaison' ? ' is-active' : '' ?>" data-util-panel="liaison">
+                    <div class="util-subtab-panel__body">
             <section class="util-routing-section">
             <p class="util-section-title">Liaison forwarding offices</p>
             <p class="util-dv-desc">
@@ -1384,7 +1442,11 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                 </div>
             </div>
             </section>
+                    </div>
+                </div>
 
+                <div class="util-subtab-panel<?= $active_routing_tab === 'hierarchy' ? ' is-active' : '' ?>" data-util-panel="hierarchy">
+                    <div class="util-subtab-panel__body">
             <section class="util-routing-section">
             <p class="util-section-title">Office hierarchy</p>
             <p class="util-dv-desc">
@@ -1464,10 +1526,18 @@ function routing_forward_destinations_for_select(array $destinations, string $st
                 </div>
             </div>
             </section>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<?php
+$util_subtabs_initial_tab = $active_routing_tab;
+$util_subtabs_valid_tabs = $routing_tab_ids;
+require __DIR__ . '/partials/util_subtabs_script.php';
+?>
 <script src="../../protected/js/main.js"></script>
 </body>
 

@@ -113,7 +113,7 @@ $pageTitleHelperName = $header_text ?? 'Returned Vouchers';
             <?php endif; ?>
             <div class="status-report-filter-bar__field status-report-filter-bar__field--grow">
                 <label for="returnedSearch">Search</label>
-                <input type="text" id="returnedSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Processing no., payee, office, returned by…" autocomplete="off">
+                <input type="text" id="returnedSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
             </div>
             <button type="submit" class="status-report-filter-bar__apply">Apply Filters</button>
             <button type="button" class="status-report-filter-bar__print" id="returnedVouchersPrintBtn">Print Report</button>

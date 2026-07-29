@@ -95,6 +95,115 @@ function session_contains_phrase($phrase)
             flex: 1 1 auto;
             min-width: 0 !important;
         }
+
+        /* Row burger menu */
+        .voucher-row-menu-cell {
+            width: 44px;
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .voucher-row-menu {
+            position: relative;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .voucher-row-menu-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            color: #4b5563;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease, transform 120ms ease;
+        }
+
+        .voucher-row-menu-trigger:hover,
+        .voucher-row-menu.is-open .voucher-row-menu-trigger {
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            border-color: #c7d7fe;
+            color: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.16);
+            transform: translateY(-1px);
+        }
+
+        .voucher-row-menu-trigger i {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .voucher-row-menu-dropdown {
+            position: fixed;
+            z-index: 501;
+            width: 128px;
+            min-width: 128px;
+            max-width: 128px;
+            padding: 4px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .voucher-row-menu-dropdown.is-open {
+            display: block;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            width: 100%;
+            min-height: 32px;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 8px;
+            box-sizing: border-box;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: 0.01em;
+            color: #374151;
+            text-decoration: none;
+            background: transparent;
+            cursor: pointer;
+            transition: background 120ms ease, color 120ms ease;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link i {
+            width: 16px;
+            flex: 0 0 16px;
+            font-size: 15px;
+            color: #6b7280;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link span {
+            flex: 1 1 auto;
+            text-align: left;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover {
+            background: #f3f6fb;
+            color: #1d4ed8;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover i {
+            color: #2563eb;
+        }
     </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
@@ -107,62 +216,14 @@ function session_contains_phrase($phrase)
                         </button>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" placeholder="Search for payee, particulars, processing no., etc" autocomplete="off">
+                        <input type="text" id="filterInput" placeholder="search" autocomplete="off">
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
     <style>
-        #coaOptionsModalForward,
-        #signatoryModal {
-            z-index: 10001;
-        }
-        #natureOfClaimModal {
-            z-index: 10005 !important;
-        }
-        #coa_modal_overlay_forward,
-        #signatory_modal_overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 10000;
-        }
-        #nature_of_claim_modal_overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 10004 !important;
-        }
-        #coaOptionsModalForward .popupForm-box__container,
-        #signatoryModal .popupForm-box__container,
-        #natureOfClaimModal .popupForm-box__container {
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-        }
-        #coaOptionsModalForward .f-container,
-        #signatoryModal .f-container,
-        #natureOfClaimModal .f-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-        #coaOptionsModalForward .box-body__container,
-        #signatoryModal .box-body__container,
-        #natureOfClaimModal .box-body__container {
-            flex: 1;
-            min-height: 0;
-            overflow: auto;
-        }
         #coa_options_list_forward input[type="checkbox"] {
             margin-right: 10px;
             cursor: pointer;
@@ -175,7 +236,7 @@ function session_contains_phrase($phrase)
         }
     </style>
     <!-- COA checklist modal (forward slip reprint) -->
-    <div class="popup-form" id="coaOptionsModalForward" style="display: none;">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="coaOptionsModalForward" style="display: none;">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="coa_modal_title_forward">COA Requirements</p>
@@ -204,9 +265,9 @@ function session_contains_phrase($phrase)
             </div>
         </div>
     </div>
-    <div class="overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
+    <div class="overlay voucher-premium-overlay" id="coa_modal_overlay_forward" style="display: none;"></div>
     <!-- DV signatory selection modal (before print) -->
-    <div class="popup-form" id="signatoryModal" style="display: none;">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="signatoryModal" style="display: none;">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="signatory_modal_title">Select Signatories</p>
@@ -245,47 +306,122 @@ function session_contains_phrase($phrase)
             </div>
         </div>
     </div>
-    <div class="overlay" id="signatory_modal_overlay" style="display: none;"></div>
+    <div class="overlay voucher-premium-overlay" id="signatory_modal_overlay" style="display: none;"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">Encoded Voucher Summary</h2>
         <style>
-            /* Keep pagination fixed at the bottom of the table card (match voucher.php) */
             .voucher-card--table {
                 position: relative;
                 display: flex;
                 flex-direction: column;
+                flex: 1;
+                min-height: 0;
+            }
+
+            .main.main--voucher-dashboard {
+                height: calc(100dvh - 4rem);
+                max-height: calc(100dvh - 4rem);
+                overflow: hidden;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem;
+            }
+
+            .main--voucher-dashboard .voucher-card--table {
+                flex: 1;
+                min-height: 0;
             }
 
             .voucher-card--table .content-wrapper {
                 flex: 1;
                 min-height: 0;
                 overflow: auto;
-                max-height: 70vh;
+                max-height: none;
+            }
+
+            #my-Table .voucher-table-actions-cell {
+                width: 1%;
+                white-space: nowrap;
+                vertical-align: middle;
+                padding: 4px 6px !important;
+                text-align: right;
+            }
+
+            .voucher-table-actions-group {
+                display: inline-flex;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 2px;
+            }
+
+            #my-Table .voucher-table-actions-group .voucher-table-action-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 28px !important;
+                min-width: 28px !important;
+                height: 28px !important;
+                min-height: 28px !important;
+                padding: 0 !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                background: #ffffff !important;
+                color: #64748b !important;
+                box-shadow: none !important;
+                font-size: 0 !important;
+                line-height: 1;
+                cursor: pointer;
+                transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+            }
+
+            #my-Table .voucher-table-actions-group .voucher-table-action-btn i {
+                font-size: 15px;
+                line-height: 1;
+            }
+
+            #my-Table .voucher-table-actions-group .voucher-table-action-btn span {
+                display: none;
+            }
+
+            #my-Table .voucher-table-actions-group .voucher-table-action-btn:hover {
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #475569 !important;
+                transform: none;
+            }
+
+            #my-Table .voucher-table-actions-group .voucher-table-action-btn:active {
+                background: #e2e8f0 !important;
+            }
+
+            .voucher-print-actions {
+                display: inline-flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
             }
 
             .voucher-pagination-footer {
-                position: sticky;
-                bottom: 0;
-                z-index: 5;
+                position: static;
                 background: #fff;
                 border-top: 1px solid rgba(229, 231, 235, 1);
                 padding: 10px 0 0;
-                margin-top: 0;
+                margin-top: auto;
             }
         </style>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
                 <thead>
                     <tr>
+                        <th class="voucher-row-menu-cell" aria-label="Menu"></th>
                         <th>Processing No.</th>
                         <th>Payee Name</th>
-                        <th>Address</th>
-                        <th>Particulars</th>
                         <th>Amount</th>
-                        <th>Date</th>
-                        <th>Type</th>
                         <th>Remarks</th>
-                        <th style="white-space: nowrap;">Print / Slip</th>
+                        <th class="voucher-table-actions-cell">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -310,7 +446,7 @@ function session_contains_phrase($phrase)
 </div>
 
 <!-- Nature of Claim (forward slip reprint) -->
-<div class="popup-form" id="natureOfClaimModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="nature_of_claim_modal_title">
+<div class="popup-form voucher-premium-modal popup-form--compact" id="natureOfClaimModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="nature_of_claim_modal_title">
     <div class="popupForm-box__container">
         <div class="popupForm-header__container">
             <p id="nature_of_claim_modal_title">Nature of Claim</p>
@@ -337,7 +473,7 @@ function session_contains_phrase($phrase)
         </div>
     </div>
 </div>
-<div class="overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
+<div class="overlay voucher-premium-overlay" id="nature_of_claim_modal_overlay" style="display: none;" aria-hidden="true"></div>
 
 <div id="encoded-slip-hidden-fields" style="display:none;" aria-hidden="true">
     <input type="text" id="encoded_processing_no" value="">
@@ -514,6 +650,17 @@ function session_contains_phrase($phrase)
             if (end < totalPages - 1) appendEllipsis();
             appendPageButton(totalPages);
         }
+        function rowMenuHtml(processingNo) {
+            var pn = String(processingNo ?? '');
+            return '<td class="voucher-row-menu-cell" data-label="">' +
+                '<div class="voucher-row-menu">' +
+                '<button type="button" class="voucher-row-menu-trigger" aria-label="Row actions" aria-haspopup="true" aria-expanded="false">' +
+                '<i class="ri-more-2-fill" aria-hidden="true"></i></button>' +
+                '<div class="voucher-row-menu-dropdown" role="menu">' +
+                '<a class="voucher-row-menu-link" href="voucher_status_report.php?q=' + encodeURIComponent(pn) + '" role="menuitem">' +
+                '<i class="ri-history-line" aria-hidden="true"></i><span>History</span></a>' +
+                '</div></div></td>';
+        }
         function renderRows(data) {
             tableBody.innerHTML = '';
             const frag = document.createDocumentFragment();
@@ -523,23 +670,24 @@ function session_contains_phrase($phrase)
                 var amountNorm = normalizeAmountInput(row.amount || '');
                 var amountShown = amountNorm !== '' ? formatAmountDisplay(amountNorm) : escapeHtml(row.amount || '');
                 tr.innerHTML =
+                    rowMenuHtml(row.processing_no) +
                     '<td data-label="processing_no">' + escapeHtml(row.processing_no) + '</td>' +
                     '<td data-label="payee">' + escapeHtml(row.payee) + '</td>' +
-                    '<td data-label="address">' + escapeHtml(row.address) + '</td>' +
-                    '<td data-label="particulars">' + escapeHtml(row.particulars) + '</td>' +
+                    '<td data-label="address" class="hidden">' + escapeHtml(row.address) + '</td>' +
+                    '<td data-label="particulars" class="hidden">' + escapeHtml(row.particulars) + '</td>' +
                     '<td data-label="amount" class="amount" data-amount="' + escapeHtml(amountNorm) + '">' + escapeHtml(amountShown) + '</td>' +
-                    '<td data-label="voucher_date">' + escapeHtml(row.voucher_date) + '</td>' +
-                    '<td data-label="voucher_type_display" class="voucher-type-cell">' + typeBadge(row.voucher_type) + '</td>' +
+                    '<td data-label="voucher_date" class="hidden">' + escapeHtml(row.voucher_date) + '</td>' +
+                    '<td data-label="voucher_type_display" class="hidden voucher-type-cell">' + typeBadge(row.voucher_type) + '</td>' +
                     '<td data-label="return_remarks" class="return-remarks-cell">' + remarksBadge(row.return_remarks) + '</td>' +
+                    '<td class="voucher-table-actions-cell" data-label="actions"><div class="voucher-table-actions-group">' +
+                    '<button class="btn voucher-table-action-btn voucher-table-action-btn--print" name="btn-gen-slip" type="button" aria-label="Print" title="Print"><i class="ri-printer-line" aria-hidden="true"></i><span>Print</span></button>' +
+                    '<button class="btn voucher-table-action-btn voucher-table-action-btn--slip" name="btn-print-slip" type="button" aria-label="Slip" title="Slip"><i class="ri-file-paper-2-line" aria-hidden="true"></i><span>Slip</span></button>' +
+                    '</div></td>' +
                     '<td data-label="encoded_by" class="hidden">' + escapeHtml(row.encoded_by) + '</td>' +
                     '<td data-label="datetime_encoded" class="hidden">' + escapeHtml(row.datetime_encoded) + '</td>' +
                     '<td data-label="encoded_from" class="hidden">' + escapeHtml(row.encoded_from) + '</td>' +
                     '<td data-label="tin_employee_no" class="hidden">' + escapeHtml(row.tin_employee_no) + '</td>' +
-                    '<td data-label="voucher_type" class="hidden">' + escapeHtml(row.voucher_type) + '</td>' +
-                    '<td data-label=""><div class="voucher-print-actions">' +
-                    '<button class="btn warning" name="btn-gen-slip" type="button">Print</button>' +
-                    '<button class="btn secondary" name="btn-print-slip" type="button">Print Slip</button>' +
-                    '</div></td>';
+                    '<td data-label="voucher_type" class="hidden">' + escapeHtml(row.voucher_type) + '</td>';
                 const printBtn = tr.querySelector('button[name="btn-gen-slip"]');
                 if (printBtn) attachPrintHandler(printBtn, row);
                 const slipBtn = tr.querySelector('button[name="btn-print-slip"]');
@@ -631,6 +779,164 @@ function session_contains_phrase($phrase)
         if (prevBtn) prevBtn.addEventListener('click', function() { if (currentPage > 1) loadPage(currentPage - 1); });
         if (nextBtn) nextBtn.addEventListener('click', function() { if (currentPage < totalPages) loadPage(currentPage + 1); });
         loadPage(1);
+    })();
+</script>
+<script>
+    (function() {
+        var table = document.getElementById('my-Table');
+        if (!table) return;
+
+        var contentWrapper = table.closest('.content-wrapper');
+
+        function getMenuDropdown(menu) {
+            return menu._portedDropdown || menu.querySelector('.voucher-row-menu-dropdown');
+        }
+
+        function resetRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            if (!dropdown) return;
+
+            dropdown.classList.remove('is-open');
+            dropdown.style.top = '';
+            dropdown.style.left = '';
+            dropdown.style.width = '';
+            dropdown.style.minWidth = '';
+            dropdown.style.maxWidth = '';
+
+            if (menu._portedDropdown) {
+                menu.appendChild(dropdown);
+                menu._portedDropdown = null;
+            }
+
+            dropdown._ownerRow = null;
+        }
+
+        function positionRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            var trigger = menu.querySelector('.voucher-row-menu-trigger');
+            if (!dropdown || !trigger) return;
+
+            if (!menu._portedDropdown) {
+                menu._portedDropdown = dropdown;
+                dropdown._ownerRow = menu.closest('tr');
+                document.body.appendChild(dropdown);
+            }
+
+            dropdown.classList.add('is-open');
+
+            var rect = trigger.getBoundingClientRect();
+            var dropdownWidth = dropdown.offsetWidth || 128;
+            var centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+            dropdown.style.top = (rect.bottom + 4) + 'px';
+
+            var dropdownRect = dropdown.getBoundingClientRect();
+            if (dropdownRect.bottom > window.innerHeight - 8) {
+                dropdown.style.top = Math.max(8, rect.top - dropdownRect.height - 4) + 'px';
+            }
+            dropdownWidth = dropdownRect.width || dropdownWidth;
+            centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+        }
+
+        function syncOpenRowMenu() {
+            var openMenu = table.querySelector('.voucher-row-menu.is-open');
+            if (openMenu) {
+                positionRowMenuDropdown(openMenu);
+            }
+        }
+
+        function closeAllRowMenus(exceptMenu) {
+            table.querySelectorAll('.voucher-row-menu.is-open').forEach(function(menu) {
+                if (exceptMenu && menu === exceptMenu) {
+                    return;
+                }
+                menu.classList.remove('is-open');
+                resetRowMenuDropdown(menu);
+                var trigger = menu.querySelector('.voucher-row-menu-trigger');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        table.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.voucher-row-menu-trigger');
+            if (trigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                var menu = trigger.closest('.voucher-row-menu');
+                if (!menu) return;
+                var willOpen = !menu.classList.contains('is-open');
+                closeAllRowMenus(willOpen ? menu : null);
+                menu.classList.toggle('is-open', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                if (willOpen) {
+                    positionRowMenuDropdown(menu);
+                } else {
+                    resetRowMenuDropdown(menu);
+                }
+                return;
+            }
+
+            if (e.target.closest('.voucher-row-menu-link')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.voucher-row-menu') && !e.target.closest('.voucher-row-menu-dropdown')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAllRowMenus();
+            }
+        });
+
+        if (contentWrapper) {
+            contentWrapper.addEventListener('scroll', syncOpenRowMenu, { passive: true });
+        }
+
+        window.addEventListener('resize', syncOpenRowMenu);
+    })();
+</script>
+<script>
+    (function() {
+        var main = document.getElementById('main');
+        var tableCard = document.querySelector('.voucher-card--table');
+        var tableWrapper = tableCard ? tableCard.querySelector('.content-wrapper') : null;
+        if (!main || !tableCard || !tableWrapper) return;
+
+        var layoutTimer = null;
+
+        function fitTableViewport() {
+            var wrapperTop = tableWrapper.getBoundingClientRect().top;
+            var pagination = tableCard.querySelector('.voucher-pagination-footer');
+            var paginationHeight = pagination ? pagination.offsetHeight : 0;
+            var available = window.innerHeight - wrapperTop - paginationHeight - 20;
+            tableWrapper.style.maxHeight = Math.max(160, available) + 'px';
+        }
+
+        function scheduleLayoutSync() {
+            if (layoutTimer) {
+                clearTimeout(layoutTimer);
+            }
+            layoutTimer = setTimeout(fitTableViewport, 80);
+        }
+
+        window.addEventListener('resize', scheduleLayoutSync);
+        window.addEventListener('load', scheduleLayoutSync);
+
+        if (window.ResizeObserver) {
+            var layoutObserver = new ResizeObserver(scheduleLayoutSync);
+            layoutObserver.observe(main);
+            layoutObserver.observe(tableCard);
+        }
+
+        scheduleLayoutSync();
     })();
 </script>
 

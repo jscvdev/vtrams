@@ -9,143 +9,268 @@ require_once __DIR__ . '/../../protected/core/components/notifications/notificat
 AuditHelper::logPageView('Performance');
 ?>
 <style>
-    .main_dashboard {
-        overflow-y: scroll;
-    }
-
-    .main-content {
-        flex: 1;
-        padding: 20px;
+    .main.main--analytics-dashboard {
+        height: calc(100dvh - 4rem);
+        max-height: calc(100dvh - 4rem);
+        overflow: hidden;
+        padding: clamp(0.75rem, 1.6vw, 1.5rem) clamp(0.875rem, 2vw, 1.75rem);
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
+        background: #F5F6F8;
+    }
+
+    .analytics-dashboard-shell {
+        display: flex;
+        flex-direction: column;
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+    }
+
+    .analytics-dashboard-toolbar {
+        display: flex;
+        flex-direction: column;
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
+        flex-shrink: 0;
+    }
+
+    .analytics-dashboard-viewport {
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        overflow: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .analytics-dashboard-scale {
         width: 100%;
-        height: 100%;
-    }
-
-    .dashboard-content {
-        display: flex;
-        gap: 20px;
-        flex-wrap: wrap;
-    }
-
-    .dashboard-content>div {
-        flex: 1;
-        min-width: 300px;
-    }
-
-    .chart-container {
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        height: 320px;
+        min-width: 0;
         display: flex;
         flex-direction: column;
+        gap: 12px;
     }
 
-    .chart-container canvas {
-        flex: 1;
-        max-height: 260px;
-    }
-
-    .chart-container h3 {
-        margin-bottom: 10px;
-        color: rgb(75 85 99 / 0.9);
-        font-size: 16px;
+    .analytics-dashboard-header__title {
+        margin: 0 0 2px;
+        font-size: 1.125rem;
         font-weight: 600;
+        color: #111827;
+        letter-spacing: -0.015em;
     }
 
-    .table-container {
-        width: 100%;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        padding: 20px;
+    .analytics-dashboard-header__subtitle {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        max-width: 640px;
     }
 
-    .stats-card-wrapper {
+    .analytics-filter-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 12px 14px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
     }
 
-    .modern-stat-card {
+    .analytics-filter-field {
         display: flex;
-        padding: 12px 16px;
-        border-radius: 10px;
-        background-color: #fff;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        min-width: 140px;
-        flex: 1;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
     }
 
-    .stat-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
+    .analytics-filter-field label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #94a3b8;
+    }
+
+    .analytics-filter-field select,
+    .analytics-filter-field input[type="date"],
+    .analytics-filter-field input[type="text"] {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fafbfc;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 500;
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+
+    .analytics-filter-field select:focus,
+    .analytics-filter-field input:focus {
+        outline: none;
+        background: #fff;
+        border-color: #b8c9ff;
+        box-shadow: 0 0 0 3px rgba(74, 118, 255, 0.12);
+    }
+
+    .analytics-filter-field--search {
+        flex: 1 1 200px;
+        margin-left: auto;
+    }
+
+    .analytics-filter-apply {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        margin-right: 12px;
-        font-size: 18px;
+        min-height: 34px;
+        padding: 0 14px;
+        border: none;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #4A76FF, #3d67e8);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(74, 118, 255, 0.22);
+        transition: transform 120ms ease, box-shadow 120ms ease;
     }
 
-    .stat-text {
+    .analytics-filter-apply:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(74, 118, 255, 0.34);
+    }
+
+    .analytics-filter-apply--print {
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.28);
+    }
+
+    .analytics-filter-apply--print:hover {
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.34);
+    }
+
+    .analytics-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .analytics-stat-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 13px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        min-width: 0;
+    }
+
+    .analytics-stat-card__body {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .analytics-stat-card__icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+
+    .analytics-stat-card__label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        line-height: 1.2;
+    }
+
+    .analytics-stat-card__value {
+        margin-top: 2px;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #0f172a;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .stat-amount {
+        display: block;
+        font-size: 10px;
+        color: #64748b;
+        margin-top: 3px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .analytics-card {
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        padding: 14px 16px 16px;
         display: flex;
         flex-direction: column;
-        color: rgb(75 85 99 / 0.9);
+        min-width: 0;
     }
 
-    .stat-label {
-        font-size: 13px;
-        font-weight: 500;
+    .analytics-card__title {
+        margin: 0 0 10px;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
     }
 
-    .stat-value {
-        font-size: 20px;
-        font-weight: bold;
-        color: #000;
-        margin-top: 4px;
+    .analytics-card--chart {
+        min-height: auto;
     }
 
-    .filter_options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        align-items: center;
-        background-color: #fff;
-        padding: 16px 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        margin-bottom: 10px;
-        color: rgb(75 85 99 / 0.9);
+    .analytics-chart-wrap {
+        position: relative;
+        height: 220px;
+        min-height: 220px;
+        max-height: 220px;
     }
 
-    .filter_options>div {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 14px;
+    .analytics-card--chart canvas {
+        max-height: none;
+        height: 100% !important;
     }
 
-    .filter_options select {
-        padding: 6px 8px;
-        border-radius: 5px;
-        border: 1px solid #ddd;
+    .analytics-card--table {
+        padding: 14px 16px 16px;
     }
 
-    .filter_options button {
-        background-color: #0d6efd;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    .filter_options button.print-btn {
-        background-color: #28a745;
+    .analytics-table-wrap {
+        overflow-x: auto;
+        width: 100%;
+        border: 1px solid #eef2f7;
+        border-radius: 10px;
     }
 
     .perf-table {
@@ -156,19 +281,27 @@ AuditHelper::logPageView('Performance');
 
     .perf-table th,
     .perf-table td {
-        padding: 10px 12px;
+        padding: 9px 12px;
         text-align: left;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #f1f5f9;
     }
 
     .perf-table th {
-        background-color: #f8f9fa;
-        color: rgb(75 85 99 / 0.9);
+        background: #fafbfc;
+        color: #94a3b8;
+        font-size: 10px;
         font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
 
-    .perf-table tr:hover {
-        background-color: #f8f9fa;
+    .perf-table tbody tr:hover {
+        background: #f8fbff;
+    }
+
+    .perf-table td {
+        color: #334155;
+        font-size: 12px;
     }
 
     .no-data {
@@ -215,13 +348,13 @@ AuditHelper::logPageView('Performance');
 
     .perf-table-pager__btn:hover:not(:disabled) {
         background: #f9fafb;
-        border-color: #0d6efd;
-        color: #0d6efd;
-        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
+        border-color: #4A76FF;
+        color: #4A76FF;
+        box-shadow: 0 2px 6px rgba(74, 118, 255, 0.12);
     }
 
     .perf-table-pager__btn:focus-visible {
-        outline: 2px solid #0d6efd;
+        outline: 2px solid #4A76FF;
         outline-offset: 2px;
     }
 
@@ -253,14 +386,45 @@ AuditHelper::logPageView('Performance');
         letter-spacing: 0.06em;
     }
 
-    @media print {
+    .perf-total-row td {
+        font-weight: 700;
+        background: #f9fafb;
+        border-top: 2px solid #e5e7eb;
+    }
 
+    @media (max-width: 1400px) {
+        .analytics-stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        }
+    }
+
+    @media (max-width: 1100px) {
+        .analytics-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 640px) {
+        .main.main--analytics-dashboard {
+            padding: 1rem;
+        }
+
+        .analytics-filter-bar {
+            padding: 14px;
+        }
+
+        .analytics-filter-field--search {
+            margin-left: 0;
+            flex-basis: 100%;
+        }
+    }
+
+    @media print {
         .sidebar,
         .header,
-        .filter_options,
-        .print-btn,
+        .analytics-filter-bar,
         .no-print,
-        .dashboard-content {
+        .analytics-grid {
             display: none !important;
         }
 
@@ -387,130 +551,132 @@ AuditHelper::logPageView('Performance');
         color: #4b5563;
         margin-top: 4px;
     }
-
-    .stat-amount {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 2px;
-    }
-
-    .perf-total-row td {
-        font-weight: 700;
-        background: #f9fafb;
-        border-top: 2px solid #e5e7eb;
-    }
 </style>
 
-<div class="main" id="main">
-    <div class="main-content main_dashboard">
-        <h1>Performance</h1>
-        <p style="color: rgb(75 85 99 / 0.9)">Voucher action counts: Forwarded, Processed, Returned, Received, Transmitted.</p>
-
-        <section class="filter_options no-print">
-            <div>
-                <label>Date:</label>
-                <input type="date" id="dateFilter" style="padding:6px;border-radius:5px;border:1px solid #ddd;">
-            </div>
-            <div>
-                <label>Year:</label>
-                <select id="yearFilter">
-                    <option value="all">All</option>
-                    <?php for ($y = date('Y'); $y >= 2020; $y--) echo "<option value=\"$y\">$y</option>"; ?>
-                </select>
-            </div>
-            <div>
-                <label>Month:</label>
-                <select id="monthFilter">
-                    <option value="all">All</option>
-                    <?php for ($m = 1; $m <= 12; $m++) echo '<option value="' . str_pad((string)$m, 2, '0', STR_PAD_LEFT) . '">' . date('M', mktime(0, 0, 0, $m, 1)) . '</option>'; ?>
-                </select>
-            </div>
-            <div>
-                <label>Action:</label>
-                <select id="actionTypeFilter">
-                    <option value="all">All Actions</option>
-                    <option value="Forwarded">Forwarded</option>
-                    <option value="Processed">Processed</option>
-                    <option value="Returned">Returned</option>
-                    <option value="Received">Received</option>
-                    <option value="Transmitted">Transmitted</option>
-                    <option value="Other">Other</option>
-                </select>
-            </div>
-            <button id="applyFiltersBtn">Apply</button>
-            <button class="print-btn" id="printDailyBtn">Print Report</button>
-            <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-                <label for="perfTableSearch" style="font-size:14px;">Table search</label>
-                <input type="text" id="perfTableSearch" placeholder="Processing no., payee, action…" style="padding:6px;border-radius:5px;border:1px solid #ddd;min-width:200px;" autocomplete="off">
-            </div>
-        </section>
-
-        <div class="table-container">
-            <div class="stats-card-wrapper" id="statsCards"></div>
-        </div>
-
-        <section class="dashboard-content">
-            <div class="chart-container">
-                <h3>Action Type Distribution</h3>
-                <canvas id="actionChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <h3>Daily Taken-Action Trend</h3>
-                <canvas id="dailyChart"></canvas>
-            </div>
-        </section>
-
-        <div class="perf-print-header print-only" id="perfPrintHeader">
-            <div class="perf-print-banner">
+<div class="main main--analytics-dashboard" id="main">
+    <div class="analytics-dashboard-shell">
+        <div class="analytics-dashboard-toolbar">
+            <header class="analytics-dashboard-header">
                 <div>
-                    <p class="perf-print-banner__eyebrow">Voucher Tracking</p>
-                    <h2>Performance Report</h2>
-                    <p class="perf-print-banner__subtitle">Taken-Action Summary</p>
+                    <h1 class="analytics-dashboard-header__title">Performance</h1>
+                    <p class="analytics-dashboard-header__subtitle">Voucher action counts: Forwarded, Processed, Returned, Received, Transmitted.</p>
                 </div>
-                <div class="perf-print-banner__meta">
-                    <div><span>Date</span><strong id="perfPrintDate">—</strong></div>
-                    <div><span>Action</span><strong id="perfPrintAction">All</strong></div>
-                    <div><span>Rows</span><strong id="perfPrintRows">0</strong></div>
-                    <div><span>Generated</span><strong id="perfPrintGenerated">—</strong></div>
+            </header>
+
+            <section class="analytics-filter-bar no-print">
+                <div class="analytics-filter-field">
+                    <label for="dateFilter">Date</label>
+                    <input type="date" id="dateFilter">
                 </div>
-            </div>
-            <div class="perf-print-summary" id="perfPrintSummary"></div>
+                <div class="analytics-filter-field">
+                    <label for="yearFilter">Year</label>
+                    <select id="yearFilter">
+                        <option value="all">All</option>
+                        <?php for ($y = date('Y'); $y >= 2020; $y--) echo "<option value=\"$y\">$y</option>"; ?>
+                    </select>
+                </div>
+                <div class="analytics-filter-field">
+                    <label for="monthFilter">Month</label>
+                    <select id="monthFilter">
+                        <option value="all">All</option>
+                        <?php for ($m = 1; $m <= 12; $m++) echo '<option value="' . str_pad((string)$m, 2, '0', STR_PAD_LEFT) . '">' . date('M', mktime(0, 0, 0, $m, 1)) . '</option>'; ?>
+                    </select>
+                </div>
+                <div class="analytics-filter-field">
+                    <label for="actionTypeFilter">Action</label>
+                    <select id="actionTypeFilter">
+                        <option value="all">All Actions</option>
+                        <option value="Forwarded">Forwarded</option>
+                        <option value="Processed">Processed</option>
+                        <option value="Returned">Returned</option>
+                        <option value="Received">Received</option>
+                        <option value="Transmitted">Transmitted</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <button type="button" class="analytics-filter-apply" id="applyFiltersBtn">Apply</button>
+                <button type="button" class="analytics-filter-apply analytics-filter-apply--print" id="printDailyBtn">Print Report</button>
+                <div class="analytics-filter-field analytics-filter-field--search">
+                    <label for="perfTableSearch">Table search</label>
+                    <input type="text" id="perfTableSearch" placeholder="Processing no., payee, action…" autocomplete="off">
+                </div>
+            </section>
         </div>
 
-        <section class="table-container">
-            <h3 style="margin-bottom:12px;">Taken-Action</h3>
-            <table class="perf-table" id="perfTable">
-                <thead>
-                    <tr>
-                        <th>Processing No</th>
-                        <th>DV No</th>
-                        <th>Payee</th>
-                        <th style="text-align:right;">Amount</th>
-                        <th>Action Type</th>
-                        <th>Action By</th>
-                        <th>Date/Time</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-                <tfoot id="perfTableFoot" style="display:none;">
-                    <tr class="perf-total-row">
-                        <td colspan="3">Total</td>
-                        <td style="text-align:right;" id="perfTableTotalAmount">—</td>
-                        <td colspan="3" id="perfTableTotalCount"></td>
-                    </tr>
-                </tfoot>
-            </table>
-            <div class="no-data" id="noDataMsg" style="display:none;">No data for selected filters.</div>
-            <div class="no-print perf-table-pager" id="perfTablePager">
-                <button type="button" id="perfTablePrev" class="perf-table-pager__btn" aria-label="Previous page">
-                    <i class="ri-arrow-left-s-line" aria-hidden="true"></i><span>Previous</span>
-                </button>
-                <span id="perfTablePagerInfo" class="perf-table-pager__info"></span>
-                <button type="button" id="perfTableNext" class="perf-table-pager__btn" aria-label="Next page">
-                    <span>Next</span><i class="ri-arrow-right-s-line" aria-hidden="true"></i>
-                </button>
+        <div class="analytics-dashboard-viewport" id="perfAnalyticsViewport">
+            <div class="analytics-dashboard-scale" id="perfAnalyticsScale">
+                <div class="analytics-stats-grid" id="statsCards"></div>
+
+                <section class="analytics-grid no-print">
+                    <div class="analytics-card analytics-card--chart">
+                        <h3 class="analytics-card__title">Action Type Distribution</h3>
+                        <div class="analytics-chart-wrap">
+                            <canvas id="actionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="analytics-card analytics-card--chart">
+                        <h3 class="analytics-card__title">Daily Taken-Action Trend</h3>
+                        <div class="analytics-chart-wrap">
+                            <canvas id="dailyChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="perf-print-header print-only" id="perfPrintHeader">
+                    <div class="perf-print-banner">
+                        <div>
+                            <p class="perf-print-banner__eyebrow">Voucher Tracking</p>
+                            <h2>Performance Report</h2>
+                            <p class="perf-print-banner__subtitle">Taken-Action Summary</p>
+                        </div>
+                        <div class="perf-print-banner__meta">
+                            <div><span>Date</span><strong id="perfPrintDate">—</strong></div>
+                            <div><span>Action</span><strong id="perfPrintAction">All</strong></div>
+                            <div><span>Rows</span><strong id="perfPrintRows">0</strong></div>
+                            <div><span>Generated</span><strong id="perfPrintGenerated">—</strong></div>
+                        </div>
+                    </div>
+                    <div class="perf-print-summary" id="perfPrintSummary"></div>
+                </div>
+
+                <section class="analytics-card analytics-card--table">
+                    <h3 class="analytics-card__title">Taken-Action</h3>
+                    <div class="analytics-table-wrap">
+                        <table class="perf-table" id="perfTable">
+                            <thead>
+                                <tr>
+                                    <th>Processing No</th>
+                                    <th>DV No</th>
+                                    <th>Payee</th>
+                                    <th style="text-align:right;">Amount</th>
+                                    <th>Action Type</th>
+                                    <th>Action By</th>
+                                    <th>Date/Time</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot id="perfTableFoot" style="display:none;">
+                                <tr class="perf-total-row">
+                                    <td colspan="3">Total</td>
+                                    <td style="text-align:right;" id="perfTableTotalAmount">—</td>
+                                    <td colspan="3" id="perfTableTotalCount"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="no-data" id="noDataMsg" style="display:none;">No data for selected filters.</div>
+                    <div class="no-print perf-table-pager" id="perfTablePager">
+                        <button type="button" id="perfTablePrev" class="perf-table-pager__btn" aria-label="Previous page">
+                            <i class="ri-arrow-left-s-line" aria-hidden="true"></i><span>Previous</span>
+                        </button>
+                        <span id="perfTablePagerInfo" class="perf-table-pager__info"></span>
+                        <button type="button" id="perfTableNext" class="perf-table-pager__btn" aria-label="Next page">
+                            <span>Next</span><i class="ri-arrow-right-s-line" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </section>
             </div>
-        </section>
+        </div>
     </div>
 </div>
 
@@ -528,13 +694,63 @@ AuditHelper::logPageView('Performance');
         const perfSearch = document.getElementById('perfTableSearch');
 
         const actionColors = {
-            Forwarded: 'rgba(54, 162, 235, 0.7)',
-            Processed: 'rgba(75, 192, 192, 0.7)',
-            Returned: 'rgba(255, 99, 132, 0.7)',
-            Received: 'rgba(255, 206, 86, 0.7)',
-            Transmitted: 'rgba(153, 102, 255, 0.7)',
-            Other: 'rgba(199, 199, 199, 0.7)'
+            Forwarded: 'rgba(74, 118, 255, 0.85)',
+            Processed: 'rgba(16, 185, 129, 0.85)',
+            Returned: 'rgba(245, 158, 11, 0.85)',
+            Received: 'rgba(139, 92, 246, 0.85)',
+            Transmitted: 'rgba(236, 72, 153, 0.85)',
+            Other: 'rgba(148, 163, 184, 0.85)'
         };
+
+        const analyticsViewport = document.getElementById('perfAnalyticsViewport');
+        let layoutSyncTimer = null;
+
+        const chartFont = {
+            family: 'inherit',
+            size: 10,
+            weight: '500'
+        };
+
+        const chartLegend = {
+            position: 'bottom',
+            labels: {
+                boxWidth: 8,
+                boxHeight: 8,
+                padding: 10,
+                font: chartFont,
+                color: '#94a3b8'
+            }
+        };
+
+        const chartScaleTicks = {
+            font: chartFont,
+            color: '#94a3b8',
+            maxTicksLimit: 7
+        };
+
+        function formatPesoAmount(raw) {
+            if (raw === '' || raw == null) return '';
+            var n = parseFloat(String(raw).replace(/,/g, ''));
+            if (!isFinite(n)) return String(raw);
+            return n.toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function resizeAllCharts() {
+            if (actionChart) actionChart.resize();
+            if (dailyChart) dailyChart.resize();
+        }
+
+        function scheduleChartResize() {
+            if (layoutSyncTimer) {
+                clearTimeout(layoutSyncTimer);
+            }
+            layoutSyncTimer = setTimeout(resizeAllCharts, 120);
+        }
+
+        window.addEventListener('resize', scheduleChartResize);
 
         function getParams() {
             const p = {};
@@ -606,13 +822,15 @@ AuditHelper::logPageView('Performance');
             };
             const html = order.map(t => {
                 const v = overall[t] || 0;
-                const amt = (overallAmount && overallAmount[t]) ? overallAmount[t] : '';
+                const rawAmt = (overallAmount && overallAmount[t]) ? overallAmount[t] : '';
+                const amt = rawAmt !== '' ? formatPesoAmount(rawAmt) : '';
                 const c = actionColors[t] || actionColors.Other;
                 const iconClass = icons[t] || icons.Other;
-                const amtHtml = amt ? `<span class="stat-amount">₱${amt}</span>` : '';
-                return `<div class="modern-stat-card"><div class="stat-icon" style="background:${c}"><i class="${iconClass}" style="font-size:1.25rem;"></i></div><div class="stat-text"><span class="stat-label">${t}</span><span class="stat-value">${v}</span>${amtHtml}</div></div>`;
+                const amtHtml = amt ? '<span class="stat-amount">₱' + amt + '</span>' : '';
+                return '<div class="analytics-stat-card"><div class="analytics-stat-card__icon" style="background:' + c.replace('0.85', '0.12') + ';color:' + c.replace('0.85', '1') + '"><i class="' + iconClass + '"></i></div><div class="analytics-stat-card__body"><div class="analytics-stat-card__label">' + t + '</div><div class="analytics-stat-card__value">' + v + '</div>' + amtHtml + '</div></div>';
             }).join('');
-            const totalCard = `<div class="modern-stat-card"><div class="stat-icon" style="background:rgba(17,24,39,0.12)"><i class="ri-money-dollar-circle-line" style="font-size:1.25rem;"></i></div><div class="stat-text"><span class="stat-label">Total Amount</span><span class="stat-value">${totalAmount ? '₱' + totalAmount : '—'}</span></div></div>`;
+            const totalFormatted = totalAmount ? formatPesoAmount(totalAmount) : '';
+            const totalCard = '<div class="analytics-stat-card"><div class="analytics-stat-card__icon" style="background:rgba(15,23,42,0.06);color:#334155"><i class="ri-money-dollar-circle-line"></i></div><div class="analytics-stat-card__body"><div class="analytics-stat-card__label">Total Amount</div><div class="analytics-stat-card__value">' + (totalFormatted ? '₱' + totalFormatted : '—') + '</div></div></div>';
             document.getElementById('statsCards').innerHTML = html + totalCard;
         }
 
@@ -640,12 +858,19 @@ AuditHelper::logPageView('Performance');
                     labels,
                     datasets: [{
                         data,
-                        backgroundColor: colors
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        spacing: 2
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: false,
+                    animation: { duration: 350 },
+                    cutout: '62%',
+                    plugins: {
+                        legend: chartLegend
+                    }
                 }
             });
         }
@@ -653,13 +878,16 @@ AuditHelper::logPageView('Performance');
         function renderDailyChart(daily) {
             const dates = Object.keys(daily).sort();
             const types = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted'];
-            const datasets = types.map((t, i) => ({
+            const datasets = types.map((t) => ({
                 label: t,
                 data: dates.map(d => daily[d][t] || 0),
-                borderColor: actionColors[t] || actionColors.Other,
-                backgroundColor: (actionColors[t] || actionColors.Other).replace('0.7', '0.2'),
+                borderColor: (actionColors[t] || actionColors.Other).replace('0.85', '1'),
+                backgroundColor: (actionColors[t] || actionColors.Other).replace('0.85', '0.12'),
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHitRadius: 8,
                 fill: true,
-                tension: 0.3
+                tension: 0.35
             }));
             const ctx = document.getElementById('dailyChart').getContext('2d');
             if (dailyChart) dailyChart.destroy();
@@ -672,9 +900,20 @@ AuditHelper::logPageView('Performance');
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 350 },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: chartLegend
+                    },
                     scales: {
+                        x: {
+                            ticks: chartScaleTicks,
+                            grid: { color: '#f1f5f9', drawBorder: false }
+                        },
                         y: {
-                            beginAtZero: true
+                            beginAtZero: true,
+                            ticks: chartScaleTicks,
+                            grid: { color: '#f1f5f9', drawBorder: false }
                         }
                     }
                 }
@@ -715,12 +954,14 @@ AuditHelper::logPageView('Performance');
             noData.style.display = 'none';
             rows.forEach(r => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${r.processing_no || '-'}</td><td>${r.dv_no || '-'}</td><td>${r.payee || '-'}</td><td style="text-align:right;">${r.amount ? '₱' + r.amount : '—'}</td><td>${r.action_type || '-'}</td><td>${r.action_by || '-'}</td><td>${r.datetime_action || '-'}</td>`;
+                const amt = r.amount ? formatPesoAmount(r.amount) : '';
+                tr.innerHTML = `<td>${r.processing_no || '-'}</td><td>${r.dv_no || '-'}</td><td>${r.payee || '-'}</td><td style="text-align:right;">${amt ? '₱' + amt : '—'}</td><td>${r.action_type || '-'}</td><td>${r.action_by || '-'}</td><td>${r.datetime_action || '-'}</td>`;
                 tbody.appendChild(tr);
             });
             if (tfoot && totalAmtEl && totalCountEl) {
                 tfoot.style.display = '';
-                totalAmtEl.textContent = totalAmount ? '₱' + totalAmount : '—';
+                const totalFmt = totalAmount ? formatPesoAmount(totalAmount) : '';
+                totalAmtEl.textContent = totalFmt ? '₱' + totalFmt : '—';
                 totalCountEl.textContent = tot + ' voucher' + (tot === 1 ? '' : 's');
             }
             if (pager && prev && next && pinfo) {
@@ -749,6 +990,7 @@ AuditHelper::logPageView('Performance');
                 renderActionChart(lastOverall);
                 renderDailyChart(data.daily || {});
                 renderTable(data.table || [], data.table_meta || {}, lastTotalAmount);
+                scheduleChartResize();
             });
         }
 

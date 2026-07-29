@@ -237,7 +237,7 @@ if (!$emp_tag_options) {
                         </button>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search for name, office, designation, etc" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
                     </div>
                     <div class="devtool-filter-field">
                         <label for="filterOffice">Office</label>
@@ -280,7 +280,7 @@ if (!$emp_tag_options) {
         </div>
     </div>
 
-    <div class="popup-form" id="popupForm2">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm2">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="form_title">Edit User</p>
@@ -373,7 +373,7 @@ if (!$emp_tag_options) {
         </div>
     </div>
 
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">User Summary</h2>
         <div class="content-wrapper">

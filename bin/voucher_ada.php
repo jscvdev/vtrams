@@ -87,7 +87,7 @@ $target = explode(",", $_SESSION['logged_user_designation']);
         <div class="filter-download_container">
             <div class="filter_options_container">
                 <div class="filter-container">
-                    <input type="text" id="filterInput" placeholder="Search for DV no., payee, particulars, etc">
+                    <input type="text" id="filterInput" placeholder="search">
                 </div>
             </div>
         </div>

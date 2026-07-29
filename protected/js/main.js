@@ -217,81 +217,60 @@ function filterNameFunctionSection() {
 }
 
 /*          FILTER FUNCTION            */
-const dropdown = document.querySelector('.select-options');
-let dropdownOpen = false;
 
-function toggleDropdown() {
-    if (dropdownOpen) {
-        dropdown.style.height = ''; // Collapse
-        dropdown.style.opacity = '0'; // Optional: for fade out
-        dropdownOpen = false; // Update state
-    } else {
-        dropdown.style.height = '0'; // Start from 0
-        dropdown.style.opacity = '0'; // Optional: for fade in
-
-        requestAnimationFrame(() => {
-            const contentHeight = dropdown.scrollHeight + 'px'; // Get the height of the content
-            dropdown.style.height = contentHeight; // Animate to content height
-            dropdown.style.opacity = '1'; // Optional: for fade in
-        });
-        dropdownOpen = true; // Update state
+/*          HEADER USER MENU            */
+function setHeaderUserMenuOpen(isOpen) {
+    const headerMenu = document.querySelector('.header-user-menu');
+    if (!headerMenu) {
+        return;
     }
+
+    const trigger = headerMenu.querySelector('.header-user-menu__trigger');
+    const selectOptions = headerMenu.querySelector('.header-user-menu__dropdown');
+    if (!trigger || !selectOptions) {
+        return;
+    }
+
+    selectOptions.style.display = isOpen ? 'block' : 'none';
+    selectOptions.classList.toggle('is-open', isOpen);
+    trigger.classList.toggle('is-open', isOpen);
+    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
 }
-/*          CUSTOM DROP DOWN            */
+
 document.addEventListener('click', function (e) {
-    const select = document.querySelector('.target_select');
-    const selectOptions = document.querySelector('.select-options');
-    const selectStyled = document.querySelector('.select-styled');
-
-    function handleOtherButtonClick() {
-        if (dropdownOpen) {
-            // If the dropdown is open, close it
-            toggleDropdown();
-        }
-        // Handle other button logic here...
+    const headerMenu = document.querySelector('.header-user-menu');
+    if (!headerMenu) {
+        return;
     }
 
-    if (e.target === selectStyled) {
-        if (document.getElementById("target_select")) {
-            toggleDropdown();
-            selectOptions.style.display = selectOptions.style.display === 'block' ? 'none' : 'block';
-            // selectOptions.style.animation = "dropDownSlide 0.5s ease-in-out"
-            // document.querySelector('.target_select').removeAttribute("id");
-        }
-    }
-    else {
-        handleOtherButtonClick();
-        selectOptions.style.display = selectOptions.style.display === 'block' ? 'none' : 'block';
-        // document.querySelector('.target_select').id = "target_select";
+    const trigger = headerMenu.querySelector('.header-user-menu__trigger');
+    if (!trigger) {
+        return;
     }
 
-    // else if (select.contains(e.target)) {
-    //     selectOptions.style.display = 'none';
-    //     document.querySelector('.target_select').id = "target_select";
-    // }
+    if (trigger === e.target || trigger.contains(e.target)) {
+        const selectOptions = headerMenu.querySelector('.header-user-menu__dropdown');
+        const isOpen = selectOptions && selectOptions.style.display === 'block';
+        setHeaderUserMenuOpen(!isOpen);
+        return;
+    }
+
+    if (!headerMenu.contains(e.target)) {
+        setHeaderUserMenuOpen(false);
+    }
 });
-/*          CUSTOM DROP DOWN            */
 
-/*          CUSTOM LI MENU BAR (NEEDS TO BE FIXED)            */
-document.querySelectorAll('.select-options li').forEach(option => {
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        setHeaderUserMenuOpen(false);
+    }
+});
+
+document.querySelectorAll('.header-user-menu__dropdown li[role="menuitem"]').forEach(function (option) {
     option.addEventListener('click', function () {
-        ;
-        const value = this.getAttribute('data-value');
-        const text = this.textContent;
-        if (document.getElementById('dropdown') && document.querySelector('.select-styled') && document.querySelector('.select-options')) {
-            document.getElementById('dropdown').value = value;
-            document.querySelector('.select-styled').textContent = text;
-        }
-    });
-    document.addEventListener('click', function (event) {
-        const target = event.target;
-        const customSelect = document.querySelector('.custom-select');
-        if (!customSelect.contains(target)) {
-            document.querySelector('.select-options').style.display = 'none';
-        }
+        setHeaderUserMenuOpen(false);
     });
 });
-/*          CUSTOM LI MENU BAR (NEEDS TO BE FIXED)            */
 
 /*          INTERNET TIME(GMT+8) PST            */
 function updateInternetTime() {

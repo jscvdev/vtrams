@@ -83,34 +83,37 @@ try {
     .hidden-on-add {
         display: none;
     }
+
+    #designationsFilterForm {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        width: 100%;
+        gap: 10px;
+    }
+
+    #designationsFilterForm .filter-chips {
+        flex: 0 0 auto;
+    }
+
+    #designationsFilterForm .filter-search {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
 </style>
-<div class="main main--dashboard" id="main">
+<?php require __DIR__ . '/../utilities/partials/list_filter_styles.php'; ?>
+<div class="main main--voucher-dashboard util-premium-page des-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Designations</h1>
-        <div class="btn warning btn-flex btn-nowrap popupForm-add voucher-dashboard-btn-primary">
-            <img src="../assets/icons/add-icon.png" alt="">
-            <a class="btn-target" name="" id="btn_add_designation">Add New Designation</a>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Designations</h1>
+            <p class="voucher-dashboard-subtitle">Manage designation limits, UDC assignments, and office visibility for voucher routing.</p>
+        </div>
+        <div class="voucher-dashboard-header__actions">
+            <button type="button" class="util-header-btn util-header-btn--primary popupForm-add" id="btn_add_designation">
+                <i class="ri-add-line"></i> Add designation
+            </button>
         </div>
     </header>
-    <style>
-        #designationsFilterForm {
-            display: flex;
-            align-items: center;
-            flex-wrap: nowrap !important;
-            width: 100%;
-            gap: 10px;
-        }
-
-        #designationsFilterForm .filter-chips {
-            flex: 0 0 auto;
-            flex-wrap: nowrap !important;
-        }
-
-        #designationsFilterForm .filter-search {
-            flex: 1 1 auto;
-            min-width: 0 !important;
-        }
-    </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
             <div class="filter-left">
@@ -122,14 +125,14 @@ try {
                         </button>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search for designation, UDC, etc" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <div class="popup-form" id="popupForm2">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm2">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p id="designation_form_title">Edit Designation</p>
@@ -182,34 +185,15 @@ try {
         </div>
     </div>
 
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
     <div class="voucher-card voucher-card--table">
-        <h2 class="voucher-card-title">Designation Summary</h2>
-        <style>
-            /* Make the table area scroll, keep pager stuck to bottom of card */
-            .voucher-card--table {
-                position: relative;
-                display: flex;
-                flex-direction: column;
-            }
-
-            .voucher-card--table .content-wrapper {
-                flex: 1;
-                min-height: 0;
-                overflow: auto;
-                max-height: 70vh;
-            }
-
-            .voucher-pagination-footer {
-                position: sticky;
-                bottom: 0;
-                z-index: 5;
-                background: #fff;
-                border-top: 1px solid rgba(229, 231, 235, 1);
-                padding: 10px 0 0;
-            }
-        </style>
-        <div class="content-wrapper">
+        <h2 class="voucher-card-title">
+            <span class="voucher-card-title__label">
+                <i class="ri-user-settings-line ri-icon"></i>
+                Designation Summary
+            </span>
+        </h2>
+        <div class="content-wrapper content-wrapper--flush">
             <table class="table content_table content_table--dashboard" id="my-Table">
                 <thead>
                     <tr>

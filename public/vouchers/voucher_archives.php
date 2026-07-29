@@ -301,13 +301,13 @@ $c2 = 0;
                         </label>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search for payee, processing no., ORS, DV, etc" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <div class="popup-form" id="popupForm">
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm">
         <div class="popupForm-box__container">
             <div class="popupForm-header__container">
                 <p>View Document</p>
@@ -427,7 +427,7 @@ $c2 = 0;
             </form>
         </div>
     </div>
-    <div class="overlay" id="overlay"></div>
+    <div class="overlay voucher-premium-overlay" id="overlay"></div>
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">Archives Summary</h2>
         <style>
@@ -902,236 +902,7 @@ $c2 = 0;
 </script>
 
 <!-- History / Remarks Modal -->
-<style>
-    /* History modal (modernized) */
-    #historyModal .popupForm-box__container {
-        max-width: 920px;
-        border-radius: 14px;
-        overflow: hidden;
-    }
-
-    #historyModal .popupForm-header__container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 18px;
-        border-bottom: 1px solid #e9ecef;
-        background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
-    }
-
-    #historyModal .popupForm-header__container p {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 700;
-        letter-spacing: 0.2px;
-        color: #1f2937;
-    }
-
-    #historyModal .close-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
-        background: #f3f4f6;
-        color: #374151;
-        transition: background 0.15s ease;
-    }
-
-    #historyModal .close-icon:hover {
-        background: #e5e7eb;
-    }
-
-    #historyModal .box-body__container {
-        padding: 16px 18px;
-        display: block;
-        background: #fff;
-    }
-
-    #historyModal .hist-topbar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 12px;
-        flex-wrap: wrap;
-    }
-
-    #historyModal .hist-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        background: #fafafa;
-    }
-
-    #historyModal .hist-pill label {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-    }
-
-    #historyModal #hist_processing_no {
-        width: 170px;
-        height: 34px;
-        padding: 6px 10px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        border-radius: 10px;
-        border: 1px solid #d1d5db;
-        background: #fff;
-    }
-
-    #historyModal .hist-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-
-    #historyModal .hist-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        background: #ffffff;
-        padding: 12px;
-        box-shadow: 0 1px 0 rgba(17, 24, 39, 0.02);
-    }
-
-    #historyModal .hist-card--full {
-        grid-column: 1 / -1;
-    }
-
-    #historyModal .hist-card-title {
-        margin: 0 0 8px 0;
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: #6b7280;
-    }
-
-    #historyModal .hist-content {
-        min-height: 56px;
-        max-height: 220px;
-        overflow: auto;
-        padding: 10px 10px;
-        border-radius: 10px;
-        background: #f9fafb;
-        border: 1px solid #eef2f7;
-        white-space: pre-wrap;
-        line-height: 1.45;
-        color: #111827;
-        font-size: 13px;
-    }
-
-    #historyModal .hist-content--tall {
-        max-height: 280px;
-        min-height: 140px;
-    }
-
-    /* Ensure process history stays readable in a fixed viewport */
-    #historyModal #hist_process_history {
-        overflow-y: auto;
-        overflow-x: hidden;
-        scrollbar-width: thin;
-    }
-
-    /* Process history list (USER : action : section/unit) */
-    #historyModal .hist-content--process-list {
-        white-space: normal;
-        padding: 12px;
-    }
-
-    #historyModal .hist-process-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    #historyModal .hist-process-item {
-        display: flex;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 6px 10px;
-        padding: 10px 12px;
-        background: #fff;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.4;
-        color: #111827;
-    }
-
-    #historyModal .hist-process-item__part {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        white-space: normal;
-    }
-
-    #historyModal .hist-process-item__part i {
-        font-size: 15px;
-        color: #6b7280;
-        flex-shrink: 0;
-    }
-
-    #historyModal .hist-process-item__part span {
-        white-space: normal;
-        word-break: break-word;
-    }
-
-    #historyModal .hist-process-item__part--user i {
-        color: #4f46e5;
-    }
-
-    #historyModal .hist-process-item__part--action i {
-        color: #059669;
-    }
-
-    #historyModal .hist-process-item__part--section i {
-        color: #b45309;
-    }
-
-    #historyModal .hist-process-sep {
-        color: #d1d5db;
-        font-weight: 700;
-        user-select: none;
-    }
-
-    #historyModal .popupForm-footer__container {
-        border-top: 1px solid #eef2f7;
-        background: #fbfbfd;
-        padding: 12px 18px;
-    }
-
-    #historyModal .footer-button__container {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-    }
-
-    /* Responsive */
-    @media (max-width: 840px) {
-        #historyModal .hist-grid {
-            grid-template-columns: 1fr;
-        }
-
-        #historyModal #hist_processing_no {
-            width: 100%;
-        }
-
-        #historyModal .hist-pill {
-            width: 100%;
-            justify-content: space-between;
-        }
-    }
-</style>
-
-<div class="popup-form" id="historyModal" style="display:none;">
+<div class="popup-form voucher-premium-modal voucher-history-modal" id="historyModal" style="display:none;">
     <div class="popupForm-box__container">
         <div class="popupForm-header__container">
             <p>History &amp; Remarks</p>
@@ -1170,7 +941,7 @@ $c2 = 0;
         </div>
     </div>
 </div>
-<div class="overlay" id="historyOverlay" style="display:none;"></div>
+<div class="overlay voucher-premium-overlay" id="historyOverlay" style="display:none;"></div>
 
 <script>
     (function() {

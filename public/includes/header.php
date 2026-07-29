@@ -101,6 +101,7 @@ $header_text = $pageTitleHelper->getHeaderText();
     ) {
         asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
         asset_stylesheet($vtramsStylesHref . 'modern_filter_card.css', $vtramsStylesDir . '/modern_filter_card.css');
+        asset_stylesheet($vtramsStylesHref . 'voucher_premium_modal.css', $vtramsStylesDir . '/voucher_premium_modal.css');
     } elseif ($file_name == 'upload.php') {
         asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
         asset_stylesheet($vtramsStylesHref . 'ustyle.css', $vtramsStylesDir . '/ustyle.css');
@@ -215,15 +216,16 @@ $header_text = $pageTitleHelper->getHeaderText();
             <div class="sidebar__account">
                 <p id="time"></p>
 
-                <img src="../assets/img/denr.png" alt="" class="sidebar__profile">
-                <div class="sidebar__name">
-                    <h3 class="sidebar__emp_name"><?php echo $_SESSION["logged_user_emp_name"]; ?></h3>
-                </div>
-                <div class="custom-select">
-                    <i class="ri-arrow-drop-down-line select-styled sidebar__link_incoming target_select" id="target_select"></i>
-                    <ul class="select-options" id="select">
-                        <li data-value="2" id="test_click" onclick="changePassword()"><i class="ri-shield-keyhole-line"></i>Password</li>
-                        <li data-value="3" onclick="functionAlert('Are you sure to logout?', 'logout')"><i class="ri-logout-circle-line"></i>Logout</li>
+                <div class="header-user-menu">
+                    <button type="button" class="header-user-menu__trigger" id="target_select" aria-label="Account menu" aria-haspopup="menu" aria-expanded="false">
+                        <img src="../assets/img/denr.png" alt="" class="header-user-menu__avatar">
+                        <span class="header-user-menu__name"><?php echo htmlspecialchars((string) $_SESSION["logged_user_emp_name"], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <i class="ri-arrow-down-s-line header-user-menu__chevron" aria-hidden="true"></i>
+                    </button>
+                    <ul class="header-user-menu__dropdown" id="select" role="menu">
+                        <li role="menuitem" data-value="2" id="test_click" onclick="changePassword()"><i class="ri-shield-keyhole-line" aria-hidden="true"></i><span>Password</span></li>
+                        <li class="header-user-menu__divider" aria-hidden="true"></li>
+                        <li role="menuitem" data-value="3" onclick="functionAlert('Are you sure to logout?', 'logout')"><i class="ri-logout-box-r-line" aria-hidden="true"></i><span>Logout</span></li>
                     </ul>
                     <script>
                         function callCD(param) {
@@ -257,7 +259,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <div class='sidebar__list'>
                                     <div class="sidebar-link-container">
                                         <a href='../vouchers/devtool.php' class='sidebar__link'>
-                                            <i class='ri-group-line'></i>
+                                            <i class='ri-team-line'></i>
                                             <span class='sidebar__link-name'>Users</span>
                                             <span class='sidebar__link-floating'>Users</span>
                                         </a>
@@ -292,7 +294,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_dashboard): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/dashboard.php" class="sidebar__link" id="button1">
-                                            <i class="ri-dashboard-fill"></i>
+                                            <i class="ri-dashboard-3-line"></i>
                                             <span class="sidebar__link-name">Dashboard</span>
                                             <span class="sidebar__link-floating">Dashboard</span>
                                         </a>
@@ -301,7 +303,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_system_utilities): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/dashboard_calculation_breakdown.php" class="sidebar__link">
-                                            <i class="ri-time-line"></i>
+                                            <i class="ri-calculator-line"></i>
                                             <span class="sidebar__link-name">Calculation Breakdown</span>
                                             <span class="sidebar__link-floating">Calculation Breakdown</span>
                                         </a>
@@ -310,14 +312,14 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_system_utilities): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../utilities/utilities.php" class="sidebar__link">
-                                            <i class="ri-quill-pen-line"></i>
+                                            <i class="ri-file-user-line"></i>
                                             <span class="sidebar__link-name">Signatories</span>
                                             <span class="sidebar__link-floating">Signatories</span>
                                         </a>
                                     </div>
                                     <div class="sidebar-link-container">
                                         <a href="../utilities/types.php" class="sidebar__link">
-                                            <i class="ri-list-settings-line"></i>
+                                            <i class="ri-stack-line"></i>
                                             <span class="sidebar__link-name">Types</span>
                                             <span class="sidebar__link-floating">Types</span>
                                         </a>
@@ -338,7 +340,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     </div>
                                     <div class="sidebar-link-container">
                                         <a href="../utilities/uacs.php" class="sidebar__link">
-                                            <i class="ri-barcode-box-line"></i>
+                                            <i class="ri-book-2-line"></i>
                                             <span class="sidebar__link-name">UACS Codes</span>
                                             <span class="sidebar__link-floating">UACS Codes</span>
                                         </a>
@@ -347,7 +349,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_dashboard): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_status_report.php" class="sidebar__link">
-                                            <i class="ri-bar-chart-grouped-line"></i>
+                                            <i class="ri-file-chart-line"></i>
                                             <span class="sidebar__link-name">Status Report</span>
                                             <span class="sidebar__link-floating">Status Report</span>
                                         </a>
@@ -356,14 +358,14 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_voucher_overview_pages): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_status.php" class="sidebar__link" id="button1">
-                                            <i class="ri-notification-badge-line"></i>
+                                            <i class="ri-pulse-line"></i>
                                             <span class="sidebar__link-name">Status</span>
                                             <span class="sidebar__link-floating">Status</span>
                                         </a>
                                     </div>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_system_logs.php" class="sidebar__link">
-                                            <i class="ri-search-line"></i>
+                                            <i class="ri-map-pin-time-line"></i>
                                             <span class="sidebar__link-name">Tracking</span>
                                             <span class="sidebar__link-floating">Tracking</span>
                                         </a>
@@ -373,7 +375,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_designations): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/designations.php" class="sidebar__link">
-                                            <i class="ri-user-star-line"></i>
+                                            <i class="ri-briefcase-line"></i>
                                             <span class="sidebar__link-name">Designations</span>
                                             <span class="sidebar__link-floating">Designations</span>
                                         </a>
@@ -383,7 +385,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <?php if ($can_view_performance): ?>
                                     <div class="sidebar-link-container">
                                         <a href="../vouchers/voucher_performance.php" class="sidebar__link">
-                                            <i class="ri-bar-chart-box-line"></i>
+                                            <i class="ri-speed-up-line"></i>
                                             <span class="sidebar__link-name">Performance</span>
                                             <span class="sidebar__link-floating">Performance</span>
                                         </a>
@@ -399,14 +401,14 @@ $header_text = $pageTitleHelper->getHeaderText();
                             <div class='sidebar__list'>
                                 <div class="sidebar-link-container">
                                     <a href='../vouchers/voucher.php' class='sidebar__link'>
-                                        <i class='ri-secure-payment-line sidebar__link_incoming' id='vouchers_pending'></i>
+                                        <i class='ri-file-add-line sidebar__link_incoming' id='vouchers_pending'></i>
                                         <span class='sidebar__link-name'>Voucher</span>
                                         <span class='sidebar__link-floating'>Voucher</span>
                                     </a>
                                 </div>
                                 <div class="sidebar-link-container">
                                     <a href='../vouchers/voucher_encoded.php' class='sidebar__link'>
-                                        <i class='ri-printer-line sidebar__link_incoming'></i>
+                                        <i class='ri-file-check-line sidebar__link_incoming'></i>
                                         <span class='sidebar__link-name'>Encoded</span>
                                         <span class='sidebar__link-floating'>Encoded</span>
                                     </a>
@@ -415,14 +417,14 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     <?php if ($can_view_processing) : ?>
                                         <div class="sidebar-link-container">
                                             <a href='../vouchers/voucher_incoming.php' class='sidebar__link'>
-                                                <i class='ri-file-list-3-line sidebar__link_incoming' id='vouchers_incoming'></i>
+                                                <i class='ri-inbox-archive-line sidebar__link_incoming' id='vouchers_incoming'></i>
                                                 <span class='sidebar__link-name'>Incoming</span>
                                                 <span class='sidebar__link-floating'>Incoming</span>
                                             </a>
                                         </div>
                                         <div class="sidebar-link-container">
                                             <a href='../vouchers/voucher_forwarding.php' class='sidebar__link' id='button1'>
-                                                <i class='ri-price-tag-3-line sidebar__link_incoming' id='vouchers_forwarding'></i>
+                                                <i class='ri-loop-left-line sidebar__link_incoming' id='vouchers_forwarding'></i>
                                                 <span class='sidebar__link-name'>Processing</span>
                                                 <span class='sidebar__link-floating'>Processing</span>
                                             </a>
@@ -430,7 +432,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     <?php endif; ?>
                                     <div class="sidebar-link-container">
                                         <a href='../vouchers/voucher_sent.php' class='sidebar__link'>
-                                            <i class='ri-file-paper-2-line sidebar__link_incoming' id='vouchers_sent'></i>
+                                            <i class='ri-send-plane-2-line sidebar__link_incoming' id='vouchers_sent'></i>
                                             <span class='sidebar__link-name'>Forwarded</span>
                                             <span class='sidebar__link-floating'>Forwarded</span>
                                         </a>
@@ -438,7 +440,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     <?php if (AccessControl::canAccessVoucherArchives()) : ?>
                                         <div class="sidebar-link-container">
                                             <a href="../vouchers/voucher_archives.php" class="sidebar__link">
-                                                <i class="ri-search-line"></i>
+                                                <i class="ri-archive-line"></i>
                                                 <span class="sidebar__link-name">Processed</span>
                                                 <span class="sidebar__link-floating">Processed</span>
                                             </a>
@@ -466,7 +468,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                     <?php if ($can_view_system_utilities): ?>
                         <div class="sidebar-link-container">
                             <a href='../vouchers/auditing.php' class='sidebar__link'>
-                                <i class='ri-shield-check-line'></i>
+                                <i class='ri-file-shield-2-line'></i>
                                 <span class='sidebar__link-name'>Auditing</span>
                                 <span class='sidebar__link-floating'>Auditing</span>
                             </a>

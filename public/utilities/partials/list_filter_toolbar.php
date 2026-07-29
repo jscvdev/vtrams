@@ -7,15 +7,19 @@
 $list_filter = $list_filter ?? utilities_list_filter_params();
 $list_total = (int) ($list_total ?? 0);
 $list_visible = (int) ($list_visible ?? 0);
-$list_placeholder = (string) ($list_placeholder ?? 'Search…');
+$list_placeholder = (string) ($list_placeholder ?? 'search');
 $list_form_id = (string) ($list_form_id ?? 'utilitiesListFilterForm');
 $list_filter_mode = (string) ($list_filter_mode ?? 'status');
 $list_voucher_types = is_array($list_voucher_types ?? null) ? $list_voucher_types : null;
 $list_type_filter_label = (string) ($list_type_filter_label ?? 'Voucher type');
+$list_hidden_fields = is_array($list_hidden_fields ?? null) ? $list_hidden_fields : [];
 ?>
 <div class="voucher-card voucher-card--filter util-list-filter-card">
     <div class="filter-toolbar">
         <form method="get" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>" class="filter-toolbar-form util-list-filter-form">
+            <?php foreach ($list_hidden_fields as $hiddenName => $hiddenValue): ?>
+                <input type="hidden" name="<?= htmlspecialchars((string) $hiddenName, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string) $hiddenValue, ENT_QUOTES, 'UTF-8') ?>" data-util-tab-sync>
+            <?php endforeach; ?>
             <div class="filter-search">
                 <input
                     type="text"

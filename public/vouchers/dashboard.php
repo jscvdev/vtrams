@@ -136,222 +136,360 @@ if ($scriptName !== '') {
 }
 ?>
 <style>
-    /* Keep your existing styles unchanged */
-    .dashboard {
-        height: 200px;
-    }
-
-    .main_dashboard {
-        overflow-y: scroll;
-    }
-
-    .main-content {
-        flex: 1;
-        padding: 20px;
+    .main.main--analytics-dashboard {
+        height: calc(100dvh - 4rem);
+        max-height: calc(100dvh - 4rem);
+        overflow: hidden;
+        padding: clamp(0.75rem, 1.6vw, 1.5rem) clamp(0.875rem, 2vw, 1.75rem);
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        gap: 3%;
-        width: 100%;
-        height: 100%;
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
+        background: #F5F6F8;
     }
 
-    .dashboard-content {
-        display: flex;
-        gap: 20px;
-    }
-
-    .dashboard-content div {
-        flex: 1;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .chart-container {
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        height: 350px;
+    .analytics-dashboard-shell {
         display: flex;
         flex-direction: column;
-    }
-
-    .chart-container canvas {
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
         flex: 1;
-        max-height: 280px;
+        min-height: 0;
+        min-width: 0;
     }
 
-    .chart-container.chart-container--table {
-        height: auto;
-        min-height: auto;
-        align-items: stretch;
-        align-self: stretch;
-        overflow: visible;
-    }
-
-    .chart-container.chart-container--table h3 {
+    .analytics-dashboard-toolbar {
+        display: flex;
+        flex-direction: column;
+        gap: clamp(0.75rem, 1.4vw, 1.25rem);
         flex-shrink: 0;
     }
 
-    .dashboard-content.dashboard-content--full {
-        align-items: stretch;
+    .analytics-dashboard-viewport {
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        overflow: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
     }
 
-    .dashboard-content.dashboard-content--full > div {
-        align-items: stretch;
-        justify-content: flex-start;
-    }
-
-    .chart-container h3 {
-        margin-bottom: 10px;
-        color: rgb(75 85 99 / 0.9);
-        text-align: left;
-        font-size: 16px;
-        font-weight: 600;
-    }
-
-    .table-container {
+    .analytics-dashboard-scale {
         width: 100%;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-    }
-
-    .stats-card-wrapper {
-        display: flex;
-        justify-content: space-between;
-        flex-wrap: nowrap;
-        overflow: hidden;
-        gap: 20px;
-    }
-
-    .stat-card {
-        flex: 1 1 150px;
-        /* border-left: 6px solid #ccc; */
-        border-radius: 8px;
-        padding: 10px 12px;
+        min-width: 0;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        color: rgb(75 85 99 / 0.7);
-        /* background: linear-gradient(to right, #999, #ccc); */
+        gap: 12px;
     }
 
-    .stat-card h4 {
-        margin: 0;
-        font-size: 16px;
-    }
-
-    .stat-card .count {
-        font-size: 13px;
-        font-weight: bold;
-        margin-top: 5px;
-        padding: 1.5rem;
-        background-color: rgba(255, 255, 255, 1);
-        /* fully opaque */
-    }
-
-    .filter_options {
+    .analytics-dashboard-header {
         display: flex;
         flex-wrap: wrap;
-        gap: 15px;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .analytics-dashboard-header__title {
+        margin: 0 0 2px;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #111827;
+        letter-spacing: -0.015em;
+    }
+
+    .analytics-dashboard-header__subtitle {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        max-width: 640px;
+    }
+
+    .analytics-dashboard-refresh {
+        display: inline-flex;
         align-items: center;
-        background-color: #fff;
-        padding: 16px 20px;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        white-space: nowrap;
+    }
+
+    .analytics-dashboard-refresh::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #4A76FF;
+        box-shadow: 0 0 0 2px rgba(74, 118, 255, 0.16);
+    }
+
+    .analytics-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 12px 14px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+
+    .analytics-filter-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .analytics-filter-field label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #94a3b8;
+    }
+
+    .analytics-filter-field select {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid #e2e8f0;
         border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-        color: rgb(75 85 99 / 0.9);
+        background: #fafbfc;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 500;
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     }
 
-    .filter_options>div {
+    .analytics-filter-field select:focus {
+        outline: none;
+        background: #fff;
+        border-color: #b8c9ff;
+        box-shadow: 0 0 0 3px rgba(74, 118, 255, 0.12);
+    }
+
+    .analytics-filter-field--date-group {
+        flex: 1 1 260px;
+    }
+
+    .analytics-filter-date-row {
         display: flex;
-        flex-direction: row;
-        font-size: 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .analytics-filter-date-row select {
+        flex: 1 1 72px;
+        min-width: 72px;
+    }
+
+    .analytics-filter-apply {
+        display: inline-flex;
         align-items: center;
-        gap: 1rem;
-    }
-
-    .filter_options select {
-        padding: 6px;
-        border-radius: 5px;
-        border: 1px solid #ccc;
-        border-color: rgb(209 213 219 / 1);
-    }
-
-    .filter_options button {
-        background-color: #0d6efd;
-        color: white;
+        justify-content: center;
+        min-height: 34px;
+        padding: 0 14px;
         border: none;
-        padding: 8px 16px;
-        border-radius: 5px;
-        height: fit-content;
-        align-self: flex-end;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #4A76FF, #3d67e8);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(74, 118, 255, 0.22);
+        transition: transform 120ms ease, box-shadow 120ms ease;
     }
 
+    .analytics-filter-apply:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(74, 118, 255, 0.28);
+    }
 
-    .modern-stat-card {
-        display: flex;
-        padding: 12px 16px;
+    .analytics-tabs {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 4px;
+        background: #fff;
+        border: 1px solid #eef2f7;
         border-radius: 10px;
-        background-color: #ffffff;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        min-width: 220px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        width: fit-content;
+    }
+
+    .analytics-tab-btn {
+        border: none;
+        background: transparent;
+        color: #64748b;
+        padding: 8px 12px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .analytics-tab-btn:hover {
+        background: #f3f6fb;
+        color: #1d4ed8;
+    }
+
+    .analytics-tab-btn.is-active {
+        background: linear-gradient(135deg, #4A76FF, #3d67e8);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(74, 118, 255, 0.24);
+    }
+
+    .analytics-tab-panel {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .analytics-tab-panel.is-active {
+        display: flex;
+    }
+
+    .analytics-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .analytics-stat-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 13px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        min-width: 0;
+    }
+
+    .analytics-stat-card__body {
+        min-width: 0;
         flex: 1;
     }
 
-    .stat-card-content {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
-    }
-
-    .stat-icon {
-        font-size: 14px;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        padding: 5px;
+    .analytics-stat-card__icon {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-
-        img {
-            width: 24px;
-            height: 24px;
-        }
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        font-size: 16px;
+        flex-shrink: 0;
     }
 
-    .stat-text {
-        display: flex;
-        flex-direction: column;
-        color: rgb(75 85 99 / 0.9);
+    .analytics-stat-card__icon--blue {
+        background: linear-gradient(135deg, rgba(74, 118, 255, 0.16), rgba(74, 118, 255, 0.08));
+        color: #4A76FF;
     }
 
-    .stat-label {
-        font-size: 14px;
-        font-weight: 500;
-        color: rgb(75 85 99 / 0.9);
+    .analytics-stat-card__icon--green {
+        background: linear-gradient(135deg, rgba(5, 150, 105, 0.16), rgba(5, 150, 105, 0.08));
+        color: #059669;
+    }
+
+    .analytics-stat-card__icon--amber {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.08));
+        color: #d97706;
+    }
+
+    .analytics-stat-card__label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #94a3b8;
         line-height: 1.2;
     }
 
-    .stat-value {
-        font-size: 18px;
-        font-weight: bold;
-        color: #000;
-        margin-top: 4px;
+    .analytics-stat-card__value {
+        margin-top: 2px;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #0f172a;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
     }
 
-    #sectionSummaryTable th,
-    #sectionSummaryTable td,
-    #sectionVoucherTable th,
-    #sectionVoucherTable td {
-        border-bottom: 1px solid #ddd;
-        padding: 8px;
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .analytics-grid--full {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .analytics-card {
+        background: #fff;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        padding: 14px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .analytics-card__title {
+        margin: 0 0 10px;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+    }
+
+    .analytics-card__note {
+        margin: -6px 0 10px;
+        color: #94a3b8;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+
+    .analytics-card--chart {
+        min-height: auto;
+    }
+
+    .analytics-chart-wrap {
+        position: relative;
+        height: 220px;
+        min-height: 220px;
+        max-height: 220px;
+    }
+
+    .analytics-card--chart canvas {
+        max-height: none;
+        height: 100% !important;
+    }
+
+    .analytics-card--table {
+        height: auto;
+        min-height: auto;
+    }
+
+    .analytics-table-wrap {
+        overflow-x: auto;
+        width: 100%;
+        border: 1px solid #eef2f7;
+        border-radius: 10px;
     }
 
     #sectionSummaryTable,
@@ -362,208 +500,204 @@ if ($scriptName !== '') {
     }
 
     #sectionSummaryTable th,
+    #sectionVoucherTable th,
+    #sectionSummaryTable td,
+    #sectionVoucherTable td {
+        padding: 9px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: left;
+    }
+
+    #sectionSummaryTable th,
     #sectionVoucherTable th {
-        color: rgb(75 85 99 / 0.7);
-        background-color: #f9f9f9;
+        background: #fafbfc;
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    #sectionSummaryTable tbody tr:hover,
+    #sectionVoucherTable tbody tr:hover {
+        background: #f8fbff;
     }
 
     #sectionSummaryTable td,
     #sectionVoucherTable td {
-        color: rgb(75 85 99 / 1);
+        color: #334155;
     }
 
-    #sectionSummaryTable tr:hover,
-    #sectionVoucherTable tr:hover {
-        background-color: #f1f1f1;
+    @media (max-width: 1100px) {
+        .analytics-stats-grid,
+        .analytics-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
     }
 
-    .section-table-scroll {
-        overflow-x: auto;
-        width: 100%;
-    }
+    @media (max-width: 640px) {
+        .main.main--analytics-dashboard {
+            padding: 1rem;
+        }
 
-    .dashboard-tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 20px;
-    }
+        .analytics-filter-bar {
+            padding: 14px;
+        }
 
-    .dashboard-tab-btn {
-        border: 1px solid rgb(209 213 219 / 1);
-        background: #fff;
-        color: rgb(75 85 99 / 0.9);
-        padding: 10px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    }
-
-    .dashboard-tab-btn.is-active {
-        background: #0d6efd;
-        border-color: #0d6efd;
-        color: #fff;
-    }
-
-    .dashboard-tab-panel {
-        display: none;
-        flex-direction: column;
-        gap: 20px;
-    }
-
-    .dashboard-tab-panel.is-active {
-        display: flex;
+        .analytics-filter-apply {
+            width: 100%;
+        }
     }
 </style>
 
 <!--=============== MAIN ===============-->
-<div class="main" id="main">
-    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-    </div>
-    <div class="main-content main_dashboard">
-        <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px;">
-            <div>
-                <h1 style="margin-bottom:6px;">Voucher Analytics Dashboard</h1>
-                <p style="color: rgb(75 85 99 / 0.9); margin:0;">Analytics for forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
-            </div>
-            <p id="dashboardRefreshStatus" style="color: rgb(75 85 99 / 0.75); font-size: 12px; margin: 0;">Loading…</p>
-        </div>
-
-        <section class="filter_options">
-            <div>
-                <label>Voucher Type:</label>
-                <select id="voucherTypeFilter">
-                    <option value="all" selected>All Types</option>
-                    <?php foreach ($dashboard_voucher_types as $type_value => $type_label): ?>
-                        <option value="<?= htmlspecialchars((string)$type_value, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$type_label, ENT_QUOTES, 'UTF-8') ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label for="officeFilter">Office:</label>
-                <select id="officeFilter">
-                    <option value="all" selected>All Offices</option>
-                    <?php foreach ($dashboard_offices as $office_name): ?>
-                        <option value="<?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>">
-                            <?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label>Date (MDY):</label>
-                <div style="display: flex; gap: 5px;">
-                    <select id="monthFilter" style="width: 80px;">
-                        <option value="all" selected>Month</option>
-                        <option value="01">Jan</option>
-                        <option value="02">Feb</option>
-                        <option value="03">Mar</option>
-                        <option value="04">Apr</option>
-                        <option value="05">May</option>
-                        <option value="06">Jun</option>
-                        <option value="07">Jul</option>
-                        <option value="08">Aug</option>
-                        <option value="09">Sep</option>
-                        <option value="10">Oct</option>
-                        <option value="11">Nov</option>
-                        <option value="12">Dec</option>
-                    </select>
-                    <select id="dayFilter" style="width: 70px;">
-                        <option value="all" selected>Day</option>
-                        <?php
-                        for ($i = 1; $i <= 31; $i++) {
-                            $day = str_pad($i, 2, '0', STR_PAD_LEFT);
-                            echo "<option value=\"$day\">$day</option>";
-                        }
-                        ?>
-                    </select>
-                    <select id="yearDateFilter" style="width: 80px;">
-                        <option value="all" selected>Year</option>
-                        <?php
-                        $currentYear = date('Y');
-                        for ($year = $currentYear; $year >= 2010; $year--) {
-                            echo "<option value=\"$year\">$year</option>";
-                        }
-                        ?>
-                    </select>
+<div class="main main--analytics-dashboard" id="main">
+    <div class="analytics-dashboard-shell">
+        <div class="analytics-dashboard-toolbar">
+            <header class="analytics-dashboard-header">
+                <div>
+                    <h1 class="analytics-dashboard-header__title">Voucher Analytics Dashboard</h1>
+                    <p class="analytics-dashboard-header__subtitle">Analytics for forwarded, received, and returned vouchers (excludes encoded/pending at encoder only)</p>
                 </div>
-            </div>
+                <p class="analytics-dashboard-refresh" id="dashboardRefreshStatus">Loading…</p>
+            </header>
 
-            <button id="applyFiltersBtn">Apply Filters</button>
-        </section>
-
-        <nav class="dashboard-tabs" aria-label="Dashboard views">
-            <button type="button" class="dashboard-tab-btn is-active" data-dashboard-tab="analytics">Analytics</button>
-            <button type="button" class="dashboard-tab-btn" data-dashboard-tab="processing">Processing Times</button>
-        </nav>
-
-        <div class="dashboard-tab-panel is-active" id="dashboardTabAnalytics">
-        <div class="table-container">
-            <div class="stats-card-wrapper" id="overallTable"></div>
+            <section class="analytics-filter-bar">
+        <div class="analytics-filter-field">
+            <label for="voucherTypeFilter">Voucher Type</label>
+            <select id="voucherTypeFilter">
+                <option value="all" selected>All Types</option>
+                <?php foreach ($dashboard_voucher_types as $type_value => $type_label): ?>
+                    <option value="<?= htmlspecialchars((string)$type_value, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$type_label, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
 
-        <section class="dashboard-content new_label">
-            <div class="chart-container new_label">
-                <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Voucher Type Distribution</h3>
-                <canvas id="voucherTypeChart"></canvas>
-            </div>
-            <div class="chart-container new_label">
-                <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Amount by Voucher Type</h3>
-                <canvas id="amountChart"></canvas>
-            </div>
-        </section>
-
-        <section class="dashboard-content new_label">
-            <div class="chart-container new_label">
-                <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Monthly Trends</h3>
-                <canvas id="monthlyChart"></canvas>
-            </div>
-        </section>
-
+        <div class="analytics-filter-field">
+            <label for="officeFilter">Office</label>
+            <select id="officeFilter">
+                <option value="all" selected>All Offices</option>
+                <?php foreach ($dashboard_offices as $office_name): ?>
+                    <option value="<?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars((string) $office_name, ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
         </div>
 
-        <div class="dashboard-tab-panel" id="dashboardTabProcessing">
-        <section class="dashboard-content new_label">
-            <div class="chart-container new_label">
-                <h3 style="margin-bottom: 10px; color: rgb(75 85 99 / 0.9); text-align:left;">Average Processing Time by Section</h3>
-                <canvas id="sectionTimeChart"></canvas>
+        <div class="analytics-filter-field analytics-filter-field--date-group">
+            <label>Date (MDY)</label>
+            <div class="analytics-filter-date-row">
+                <select id="monthFilter" aria-label="Filter month">
+                    <option value="all" selected>Month</option>
+                    <option value="01">Jan</option>
+                    <option value="02">Feb</option>
+                    <option value="03">Mar</option>
+                    <option value="04">Apr</option>
+                    <option value="05">May</option>
+                    <option value="06">Jun</option>
+                    <option value="07">Jul</option>
+                    <option value="08">Aug</option>
+                    <option value="09">Sep</option>
+                    <option value="10">Oct</option>
+                    <option value="11">Nov</option>
+                    <option value="12">Dec</option>
+                </select>
+                <select id="dayFilter" aria-label="Filter day">
+                    <option value="all" selected>Day</option>
+                    <?php
+                    for ($i = 1; $i <= 31; $i++) {
+                        $day = str_pad($i, 2, '0', STR_PAD_LEFT);
+                        echo "<option value=\"$day\">$day</option>";
+                    }
+                    ?>
+                </select>
+                <select id="yearDateFilter" aria-label="Filter year">
+                    <option value="all" selected>Year</option>
+                    <?php
+                    $currentYear = date('Y');
+                    for ($year = $currentYear; $year >= 2010; $year--) {
+                        echo "<option value=\"$year\">$year</option>";
+                    }
+                    ?>
+                </select>
             </div>
-            <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px;">
-                <h3 style="margin-bottom: 20px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Section Processing Time Summary</h3>
-                <p style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers. Includes each re-processing stint after a return (e.g. Accounting returns to Planning and Planning forwards again). Encoding and forwarding by a process-section user before receive is excluded. Processing time counts Monday through Thursday only (Fridays, Saturdays, and Sundays are excluded).</p>
-                <table id="sectionSummaryTable">
-                    <thead>
-                        <tr>
-                            <th>Section</th>
-                            <th style="text-align:right;">Vouchers</th>
-                            <th style="text-align:right;">Avg Time</th>
-                            <th style="text-align:right;">Min</th>
-                            <th style="text-align:right;">Max</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
+        </div>
+
+        <button type="button" class="analytics-filter-apply" id="applyFiltersBtn">Apply Filters</button>
+            </section>
+
+            <nav class="analytics-tabs" aria-label="Dashboard views">
+                <button type="button" class="analytics-tab-btn dashboard-tab-btn is-active" data-dashboard-tab="analytics">Analytics</button>
+                <button type="button" class="analytics-tab-btn dashboard-tab-btn" data-dashboard-tab="processing">Processing Times</button>
+            </nav>
+        </div>
+
+        <div class="analytics-dashboard-viewport" id="analyticsDashboardViewport">
+            <div class="analytics-dashboard-scale" id="analyticsDashboardScale">
+    <div class="analytics-tab-panel dashboard-tab-panel is-active" id="dashboardTabAnalytics">
+        <div class="analytics-stats-grid" id="overallTable"></div>
+
+        <section class="analytics-grid">
+            <article class="analytics-card analytics-card--chart">
+                <h3 class="analytics-card__title">Voucher Type Distribution</h3>
+                <div class="analytics-chart-wrap"><canvas id="voucherTypeChart"></canvas></div>
+            </article>
+            <article class="analytics-card analytics-card--chart">
+                <h3 class="analytics-card__title">Amount by Voucher Type</h3>
+                <div class="analytics-chart-wrap"><canvas id="amountChart"></canvas></div>
+            </article>
         </section>
 
-        <section class="dashboard-content new_label">
-            <div class="chart-container new_label" style="display:flex; flex-direction: column; height: auto; min-height: 350px; width: 100%;">
-                <h3 style="margin-bottom: 8px; color: rgb(75 85 99 / 0.9); text-align:left; width: 100%;">Per-Voucher Section Processing Breakdown</h3>
-                <p id="dashboardVoucherListMeta" style="margin: 0 0 12px; color: rgb(75 85 99 / 0.75); font-size: 12px;">Showing the 15 most recently processed vouchers for the current filters (updates automatically).</p>
-                <div class="section-table-scroll">
+        <section class="analytics-grid analytics-grid--full">
+            <article class="analytics-card analytics-card--chart">
+                <h3 class="analytics-card__title">Monthly Trends</h3>
+                <div class="analytics-chart-wrap"><canvas id="monthlyChart"></canvas></div>
+            </article>
+        </section>
+    </div>
+
+    <div class="analytics-tab-panel dashboard-tab-panel" id="dashboardTabProcessing">
+        <section class="analytics-grid">
+            <article class="analytics-card analytics-card--chart">
+                <h3 class="analytics-card__title">Average Processing Time by Section</h3>
+                <div class="analytics-chart-wrap"><canvas id="sectionTimeChart"></canvas></div>
+            </article>
+            <article class="analytics-card analytics-card--table">
+                <h3 class="analytics-card__title">Section Processing Time Summary</h3>
+                <p class="analytics-card__note"><?= htmlspecialchars($dashboard_section_timing_blurb, ENT_QUOTES, 'UTF-8') ?> only — from when received by the section until successfully forwarded (confirmed by the next section/process), or processed/paid for Cashiers. Includes each re-processing stint after a return (e.g. Accounting returns to Planning and Planning forwards again). Encoding and forwarding by a process-section user before receive is excluded. Processing time counts Monday through Thursday only (Fridays, Saturdays, and Sundays are excluded).</p>
+                <div class="analytics-table-wrap">
+                    <table id="sectionSummaryTable">
+                        <thead>
+                            <tr>
+                                <th>Section</th>
+                                <th style="text-align:right;">Vouchers</th>
+                                <th style="text-align:right;">Avg Time</th>
+                                <th style="text-align:right;">Min</th>
+                                <th style="text-align:right;">Max</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="analytics-grid analytics-grid--full">
+            <article class="analytics-card analytics-card--table">
+                <h3 class="analytics-card__title">Per-Voucher Section Processing Breakdown</h3>
+                <p class="analytics-card__note" id="dashboardVoucherListMeta">Showing the 15 most recently processed vouchers for the current filters (updates automatically).</p>
+                <div class="analytics-table-wrap">
                     <table id="sectionVoucherTable">
                         <thead></thead>
                         <tbody></tbody>
                     </table>
                 </div>
-            </div>
+            </article>
         </section>
+    </div>
+            </div>
         </div>
-
     </div>
 </div>
 
@@ -595,6 +729,58 @@ if ($scriptName !== '') {
 
             let voucherTypeChart, amountChart, monthlyChart, sectionTimeChart;
 
+            let layoutSyncTimer = null;
+
+            const chartFont = {
+                family: 'inherit',
+                size: 10,
+                weight: '500'
+            };
+
+            const chartLegend = {
+                position: 'bottom',
+                labels: {
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    padding: 10,
+                    font: chartFont,
+                    color: '#94a3b8'
+                }
+            };
+
+            const chartScaleTicks = {
+                font: chartFont,
+                color: '#94a3b8',
+                maxTicksLimit: 7
+            };
+
+            function formatPesoAmount(raw) {
+                if (raw === '' || raw == null) return '';
+                const n = parseFloat(String(raw).replace(/,/g, ''));
+                if (!isFinite(n)) return String(raw);
+                return n.toLocaleString('en-PH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function resizeAllCharts() {
+                [voucherTypeChart, amountChart, monthlyChart, sectionTimeChart].forEach(chart => {
+                    if (chart && typeof chart.resize === 'function') {
+                        chart.resize();
+                    }
+                });
+            }
+
+            function scheduleChartResize() {
+                if (layoutSyncTimer) {
+                    clearTimeout(layoutSyncTimer);
+                }
+                layoutSyncTimer = setTimeout(resizeAllCharts, 120);
+            }
+
+            window.addEventListener('resize', scheduleChartResize);
+
             const tabButtons = document.querySelectorAll('.dashboard-tab-btn');
             const tabPanels = {
                 analytics: document.getElementById('dashboardTabAnalytics'),
@@ -610,6 +796,7 @@ if ($scriptName !== '') {
                             panel.classList.toggle('is-active', key === tab);
                         }
                     });
+                    scheduleChartResize();
                 });
             });
 
@@ -652,16 +839,16 @@ if ($scriptName !== '') {
             function updateCharts(data) {
                 const stats = processData(data);
 
-                // Color palettes (repeat when many voucher types)
+                // Color palettes aligned with dashboard theme
                 const baseColors = [
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(54, 162, 235, 0.6)',
-                    'rgba(255, 206, 86, 0.6)',
-                    'rgba(255, 99, 132, 0.6)',
-                    'rgba(153, 102, 255, 0.6)',
-                    'rgba(255, 159, 64, 0.6)',
-                    'rgba(199, 199, 199, 0.6)',
-                    'rgba(83, 102, 255, 0.6)'
+                    'rgba(74, 118, 255, 0.72)',
+                    'rgba(5, 150, 105, 0.72)',
+                    'rgba(245, 158, 11, 0.72)',
+                    'rgba(139, 92, 246, 0.72)',
+                    'rgba(236, 72, 153, 0.72)',
+                    'rgba(14, 165, 233, 0.72)',
+                    'rgba(107, 114, 128, 0.72)',
+                    'rgba(239, 68, 68, 0.72)'
                 ];
 
                 function colorsForCount(n) {
@@ -682,12 +869,17 @@ if ($scriptName !== '') {
                         labels: voucherTypeLabels,
                         datasets: [{
                             data: voucherTypeData,
-                            backgroundColor: colorsForCount(voucherTypeLabels.length)
+                            backgroundColor: colorsForCount(voucherTypeLabels.length),
+                            borderWidth: 0,
+                            spacing: 2
                         }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false
+                        maintainAspectRatio: false,
+                        animation: { duration: 350 },
+                        cutout: '62%',
+                        plugins: { legend: chartLegend }
                     }
                 });
 
@@ -702,15 +894,25 @@ if ($scriptName !== '') {
                         datasets: [{
                             label: 'Total Amount',
                             data: amountData,
-                            backgroundColor: 'rgba(75, 192, 192, 0.6)'
+                            backgroundColor: 'rgba(74, 118, 255, 0.72)',
+                            borderRadius: 6,
+                            maxBarThickness: 36
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: { duration: 350 },
+                        plugins: { legend: { display: false } },
                         scales: {
+                            x: {
+                                ticks: chartScaleTicks,
+                                grid: { display: false }
+                            },
                             y: {
-                                beginAtZero: true
+                                beginAtZero: true,
+                                ticks: chartScaleTicks,
+                                grid: { color: '#f1f5f9', drawBorder: false }
                             }
                         }
                     }
@@ -731,18 +933,33 @@ if ($scriptName !== '') {
                         datasets: [{
                             label: 'Number of Vouchers',
                             data: monthlyData,
-                            borderColor: 'rgba(153, 102, 255, 0.6)',
-                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                            tension: 0.4,
+                            borderColor: 'rgba(74, 118, 255, 0.95)',
+                            backgroundColor: 'rgba(74, 118, 255, 0.12)',
+                            pointBackgroundColor: '#4A76FF',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 0,
+                            pointHitRadius: 8,
+                            borderWidth: 2,
+                            tension: 0.35,
                             fill: true
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: { duration: 350 },
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: false } },
                         scales: {
+                            x: {
+                                ticks: chartScaleTicks,
+                                grid: { color: '#f1f5f9', drawBorder: false }
+                            },
                             y: {
-                                beginAtZero: true
+                                beginAtZero: true,
+                                ticks: chartScaleTicks,
+                                grid: { color: '#f1f5f9', drawBorder: false }
                             }
                         }
                     }
@@ -756,41 +973,38 @@ if ($scriptName !== '') {
                 const statCards = [{
                         label: 'Total Vouchers',
                         value: stats.totalEntries,
-                        icon: '../assets/icons/total.png',
-                        color: '#e6f0fa'
+                        icon: 'ri-file-list-3-line',
+                        tone: 'blue'
                     },
                     {
                         label: 'Total Amount',
-                        value: '₱' + stats.totalAmount.toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        }),
-                        icon: '../assets/icons/total.png',
-                        color: '#e6f4ea'
+                        value: '₱' + formatPesoAmount(stats.totalAmount),
+                        icon: 'ri-money-dollar-circle-line',
+                        tone: 'green'
                     },
                     {
                         label: 'Voucher Types',
                         value: Object.keys(stats.voucherType).length,
-                        icon: '../assets/icons/total.png',
-                        color: '#fff8e6'
+                        icon: 'ri-stack-line',
+                        tone: 'amber'
                     }
                 ];
 
                 statCards.forEach(stat => {
-                    const card = document.createElement('div');
-                    card.className = 'modern-stat-card';
+                    const card = document.createElement('article');
+                    card.className = 'analytics-stat-card';
                     card.innerHTML = `
-                        <div class="stat-card-content">
-                            <div class="stat-icon" style="background-color: ${stat.color}">
-                                <img src="${stat.icon}" alt="${stat.label} icon" class="status-img">
-                            </div>
-                            <div class="stat-text">
-                                <div class="stat-label">${stat.label}</div>
-                                <div class="stat-value">${stat.value}</div>
-                            </div>
+                        <div class="analytics-stat-card__icon analytics-stat-card__icon--${stat.tone}">
+                            <i class="${stat.icon}" aria-hidden="true"></i>
+                        </div>
+                        <div class="analytics-stat-card__body">
+                            <div class="analytics-stat-card__label">${stat.label}</div>
+                            <div class="analytics-stat-card__value">${stat.value}</div>
                         </div>`;
                     overallTableDiv.appendChild(card);
                 });
+
+                scheduleChartResize();
             }
 
             function updateSectionTiming(sectionTiming) {
@@ -823,28 +1037,40 @@ if ($scriptName !== '') {
                         datasets: [{
                             label: 'Avg Hours',
                             data: sectionAvgHours,
-                            backgroundColor: 'rgba(255, 159, 64, 0.6)'
+                            backgroundColor: 'rgba(74, 118, 255, 0.72)',
+                            borderRadius: 6,
+                            maxBarThickness: 36
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Hours'
-                                }
-                            }
-                        },
+                        animation: { duration: 350 },
                         plugins: {
+                            legend: { display: false },
                             tooltip: {
                                 callbacks: {
                                     label(ctx) {
                                         const row = summary[ctx.dataIndex];
                                         return row ? `Avg: ${row.avg_label}` : '';
                                     }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: chartScaleTicks,
+                                grid: { display: false }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: chartScaleTicks,
+                                grid: { color: '#f1f5f9', drawBorder: false },
+                                title: {
+                                    display: true,
+                                    text: 'Hours',
+                                    font: chartFont,
+                                    color: '#94a3b8'
                                 }
                             }
                         }
@@ -904,6 +1130,8 @@ if ($scriptName !== '') {
                     tr.innerHTML = html;
                     voucherBody.appendChild(tr);
                 });
+
+                scheduleChartResize();
             }
 
             function parseFetchResponse(res) {

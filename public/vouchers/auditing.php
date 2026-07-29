@@ -179,7 +179,7 @@ if (!isset($displayTotal)) {
         <div class="filter-download_container">
             <div class="filter_options_container">
                 <div class="filter-container">
-                    <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search by user, action, description..." autocomplete="off">
+                    <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
                 </div>
             </div>
             <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">

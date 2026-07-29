@@ -1885,10 +1885,10 @@ function voucher_forwarding_process_action_html(string $processStatus): string
     $processProcessing = $processStatus === 'Processing';
 
     if ($processEmpty) {
-        return '<button class="btn tertiary pPop" id="openPopup" name="btn_process" type="button">Process</button>';
+        return '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn_process" type="button" aria-label="Process" title="Process"><i class="ri-play-circle-line" aria-hidden="true"></i><span>Process</span></button>';
     }
     if ($processProcessing) {
-        return '<button class="btn success pPop" id="openPopup" name="btn_process_confirm" type="button">Confirm</button>';
+        return '<button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn_process_confirm" type="button" aria-label="Confirm" title="Confirm"><i class="ri-check-line" aria-hidden="true"></i><span>Confirm</span></button>';
     }
 
     return '';

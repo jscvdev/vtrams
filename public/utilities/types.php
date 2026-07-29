@@ -346,15 +346,18 @@ $type_visible = count($type_rows);
 </style>
 <?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
-<div class="main main--dashboard typ-page" id="main">
+<div class="main main--voucher-dashboard util-premium-page typ-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Types</h1>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Types</h1>
+            <p class="voucher-dashboard-subtitle">Configure default particulars and locked fields for each voucher type on the New Voucher form.</p>
+        </div>
     </header>
 
     <?php
     $list_total = $type_count;
     $list_visible = $type_visible;
-    $list_placeholder = 'Search type key, label, or particulars';
+    $list_placeholder = 'search';
     $list_form_id = 'typesListFilterForm';
     $list_filter_mode = 'voucher_type';
     $list_voucher_types = $list_type_options;

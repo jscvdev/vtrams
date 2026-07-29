@@ -557,15 +557,18 @@ $next_checklist_type_sort = sort_order_next_position($pdo, 'checklist_type_optio
 </style>
 <?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
-<div class="main main--dashboard chk-page" id="main">
+<div class="main main--voucher-dashboard util-premium-page chk-page" id="main">
     <header class="voucher-dashboard-header">
-        <h1 class="voucher-dashboard-title">Checklist</h1>
+        <div class="voucher-dashboard-header__text">
+            <h1 class="voucher-dashboard-title">Checklist</h1>
+            <p class="voucher-dashboard-subtitle">Define mandatory supporting documents per voucher type for forward slips and forms.</p>
+        </div>
     </header>
 
     <?php
     $list_total = $type_count;
     $list_visible = $checklist_visible;
-    $list_placeholder = 'Search voucher type, title, or display label';
+    $list_placeholder = 'search';
     $list_form_id = 'checklistListFilterForm';
     $list_filter_mode = 'voucher_type';
     $list_voucher_types = $list_type_options;
