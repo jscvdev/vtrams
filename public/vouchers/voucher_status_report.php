@@ -903,10 +903,10 @@ $statusReportRowMetaLabel = $isDefaultPreview
                         </div>
                         <p class="status-section-breakdown-note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
                     </div>
-                    <div class="status-breakdown-card status-breakdown-card--full">
-                        <p class="status-breakdown-title"><i class="ri-history-line" aria-hidden="true"></i>Complete Process History</p>
-                        <ul class="status-history-list" id="sr_history"></ul>
-                    </div>
+                </div>
+                <div class="status-breakdown-card status-breakdown-card--full status-breakdown-card--history">
+                    <p class="status-breakdown-title"><i class="ri-history-line" aria-hidden="true"></i>Complete Process History</p>
+                    <ul class="status-history-list" id="sr_history"></ul>
                 </div>
             </div>
             <div class="popupForm-footer__container">
