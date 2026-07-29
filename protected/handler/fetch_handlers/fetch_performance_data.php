@@ -32,13 +32,16 @@ $actionTypeFilter = in_array($rawActionType, $allowedActionTypes, true) ? $rawAc
 $whereParts = ["1=1"];
 $params = [];
 
-// Office filter (logged user's office by default if ACL restricts)
-if ($office) {
-    $whereParts[] = "office_from = :office";
-    $params[':office'] = $office;
-} elseif (!empty($_SESSION['logged_user_office'])) {
-    $whereParts[] = "office_from = :office";
-    $params[':office'] = $_SESSION['logged_user_office'];
+// Office filter for office-wide views only. Individual performance is scoped by action_by
+// so actions taken at other offices (e.g. liaison forwarding from CENRO/PAMO) are included.
+if (!$user) {
+    if ($office) {
+        $whereParts[] = "office_from = :office";
+        $params[':office'] = $office;
+    } elseif (!empty($_SESSION['logged_user_office'])) {
+        $whereParts[] = "office_from = :office";
+        $params[':office'] = $_SESSION['logged_user_office'];
+    }
 }
 
 if ($year && $year >= 1900 && $year <= 2100) {
