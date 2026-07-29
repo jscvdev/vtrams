@@ -412,6 +412,11 @@
     text-align: left;
 }
 
+.popup-form.status-breakdown-modal .status-remarks-latest {
+    color: #dc2626;
+    font-weight: 600;
+}
+
 .popup-form.status-breakdown-modal .status-history-list {
     list-style: none;
     margin: 0;

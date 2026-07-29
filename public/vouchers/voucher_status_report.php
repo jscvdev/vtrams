@@ -890,7 +890,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                         <div class="status-breakdown-content" id="sr_latest"></div>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full" id="sr_latest_remarks_card" style="display:none;">
-                        <p class="status-breakdown-title"><i class="ri-chat-3-line" aria-hidden="true"></i>Latest Remarks</p>
+                        <p class="status-breakdown-title"><i class="ri-chat-3-line" aria-hidden="true"></i>Combined Remarks</p>
                         <div class="status-breakdown-content" id="sr_latest_remarks"></div>
                     </div>
                     <div class="status-breakdown-card status-breakdown-card--full" id="sr_section_breakdown_card" style="display:none;">
@@ -1042,6 +1042,44 @@ $statusReportRowMetaLabel = $isDefaultPreview
             customEl.disabled = !isCustom;
         }
 
+        function splitCombinedRemarks(raw) {
+            const text = String(raw || '').trim();
+            if (!text || text.toLowerCase() === 'n/a') {
+                return [];
+            }
+
+            const pattern = /(?:^|,\s*)([^,]+?):\s*(.*?)(?=(?:,\s*[^,]+?:\s)|$)/gs;
+            const matches = Array.from(text.matchAll(pattern));
+            if (matches.length === 0) {
+                return [{ text: text, isLatest: true }];
+            }
+
+            return matches.map(function(match, index) {
+                const name = String(match[1] || '').trim();
+                const body = String(match[2] || '').trim();
+                return {
+                    text: (name + ': ' + body).trim(),
+                    isLatest: index === matches.length - 1
+                };
+            });
+        }
+
+        function renderCombinedRemarks(raw) {
+            const segments = splitCombinedRemarks(raw);
+            if (segments.length === 0) {
+                return '';
+            }
+
+            return segments.map(function(segment, index) {
+                const prefix = index > 0 ? ', ' : '';
+                const html = escapeHtml(segment.text);
+                if (segment.isLatest) {
+                    return prefix + '<span class="status-remarks-latest">' + html + '</span>';
+                }
+                return prefix + html;
+            }).join('');
+        }
+
         function renderHistoryList(raw) {
             const normalized = String(raw || '')
                 .replace(/\r\n/g, '\n')
@@ -1149,11 +1187,11 @@ $statusReportRowMetaLabel = $isDefaultPreview
             const remarksEl = document.getElementById('sr_latest_remarks');
             const remarks = String(entry.remarks || '').trim();
             if (remarksCard && remarksEl) {
-                if (remarks !== '') {
-                    remarksEl.textContent = remarks;
+                if (remarks !== '' && remarks.toLowerCase() !== 'n/a') {
+                    remarksEl.innerHTML = renderCombinedRemarks(remarks);
                     remarksCard.style.display = '';
                 } else {
-                    remarksEl.textContent = '';
+                    remarksEl.innerHTML = '';
                     remarksCard.style.display = 'none';
                 }
             }
