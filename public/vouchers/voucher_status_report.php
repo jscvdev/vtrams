@@ -919,6 +919,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
 </div>
 <div class="overlay voucher-premium-overlay" id="statusReportOverlay" style="display:none;"></div>
 
+<script src="../../protected/js/voucher_process_history_display.js"></script>
 <script>
     (function() {
         const entries = <?php echo $entriesJson ?: '[]'; ?>;
@@ -1081,6 +1082,10 @@ $statusReportRowMetaLabel = $isDefaultPreview
         }
 
         function renderHistoryList(raw) {
+            if (typeof renderProcessHistoryDisplayList === 'function') {
+                return renderProcessHistoryDisplayList(raw);
+            }
+
             const normalized = String(raw || '')
                 .replace(/\r\n/g, '\n')
                 .replace(/\r/g, '\n')
@@ -1196,7 +1201,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 }
             }
             renderSectionBreakdown(entry);
-            document.getElementById('sr_history').innerHTML = renderHistoryList(entry.process_history || '');
+            document.getElementById('sr_history').innerHTML = renderHistoryList(entry.process_history_display || entry.process_history || '');
             highlightBreakdownRow(entry.processing_no || '');
             modal.style.display = 'block';
             overlay.style.display = 'block';

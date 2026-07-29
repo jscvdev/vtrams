@@ -111,6 +111,11 @@ foreach ($searchParams as $key => $pair) {
 $fetch_voucher_receiving_data->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_receiving_data->bindValue(':off', $offset, PDO::PARAM_INT);
 $fetch_voucher_receiving_data->execute();
+$forwardingRows = $fetch_voucher_receiving_data->fetchAll(PDO::FETCH_ASSOC);
+$forwardingHistoryMap = voucher_tracking_fetch_display_history_map(
+    $pdo,
+    array_column($forwardingRows, 'processing_no')
+);
 
 $totalRows = $displayTotal;
 
@@ -1019,11 +1024,17 @@ if ($showCashierArchiveCol) {
                 </thead>
                 <tbody>
                     <?php
-                    while ($row = $fetch_voucher_receiving_data->fetch(PDO::FETCH_ASSOC)) {
+                    foreach ($forwardingRows as $row) {
                         $forwarding_process_history = voucher_tracking_enrich_process_history_for_return(
                             $pdo,
                             (string) ($row['process_history'] ?? ''),
                             (string) ($row['voucher_type'] ?? '')
+                        );
+                        $forwarding_process_history_display = voucher_tracking_process_history_for_display(
+                            $pdo,
+                            (string) ($row['processing_no'] ?? ''),
+                            $forwarding_process_history,
+                            $forwardingHistoryMap
                         );
                     ?>
                         <tr>
@@ -1038,7 +1049,7 @@ if ($showCashierArchiveCol) {
                                         <i class="ri-more-2-fill" aria-hidden="true"></i>
                                     </button>
                                     <div class="voucher-row-menu-dropdown" role="menu">
-                                        <button class="btn tertiary voucher-row-menu-item" name="btn-history" type="button" role="menuitem">
+                                        <button class="btn tertiary voucher-row-menu-item" name="btn-view" type="button" role="menuitem">
                                             <i class="ri-eye-line" aria-hidden="true"></i>
                                             <span>View</span>
                                         </button>
@@ -1252,6 +1263,7 @@ if ($showCashierArchiveCol) {
                             <td data-label="process_status" class="hidden"><?php echo $row['process_status']; ?></td>
                             <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
                             <td data-label="process_history" class="hidden"><?php echo htmlspecialchars($forwarding_process_history, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="process_history_display" class="hidden"><?php echo htmlspecialchars($forwarding_process_history_display, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars((string)$row['coa_options']) : ''; ?></td>
                             <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category']) : ''; ?></td>
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection']) : ''; ?></td>
@@ -1510,7 +1522,7 @@ if ($showCashierArchiveCol) {
                 return;
             }
 
-            if (e.target.closest('[name="btn-history"]') || e.target.closest('.voucher-row-menu-link')) {
+            if (e.target.closest('[name="btn-view"]') || e.target.closest('.voucher-row-menu-link')) {
                 closeAllRowMenus();
             }
         });
@@ -1964,6 +1976,7 @@ if ($showCashierArchiveCol) {
 <script src="../../protected/js/main.js"></script>
 <script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
+<script src="../../protected/js/voucher_process_history_display.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
     function escapeHtml(s) {
@@ -2255,32 +2268,19 @@ if ($showCashierArchiveCol) {
                 if (chargedStringInput) chargedStringInput.value = '';
             }
 
-            if (name === "btn-history") {
-                const modal = document.getElementById('historyModal');
-                const overlay = document.getElementById('historyOverlay');
-
-                const procNo = row.querySelector('[data-label="processing_no"]')?.textContent?.trim() || '';
-                const senderRemarks = row.querySelector('[data-label="sender_remarks"]')?.textContent || '';
-                const combinedRemarks = row.querySelector('[data-label="combined_remarks"]')?.textContent || '';
-                const processHistory = row.querySelector('[data-label="process_history"]')?.textContent || '';
-
-                const procEl = document.getElementById('hist_processing_no');
-                const senderEl = document.getElementById('hist_sender_remarks');
-                const combinedEl = document.getElementById('hist_combined_remarks');
-                const histEl = document.getElementById('hist_process_history');
-
-                if (procEl) procEl.value = procNo;
-                if (senderEl) senderEl.textContent = senderRemarks && senderRemarks.trim() !== '' ? senderRemarks.trim() : '';
-                if (combinedEl) combinedEl.textContent = combinedRemarks && combinedRemarks.trim() !== '' ? combinedRemarks.trim() : '';
-                if (histEl) {
-                    histEl.classList.add('hist-content--process-list');
-                    histEl.innerHTML = renderProcessHistory(processHistory);
+            if (name === "btn-view") {
+                setVoucherPortalViewMode(true);
+                document.getElementById("form_title").textContent = "View Voucher";
+                if (typeof openPopup === 'function') {
+                    openPopup();
+                } else {
+                    document.getElementById('popupForm').style.display = 'block';
+                    document.getElementById('overlay').style.display = 'block';
                 }
-
-                if (modal) modal.style.display = 'block';
-                if (overlay) overlay.style.display = 'block';
                 return;
             }
+
+            setVoucherPortalViewMode(false);
 
             if (name === "btn-return") {
                 restoreForwardDestinationOptions();

@@ -107,6 +107,11 @@ foreach ($searchParams as $key => $pair) {
 $fetch_voucher_incoming_data->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_incoming_data->bindValue(':off', $offset, PDO::PARAM_INT);
 $fetch_voucher_incoming_data->execute();
+$incomingRows = $fetch_voucher_incoming_data->fetchAll(PDO::FETCH_ASSOC);
+$incomingHistoryMap = voucher_tracking_fetch_display_history_map(
+    $pdo,
+    array_column($incomingRows, 'processing_no')
+);
 
 $totalRows = $displayTotal;
 
@@ -910,7 +915,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 </thead>
                 <tbody>
                     <?php
-                    while ($row = $fetch_voucher_incoming_data->fetch(PDO::FETCH_ASSOC)) {
+                    foreach ($incomingRows as $row) {
                         $incoming_process_history = voucher_incoming_load_process_history(
                             $pdo,
                             (string) ($row['processing_no'] ?? ''),
@@ -920,6 +925,12 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             $pdo,
                             $incoming_process_history,
                             (string) ($row['voucher_type'] ?? '')
+                        );
+                        $incoming_process_history_display = voucher_tracking_process_history_for_display(
+                            $pdo,
+                            (string) ($row['processing_no'] ?? ''),
+                            $incoming_process_history,
+                            $incomingHistoryMap
                         );
                         $incoming_requires_dv = $incoming_is_accounting_role
                             ? voucher_incoming_requires_dv_no(
@@ -942,7 +953,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                         <i class="ri-more-2-fill" aria-hidden="true"></i>
                                     </button>
                                     <div class="voucher-row-menu-dropdown" role="menu">
-                                        <button class="btn tertiary voucher-row-menu-item" name="btn-history" type="button" role="menuitem">
+                                        <button class="btn tertiary voucher-row-menu-item" name="btn-view" type="button" role="menuitem">
                                             <i class="ri-eye-line" aria-hidden="true"></i>
                                             <span>View</span>
                                         </button>
@@ -1024,6 +1035,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars($row['coa_category']) : ''; ?></td>
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars($row['coa_subsection']) : ''; ?></td>
                             <td data-label="process_history" class="hidden"><?php echo htmlspecialchars($incoming_process_history, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="process_history_display" class="hidden"><?php echo htmlspecialchars($incoming_process_history_display, ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php
                     }
@@ -1277,7 +1289,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 return;
             }
 
-            if (e.target.closest('[name="btn-history"]') || e.target.closest('.voucher-row-menu-link')) {
+            if (e.target.closest('[name="btn-view"]') || e.target.closest('.voucher-row-menu-link')) {
                 closeAllRowMenus();
             }
         });
@@ -1727,6 +1739,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
 <script src="../../protected/js/main.js"></script>
 <script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher.js"></script>
+<script src="../../protected/js/voucher_process_history_display.js"></script>
 <script src="../../protected/js/popscript.js"></script>
 <script>
     function escapeHtml(s) {
@@ -1975,31 +1988,18 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 if (chargedStringInput) chargedStringInput.value = '';
             }
 
-            if (name === "btn-history") {
-                const modal = document.getElementById('historyModal');
-                const overlay = document.getElementById('historyOverlay');
-
-                const procNo = row.querySelector('[data-label="processing_no"]')?.textContent?.trim() || '';
-                const senderRemarks = (row.querySelector('[data-label="sender_remarks"]')?.textContent || '').trim();
-                const combinedRemarks = row.querySelector('[data-label="remarks"]')?.textContent || '';
-                const processHistory = row.querySelector('[data-label="process_history"]')?.textContent || '';
-
-                const procEl = document.getElementById('hist_processing_no');
-                const senderEl = document.getElementById('hist_sender_remarks');
-                const combinedEl = document.getElementById('hist_combined_remarks');
-                const histEl = document.getElementById('hist_process_history');
-
-                if (procEl) procEl.value = procNo;
-                if (senderEl) senderEl.textContent = senderRemarks && senderRemarks.trim() !== '' ? senderRemarks.trim() : '';
-                if (combinedEl) combinedEl.textContent = combinedRemarks && combinedRemarks.trim() !== '' ? combinedRemarks.trim() : '';
-                if (histEl) {
-                    histEl.classList.add('hist-content--process-list');
-                    histEl.innerHTML = renderProcessHistory(processHistory);
+            if (name === "btn-view") {
+                setVoucherPortalViewMode(true);
+                document.getElementById("form_title").textContent = "View Voucher";
+                if (typeof openPopup === 'function') {
+                    openPopup();
+                } else {
+                    document.getElementById('popupForm').style.display = 'block';
+                    document.getElementById('overlay').style.display = 'block';
                 }
-
-                if (modal) modal.style.display = 'block';
-                if (overlay) overlay.style.display = 'block';
+                return;
             } else if (name === "btn-receive") {
+                setVoucherPortalViewMode(false);
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_incoming_module/voucher_incoming_handler.php');
                 document.querySelector(".btn-dynamic").textContent = "Receive";
                 document.getElementById("form_title").textContent = "Receive Voucher";
@@ -2008,6 +2008,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 document.querySelector(".btn-dynamic").classList.add("success");
                 applyIncomingDvNoRules(voucher_type, process_history, row);
             } else if (name === "btn-return") {
+                setVoucherPortalViewMode(false);
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("dv_no").required = false;
                 document.querySelector(".btn-dynamic").textContent = "Return";

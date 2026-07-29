@@ -746,7 +746,7 @@ function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $of
         }
     }
 
-    return voucher_status_report_attach_section_breakdowns($pdo, $entries, $trackingRowsByPn);
+    return voucher_status_report_attach_section_breakdowns($pdo, voucher_tracking_attach_display_process_history($pdo, $entries), $trackingRowsByPn);
 }
 
 /**

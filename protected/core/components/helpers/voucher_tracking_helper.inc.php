@@ -1643,6 +1643,126 @@ function voucher_tracking_normalize_process_history(?string $value): string
 }
 
 /**
+ * Build one display-oriented process-history line from an action log row.
+ * Format: NAME | ACTION | SECTION | OFFICE | DATETIME
+ *
+ * @param array<string, mixed> $row
+ */
+function voucher_tracking_build_display_history_line_from_log(array $row): string
+{
+    return trim((string) ($row['action_by'] ?? '')) . ' | '
+        . trim((string) ($row['action'] ?? '')) . ' | '
+        . trim((string) ($row['action_from'] ?? '')) . ' | '
+        . trim((string) ($row['office_from'] ?? '')) . ' | '
+        . trim((string) ($row['datetime_action'] ?? ''));
+}
+
+/**
+ * @param list<string> $processingNos
+ * @return array<string, list<string>>
+ */
+function voucher_tracking_fetch_display_history_map(PDO $pdo, array $processingNos): array
+{
+    $processingNos = array_values(array_unique(array_filter(array_map(
+        static fn($pn): string => trim((string) $pn),
+        $processingNos
+    ))));
+
+    if ($processingNos === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
+    $sql = '
+        SELECT processing_no, action_by, action, action_from, office_from, datetime_action
+        FROM voucher_action_logs
+        WHERE processing_no IN (' . $placeholders . ')
+        ORDER BY processing_no ASC, datetime_action ASC, id ASC
+    ';
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($processingNos as $index => $processingNo) {
+        $stmt->bindValue($index + 1, $processingNo, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $map = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $processingNo = trim((string) ($row['processing_no'] ?? ''));
+        if ($processingNo === '') {
+            continue;
+        }
+
+        $line = voucher_tracking_build_display_history_line_from_log($row);
+        if (trim(str_replace('|', '', $line)) === '') {
+            continue;
+        }
+
+        if (!isset($map[$processingNo])) {
+            $map[$processingNo] = [];
+        }
+        $map[$processingNo][] = $line;
+    }
+
+    return $map;
+}
+
+function voucher_tracking_process_history_for_display(
+    PDO $pdo,
+    string $processing_no,
+    string $fallback = '',
+    ?array $prefetchedMap = null
+): string {
+    $processing_no = trim($processing_no);
+    $fallback = voucher_tracking_normalize_process_history($fallback);
+
+    if ($processing_no === '') {
+        return $fallback;
+    }
+
+    $map = $prefetchedMap ?? voucher_tracking_fetch_display_history_map($pdo, [$processing_no]);
+    $lines = $map[$processing_no] ?? [];
+
+    if ($lines !== []) {
+        return implode("\n", $lines);
+    }
+
+    return $fallback;
+}
+
+/**
+ * @param list<array<string, mixed>> $entries
+ * @return list<array<string, mixed>>
+ */
+function voucher_tracking_attach_display_process_history(PDO $pdo, array $entries): array
+{
+    if ($entries === []) {
+        return $entries;
+    }
+
+    $processingNos = [];
+    foreach ($entries as $entry) {
+        $pn = trim((string) ($entry['processing_no'] ?? ''));
+        if ($pn !== '') {
+            $processingNos[] = $pn;
+        }
+    }
+
+    $map = voucher_tracking_fetch_display_history_map($pdo, $processingNos);
+    foreach ($entries as $index => $entry) {
+        $pn = trim((string) ($entry['processing_no'] ?? ''));
+        $entries[$index]['process_history_display'] = voucher_tracking_process_history_for_display(
+            $pdo,
+            $pn,
+            (string) ($entry['process_history'] ?? ''),
+            $map
+        );
+    }
+
+    return $entries;
+}
+
+/**
  * @return list<array{name: string, action: string, section: string, office: string}>
  */
 function voucher_tracking_parse_process_history_lines(string $value): array
