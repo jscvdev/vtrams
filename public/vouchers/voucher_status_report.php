@@ -1330,6 +1330,35 @@ $statusReportRowMetaLabel = $isDefaultPreview
         });
     })();
 </script>
+<script src="../../protected/js/qr_scanner_search.js"></script>
+<script>
+    (function() {
+        var inp = document.getElementById('statusReportSearch');
+        var form = inp && inp.closest('form');
+        if (!inp || !form) return;
+
+        function applyFilterSearch() {
+            form.submit();
+        }
+
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyFilterSearch();
+            }
+        });
+
+        if (typeof bindQrScannerSearch === 'function') {
+            bindQrScannerSearch({
+                inputId: 'statusReportSearch',
+                onSubmit: function(value) {
+                    inp.value = value;
+                    applyFilterSearch();
+                }
+            });
+        }
+    })();
+</script>
 <script src="../../protected/js/main.js"></script>
 <?php require_once __DIR__ . '/../../protected/core/components/notifications/notification_flash.inc.php'; ?>
 </body>
