@@ -1903,7 +1903,7 @@ if ($showCashierArchiveCol) {
         <?php endif; ?>
 
         <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '5Cw9e') : ?>
-            <option value="s1JxV">Eda Buen</option>
+            <option value="5Cw9e">Eda Buen</option>
         <?php endif; ?>
     `;
             return;
@@ -1927,6 +1927,10 @@ if ($showCashierArchiveCol) {
 
         <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
             <option value="s1JxV">Gracile B. Palce</option>
+        <?php endif; ?>
+
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '5Cw9e') : ?>
+            <option value="5Cw9e">Eda Buen</option>
         <?php endif; ?>
     `;
 
