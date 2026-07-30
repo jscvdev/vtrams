@@ -863,6 +863,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         scheduleStatusLayoutSync();
     })();
 </script>
+<script src="../../protected/js/qr_scanner_search.js"></script>
 <script>
     (function() {
         var inp = document.getElementById('filterInput');
@@ -898,6 +899,16 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                 applyFilterSearch();
             }
         });
+        if (typeof bindQrScannerSearch === 'function') {
+            bindQrScannerSearch({
+                inputId: 'filterInput',
+                onSubmit: function(value) {
+                    inp.value = value;
+                    initial = '';
+                    applyFilterSearch();
+                }
+            });
+        }
     })();
 </script>
 <?php if ($invalidSearch): ?>

@@ -252,6 +252,23 @@ window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
 }
 .forward-slip-sheet .row { display: flex; gap: 8mm; align-items: baseline; }
 .forward-slip-sheet .row.space { justify-content: space-between; }
+.forward-slip-sheet .processing-row { align-items: center; gap: 4mm; justify-content: space-between; }
+.forward-slip-sheet .slip-qr { flex-shrink: 0; line-height: 0; margin-left: auto; }
+.forward-slip-sheet .slip-qr img {
+  width: 20mm;
+  height: 20mm;
+  display: block;
+}
+.forward-slip-sheet .processing-no-group {
+  display: flex;
+  align-items: baseline;
+  gap: 3mm;
+}
+.forward-slip-sheet .processing-no-field {
+  flex: 0 0 auto;
+  width: 42mm;
+  min-width: 42mm;
+}
 .forward-slip-sheet .label { font-size: 11px; }
 .forward-slip-sheet .field { flex: 1; border-bottom: 1px solid #000; height: 14px; }
 .forward-slip-sheet .field.text { border-bottom: 1px solid #000; padding: 0 2px; }

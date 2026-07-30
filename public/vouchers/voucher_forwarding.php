@@ -1345,6 +1345,7 @@ if ($showCashierArchiveCol) {
     </div>
 </div>
 
+<script src="../../protected/js/qr_scanner_search.js"></script>
 <script>
     (function() {
         var inp = document.getElementById('filterInput');
@@ -1370,6 +1371,16 @@ if ($showCashierArchiveCol) {
                 applyFilterSearch();
             }
         });
+        if (typeof bindQrScannerSearch === 'function') {
+            bindQrScannerSearch({
+                inputId: 'filterInput',
+                onSubmit: function(value) {
+                    inp.value = value;
+                    initial = '';
+                    applyFilterSearch();
+                }
+            });
+        }
     })();
 </script>
 <script>

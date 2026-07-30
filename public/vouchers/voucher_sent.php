@@ -835,6 +835,7 @@ $totalRows = $displayTotal;
     </div>
 </div>
 
+<script src="../../protected/js/qr_scanner_search.js"></script>
 <script>
     (function() {
         var typeFilter = document.getElementById('filterInputType');
@@ -908,6 +909,16 @@ $totalRows = $displayTotal;
                 applyFilterSearch();
             }
         });
+        if (typeof bindQrScannerSearch === 'function') {
+            bindQrScannerSearch({
+                inputId: 'filterInput',
+                onSubmit: function(value) {
+                    inp.value = value;
+                    initial = '';
+                    applyFilterSearch();
+                }
+            });
+        }
     })();
 </script>
 <script>

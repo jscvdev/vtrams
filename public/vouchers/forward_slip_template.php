@@ -5,10 +5,35 @@
 
 require_once __DIR__ . '/checklist_config.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
+
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 
 function h($value)
 {
     return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+}
+
+function processing_no_qr_data_uri($processingNo)
+{
+    $raw = trim((string)($processingNo ?? ''));
+    if ($raw === '') {
+        return '';
+    }
+
+    try {
+        $options = new QROptions([
+            'outputType' => QRCode::OUTPUT_IMAGE_PNG,
+            'scale' => 5,
+            'outputBase64' => true,
+            'quietzoneSize' => 1,
+        ]);
+
+        return (new QRCode($options))->render($raw);
+    } catch (Throwable $e) {
+        return '';
+    }
 }
 
 function formatAmount($val)
@@ -21,7 +46,9 @@ function formatAmount($val)
 }
 
 $claimant = h($_POST['claimant'] ?? '');
-$processingNo = h($_POST['processing_no'] ?? '');
+$processingNoRaw = trim((string)($_POST['processing_no'] ?? ''));
+$processingNo = h($processingNoRaw);
+$processingNoQr = processing_no_qr_data_uri($processingNoRaw);
 $amount = formatAmount($_POST['amount'] ?? '');
 $nature = h($_POST['nature'] ?? '');
 $remarks = h($_POST['remarks'] ?? '');
@@ -76,9 +103,16 @@ function selected_match_label($base, $set)
 ?>
 
 <div class="forward-slip-sheet">
-    <div class="row">
-        <div class="label">PROCESSING NO.:</div>
-        <div class="field text"><span><?= $processingNo ?></span></div>
+    <div class="row processing-row">
+        <div class="processing-no-group">
+            <div class="label">PROC. NO.:</div>
+            <div class="field text processing-no-field"><span><?= $processingNo ?></span></div>
+        </div>
+        <?php if ($processingNoQr !== ''): ?>
+        <div class="slip-qr">
+            <img src="<?= h($processingNoQr) ?>" alt="Processing No. QR Code" width="80" height="80">
+        </div>
+        <?php endif; ?>
     </div>
 
     <div class="row space">
