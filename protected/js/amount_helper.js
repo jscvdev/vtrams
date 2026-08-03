@@ -73,6 +73,22 @@ function setAmountDisplayValue(input, raw) {
     input.value = formatAmountDisplay(raw);
 }
 
+function formatAmountStackCells() {
+    document.querySelectorAll('.voucher-amount-stack-cell').forEach(function(td) {
+        var gross = td.getAttribute('data-amount-gross') || '';
+        var net = td.getAttribute('data-amount-net') || '';
+        var grossEl = td.querySelector('[data-amount-part="gross"]');
+        var netEl = td.querySelector('[data-amount-part="net"]');
+        if (grossEl && gross) {
+            grossEl.textContent = formatAmountDisplay(gross);
+        }
+        if (netEl && net) {
+            netEl.textContent = formatAmountDisplay(net);
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     formatAmountTableCells();
+    formatAmountStackCells();
 });

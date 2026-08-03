@@ -436,11 +436,11 @@ function update_dv(object $pdo, string $dv_no, string $processing_no)
 /**
  * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
  */
-function update_amount(object $pdo, string $processing_no, string $amount): array
+function update_amount(object $pdo, string $processing_no, string $netAmount, string $grossAmount = ''): array
 {
     vouchers_amount_ensure_string_column($pdo);
 
-    $normalized = ensure_amount_two_decimals($amount);
+    $netNorm = ensure_amount_two_decimals($netAmount);
 
     $select = $pdo->prepare('SELECT amount, charged_amount FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1');
     $select->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
@@ -449,7 +449,7 @@ function update_amount(object $pdo, string $processing_no, string $amount): arra
     if (!$row) {
         return [
             'updated' => false,
-            'effective_amount' => $normalized,
+            'effective_amount' => $netNorm,
             'charged_amount' => null,
         ];
     }
@@ -458,24 +458,25 @@ function update_amount(object $pdo, string $processing_no, string $amount): arra
     $existingCharged = amount_is_non_zero($row['charged_amount'] ?? null)
         ? ensure_amount_two_decimals(amount_pdo_value_to_string($row['charged_amount']))
         : '';
-    $effectiveCurrent = $existingCharged !== '' ? $existingCharged : $originalAmount;
 
-    if ($normalized !== '' && amounts_equal_string($normalized, $effectiveCurrent)) {
-        return [
-            'updated' => false,
-            'effective_amount' => $effectiveCurrent,
-            'charged_amount' => $existingCharged !== '' ? $existingCharged : null,
-        ];
+    if ($grossAmount !== '') {
+        $grossNorm = ensure_amount_two_decimals($grossAmount);
+    } else {
+        $grossNorm = $originalAmount;
     }
 
     $charged = null;
-    if ($normalized !== '' && !amounts_equal_string($normalized, $originalAmount)) {
-        $charged = $normalized;
+    if ($netNorm !== '' && !amounts_equal_string($netNorm, $grossNorm)) {
+        $charged = $netNorm;
+    } elseif ($grossAmount === '' && $netNorm !== '' && !amounts_equal_string($netNorm, $originalAmount)) {
+        $charged = $netNorm;
     }
 
-    $newChargedNorm = $charged ?? '';
-    $oldChargedNorm = $existingCharged;
-    if (amounts_equal_string($newChargedNorm, $oldChargedNorm)) {
+    $effectiveCurrent = $existingCharged !== '' ? $existingCharged : $originalAmount;
+    $grossChanged = !amounts_equal_string($grossNorm, $originalAmount);
+    $chargedChanged = !amounts_equal_string($charged ?? '', $existingCharged);
+
+    if (!$grossChanged && !$chargedChanged) {
         return [
             'updated' => false,
             'effective_amount' => $effectiveCurrent,
@@ -483,16 +484,18 @@ function update_amount(object $pdo, string $processing_no, string $amount): arra
         ];
     }
 
-    $query = 'UPDATE voucher_receiving SET charged_amount = :charged_amount WHERE processing_no = :processing_no';
+    $query = 'UPDATE voucher_receiving SET amount = :amount, charged_amount = :charged_amount WHERE processing_no = :processing_no';
 
     $statement = $pdo->prepare($query);
+    $statement->bindValue(':amount', $grossNorm, PDO::PARAM_STR);
     $statement->bindValue(':charged_amount', $charged, $charged === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
     $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
     $statement->execute();
 
+    sync_voucher_tracking_gross_amount($pdo, $processing_no, $grossNorm);
     sync_voucher_tracking_charged_amount($pdo, $processing_no, $charged);
 
-    $effective = $charged ?? $originalAmount;
+    $effective = $charged ?? $grossNorm;
 
     return [
         'updated' => $statement->rowCount() > 0,

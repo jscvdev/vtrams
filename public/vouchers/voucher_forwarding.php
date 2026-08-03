@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 utilities_return_previous_ensure_schema($pdo);
 $return_previous_allowed_units = utilities_return_previous_active_designations($pdo);
@@ -152,6 +153,7 @@ $showTransmitCol = (
 $showEditCol = (
     in_array('Accounting Unit', $target, true)
     || in_array('Processor', $target, true)
+    || in_array('Accountant III', $target, true)
     || in_array('Budget Unit', $target, true)
     || in_array('Budget Officer', $target, true)
     || in_array('ICU', $target, true)
@@ -633,17 +635,23 @@ if ($showCashierArchiveCol) {
                                 <input type="text" name="tin_employee_no" class="tin_employee_no form-custom-input" id="tin_employee_no" value="" placeholder="TIN/Employee No." readonly>
                             </div>
                             <div class="label-input__container number-input amount_primary_block">
-                                <label for="">Amount</label>
-                                <input type="text" name="string_amount" class="string_amount form-custom-input" id="string_amount" placeholder="Amount" required readonly>
+                                <label for="" class="amount_main_label">Amount</label>
+                                <input type="text" name="string_amount" class="string_amount form-custom-input amount_main_display" id="string_amount" placeholder="Amount" required readonly>
                                 <input type="hidden" name="amount" class="amount" id="int_amount" value="1">
-                                <div class="label-input__container number-input original_charged_container" style="display: none; margin-top: 4px;">
-                                    <label for="">Original Amount</label>
-                                    <input type="text" name="original_string_amount" class="original_string_amount form-custom-input" id="original_string_amount" placeholder="Original Amount" readonly>
+                                <input type="hidden" name="gross_amount" id="gross_amount" value="">
+                                <div class="voucher-amount-split-panel" id="voucherAmountSplitPanel" style="display: none;">
+                                    <p class="voucher-amount-split-panel__title">Amount</p>
+                                    <div class="voucher-amount-split-panel__body">
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--gross original_charged_container" style="display: none;">
+                                            <label for="original_string_amount" class="voucher-amount-split-field__label">Gross</label>
+                                            <input type="text" name="original_string_amount" class="original_string_amount form-custom-input voucher-amount-split-field__input" id="original_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--net charged_amount_container" style="display: none;">
+                                            <label for="charged_string_amount" class="voucher-amount-split-field__label">Net</label>
+                                            <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input voucher-amount-split-field__input" id="charged_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="label-input__container number-input charged_amount_container" style="display: none;">
-                                <label for="">Charged Amount (Edited)</label>
-                                <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input" id="charged_string_amount" placeholder="Charged Amount (Edited)" style="color: red;" readonly>
                             </div>
                             <div class="label-input__container">
                                 <label for="">Voucher Date</label>
@@ -823,6 +831,88 @@ if ($showCashierArchiveCol) {
                 min-height: 0;
                 overflow: auto;
                 max-height: none;
+            }
+
+
+            .voucher-amount-split-panel {
+                margin-top: 8px;
+                padding: 14px 16px;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+                background: #fafafa;
+            }
+
+            .voucher-amount-split-panel__title {
+                margin: 0 0 12px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .voucher-amount-split-panel__body {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            @media (max-width: 640px) {
+                .voucher-amount-split-panel__body {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            .voucher-amount-split-field {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-width: 0;
+            }
+
+            .voucher-amount-split-field__label {
+                margin: 0;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .voucher-amount-split-field--gross .voucher-amount-split-field__label {
+                color: #16a34a;
+            }
+
+            .voucher-amount-split-field--net .voucher-amount-split-field__label {
+                color: #2563eb;
+            }
+
+            .voucher-amount-split-field__input {
+                width: 100%;
+                border-radius: 8px !important;
+                border: 1px solid #e2e8f0 !important;
+                background: #ffffff !important;
+                padding: 10px 12px !important;
+                font-size: 15px !important;
+                font-weight: 600 !important;
+                font-variant-numeric: tabular-nums;
+                color: #0f172a !important;
+                transition: border-color 140ms ease, box-shadow 140ms ease;
+            }
+
+            .voucher-amount-split-field__input:focus {
+                outline: none;
+                border-color: #cbd5e1 !important;
+                box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+            }
+
+            .voucher-amount-split-field--gross .voucher-amount-split-field__input:not([readonly]):focus {
+                border-color: #86efac !important;
+                box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+            }
+
+            .voucher-amount-split-field--net .voucher-amount-split-field__input:not([readonly]):focus {
+                border-color: #93c5fd !important;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
             }
 
             #my-Table .voucher-table-actions-cell {
@@ -1067,13 +1157,7 @@ if ($showCashierArchiveCol) {
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address" class="hidden status"><?php echo $row['address']; ?></td>
                             <td data-label="particulars" class="hidden"><?php echo $row['particulars']; ?></td>
-                            <?php
-                            $baseAmount = (string) ($row['amount'] ?? '');
-                            $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
-                            $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
-                            $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
-                            ?>
-                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($row['amount'] ?? '', $row['charged_amount'] ?? ''); ?>
                             <td data-label="voucher_date" class="hidden"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="hidden voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
                             <td data-label="datetime_forwarded" class="hidden"><?php echo $row['datetime_forwarded']; ?></td>
@@ -2064,11 +2148,16 @@ if ($showCashierArchiveCol) {
         return html;
     }
 
-    function enableAmountEditing() {
-        // Prefer editing the Charged Amount (Edited) field if present,
-        // otherwise fall back to the main Amount field.
-        const inputElement = document.getElementById('charged_string_amount') || document.getElementById('string_amount');
-        const outputElement = document.getElementById('int_amount');
+    function setAmountSplitViewMode(showSplit) {
+        const amountMainLabel = document.querySelector('.amount_main_label');
+        const amountMainDisplay = document.querySelector('.amount_main_display');
+        const splitPanel = document.getElementById('voucherAmountSplitPanel');
+        if (amountMainLabel) amountMainLabel.style.display = showSplit ? 'none' : '';
+        if (amountMainDisplay) amountMainDisplay.style.display = showSplit ? 'none' : '';
+        if (splitPanel) splitPanel.style.display = showSplit ? 'block' : 'none';
+    }
+
+    function watchAmountInput(inputElement, outputElement) {
         if (!inputElement || !outputElement) return;
 
         inputElement.readOnly = false;
@@ -2084,10 +2173,20 @@ if ($showCashierArchiveCol) {
             }
         }
 
-        // Avoid multiple intervals by storing one on the element
         if (!inputElement._amountIntervalId) {
             inputElement._amountIntervalId = setInterval(checkForChange, 100);
         }
+    }
+
+    function enableAmountEditing() {
+        watchAmountInput(
+            document.getElementById('original_string_amount'),
+            document.getElementById('gross_amount')
+        );
+        watchAmountInput(
+            document.getElementById('charged_string_amount'),
+            document.getElementById('int_amount')
+        );
     }
 
     function resetVoucherDetailEditing() {
@@ -2124,9 +2223,14 @@ if ($showCashierArchiveCol) {
         }
     }
 
-    function isAmountEditRole() {
+    function isAccountingAmountEditRole() {
         return targetArray2.includes('Accounting Unit') ||
             targetArray2.includes('Processor') ||
+            targetArray2.includes('Accountant III');
+    }
+
+    function isAmountEditRole() {
+        return isAccountingAmountEditRole() ||
             targetArray2.includes('Budget Unit') ||
             targetArray2.includes('Budget Officer');
     }
@@ -2205,6 +2309,10 @@ if ($showCashierArchiveCol) {
             document.querySelector('.tin_employee_no').value = tin_employee_no;
             document.querySelector('.amount').value = convertedBack;
             setAmountDisplayValue(document.getElementById('string_amount'), amount);
+            const grossHiddenInput = document.getElementById('gross_amount');
+            if (grossHiddenInput) {
+                grossHiddenInput.value = normalizeAmountInput(amountOriginal);
+            }
 
             document.querySelector('.voucher_date').value = voucher_date;
             document.querySelector('.office_from').value = office_from;
@@ -2265,15 +2373,19 @@ if ($showCashierArchiveCol) {
             if (chargedStringInput) chargedStringInput.disabled = true;
 
             const hasCharged = isNonZeroAmount(charged_amount);
+            setAmountSplitViewMode(hasCharged);
 
             if (hasCharged) {
-                if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
+                if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                 if (stringAmountInput) stringAmountInput.removeAttribute('required');
+                if (originalContainer) originalContainer.style.display = 'flex';
                 if (chargedContainer) chargedContainer.style.display = 'flex';
+                if (originalStringInput) setAmountDisplayValue(originalStringInput, amountOriginal);
                 if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
             } else {
                 if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                 if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
+                if (originalContainer) originalContainer.style.display = 'none';
                 if (chargedContainer) chargedContainer.style.display = 'none';
                 if (originalStringInput) originalStringInput.value = '';
                 if (chargedStringInput) chargedStringInput.value = '';
@@ -2479,7 +2591,7 @@ if ($showCashierArchiveCol) {
                 var dvInput = document.getElementById('dv_no');
                 if (dvInput) {
                     dvInput.required = false;
-                    if (targetArray2.includes('Accounting Unit') || targetArray2.includes('Processor')) {
+                    if (targetArray2.includes('Accounting Unit') || targetArray2.includes('Processor') || targetArray2.includes('Accountant III')) {
                         dvInput.readOnly = false;
                     }
                 }
@@ -2502,38 +2614,42 @@ if ($showCashierArchiveCol) {
                         "Edit Voucher" :
                         "Edit Amount";
 
+                    setAmountSplitViewMode(true);
                     if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
-                    if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
+                    if (stringAmountInput) stringAmountInput.removeAttribute('required');
                     if (originalContainer) originalContainer.style.display = 'flex';
                     if (chargedContainer) chargedContainer.style.display = 'flex';
-                    if (originalStringInput) originalStringInput.disabled = false;
-                    if (chargedStringInput) chargedStringInput.disabled = false;
-
-                    const hasChargedEdit = isNonZeroAmount(charged_amount);
-
-                    if (originalStringInput && chargedStringInput) {
-                        if (hasChargedEdit) {
-                            originalStringInput.value = amountOriginal;
-                            chargedStringInput.value = String(charged_amount || '').trim();
-                        } else {
-                            originalStringInput.value = amount;
-                            chargedStringInput.value = amount;
-                        }
-                    } else if (chargedStringInput) {
-                        if (hasChargedEdit) {
-                            chargedStringInput.value = String(charged_amount || '').trim();
-                        } else {
-                            chargedStringInput.value = amount;
-                        }
+                    if (originalStringInput) {
+                        originalStringInput.disabled = false;
+                        setAmountDisplayValue(originalStringInput, amountOriginal);
+                    }
+                    if (chargedStringInput) {
+                        chargedStringInput.disabled = false;
+                        setAmountDisplayValue(
+                            chargedStringInput,
+                            isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal
+                        );
                     }
 
                     const mainAmountInput = document.getElementById('string_amount');
                     if (mainAmountInput) mainAmountInput.readOnly = true;
 
+                    const grossHiddenInput = document.getElementById('gross_amount');
+                    if (grossHiddenInput) {
+                        grossHiddenInput.value = normalizeAmountInput(amountOriginal);
+                    }
+                    const intAmountInput = document.getElementById('int_amount');
+                    if (intAmountInput) {
+                        intAmountInput.value = normalizeAmountInput(
+                            isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal
+                        );
+                    }
+
                     enableAmountEditing();
                 } else {
                     document.getElementById("form_title").textContent = "Edit Voucher";
 
+                    setAmountSplitViewMode(false);
                     if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
                     if (stringAmountInput) stringAmountInput.removeAttribute('required');
                     if (originalContainer) originalContainer.style.display = 'none';
@@ -2557,15 +2673,22 @@ if ($showCashierArchiveCol) {
             }
 
             const intAmount = document.getElementById('int_amount');
+            const grossHidden = document.getElementById('gross_amount');
+            const grossInput = document.getElementById('original_string_amount');
             const chargedInput = document.getElementById('charged_string_amount');
+
             if (chargedInput && intAmount && !chargedInput.disabled) {
                 syncAmountFields(chargedInput.value, intAmount);
-                return;
+            }
+            if (grossInput && grossHidden && !grossInput.disabled) {
+                syncAmountFields(grossInput.value, grossHidden);
             }
 
-            const stringInput = document.getElementById('string_amount');
-            if (stringInput && intAmount) {
-                syncAmountFields(stringInput.value, intAmount);
+            if (intAmount && (!chargedInput || chargedInput.disabled)) {
+                const stringInput = document.getElementById('string_amount');
+                if (stringInput) {
+                    syncAmountFields(stringInput.value, intAmount);
+                }
             }
         });
     })();

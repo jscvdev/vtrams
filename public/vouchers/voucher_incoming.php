@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/cursor_paginati
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 utilities_return_previous_ensure_schema($pdo);
 $return_previous_allowed_units = utilities_return_previous_active_designations($pdo);
 $dashboard_voucher_types = checklist_types_with_labels();
@@ -971,13 +972,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address" class="hidden status"><?php echo $row['address']; ?></td>
                             <td data-label="particulars" class="hidden"><?php echo $row['particulars']; ?></td>
-                            <?php
-                            $baseAmount = (string) ($row['amount'] ?? '');
-                            $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
-                            $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
-                            $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
-                            ?>
-                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($row['amount'] ?? '', $row['charged_amount'] ?? ''); ?>
                             <td data-label="amount_original" class="hidden"><?php echo $row['amount']; ?></td>
                             <td data-label="voucher_date" class="hidden"><?php echo $row['voucher_date']; ?></td>
                             <td data-label="voucher_type_display" class="hidden voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>

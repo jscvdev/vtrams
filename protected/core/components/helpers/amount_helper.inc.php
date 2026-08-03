@@ -112,6 +112,89 @@ function format_amount_display(mixed $raw): string
     return isset($parts[1]) ? $intPart . '.' . $parts[1] : $intPart;
 }
 
+/** True when charged_amount should display as a separate net line. */
+function amount_show_charged_net(mixed $charged): bool
+{
+    $chargedStr = trim(amount_pdo_value_to_string($charged));
+
+    return $chargedStr !== '' && $chargedStr !== '0' && $chargedStr !== '0.00';
+}
+
+/**
+ * @return array{effective: string, gross: string, net: string, show_net: bool}
+ */
+function voucher_amount_stack_parts(mixed $grossAmount, mixed $chargedAmount = null): array
+{
+    $gross = amount_pdo_value_to_string($grossAmount);
+    $net = amount_pdo_value_to_string($chargedAmount ?? '');
+    $showNet = amount_show_charged_net($net);
+    $effective = $showNet ? $net : $gross;
+
+    return [
+        'effective' => $effective,
+        'gross' => $gross,
+        'net' => $net,
+        'show_net' => $showNet,
+    ];
+}
+
+/** Inner HTML for a gross/net amount stack (label and value side by side). */
+function voucher_amount_stack_inner_html(mixed $grossAmount, mixed $chargedAmount = null): string
+{
+    $parts = voucher_amount_stack_parts($grossAmount, $chargedAmount);
+    $grossEsc = htmlspecialchars($parts['gross'], ENT_QUOTES, 'UTF-8');
+    $netEsc = htmlspecialchars($parts['net'], ENT_QUOTES, 'UTF-8');
+
+    $html = '<div class="voucher-amount-stack">'
+        . '<div class="voucher-amount-row voucher-amount-row--gross">'
+        . '<span class="voucher-amount-row__label">Gross</span>'
+        . '<span class="voucher-amount-row__value" data-amount-part="gross">' . $grossEsc . '</span>'
+        . '</div>';
+
+    if ($parts['show_net']) {
+        $html .= '<div class="voucher-amount-row voucher-amount-row--net">'
+            . '<span class="voucher-amount-row__label">Net</span>'
+            . '<span class="voucher-amount-row__value" data-amount-part="net">' . $netEsc . '</span>'
+            . '</div>';
+    }
+
+    $html .= '</div>';
+
+    return $html;
+}
+
+/** Full table cell markup for gross/net amount display. */
+function voucher_amount_stack_cell_html(mixed $grossAmount, mixed $chargedAmount = null, string $extraClass = ''): string
+{
+    $parts = voucher_amount_stack_parts($grossAmount, $chargedAmount);
+    $effectiveEsc = htmlspecialchars(normalize_amount_string($parts['effective']), ENT_QUOTES, 'UTF-8');
+    $grossDataEsc = htmlspecialchars(normalize_amount_string($parts['gross']), ENT_QUOTES, 'UTF-8');
+    $netDataEsc = htmlspecialchars($parts['show_net'] ? normalize_amount_string($parts['net']) : '', ENT_QUOTES, 'UTF-8');
+    $class = trim('amount voucher-amount-stack-cell ' . $extraClass);
+
+    return '<td data-label="amount" class="' . $class . '"'
+        . ' data-amount="' . $effectiveEsc . '"'
+        . ' data-amount-gross="' . $grossDataEsc . '"'
+        . ' data-amount-net="' . $netDataEsc . '"'
+        . ' data-amount-skip="1">'
+        . voucher_amount_stack_inner_html($grossAmount, $chargedAmount)
+        . '</td>';
+}
+
+/** Data attributes for a custom amount table cell wrapper. */
+function voucher_amount_stack_cell_attrs(mixed $grossAmount, mixed $chargedAmount = null): string
+{
+    $parts = voucher_amount_stack_parts($grossAmount, $chargedAmount);
+    $effectiveEsc = htmlspecialchars(normalize_amount_string($parts['effective']), ENT_QUOTES, 'UTF-8');
+    $grossDataEsc = htmlspecialchars(normalize_amount_string($parts['gross']), ENT_QUOTES, 'UTF-8');
+    $netDataEsc = htmlspecialchars($parts['show_net'] ? normalize_amount_string($parts['net']) : '', ENT_QUOTES, 'UTF-8');
+
+    return 'class="voucher-amount-stack-cell" data-amount="' . $effectiveEsc . '"'
+        . ' data-amount-gross="' . $grossDataEsc . '"'
+        . ' data-amount-net="' . $netDataEsc . '"'
+        . ' data-amount-skip="1"';
+}
+
 /** POST/session text for DB storage — do not HTML-escape (escape on output only). */
 function voucher_post_string(mixed $value): string
 {

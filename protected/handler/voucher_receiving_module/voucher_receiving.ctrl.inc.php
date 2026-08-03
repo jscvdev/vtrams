@@ -178,10 +178,14 @@ function update_voucher_dv_no(object $pdo, string $dv_no, string $processing_no)
 /**
  * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
  */
-function update_voucher_amount(object $pdo, string $processing_no, string $amount): array
+function update_voucher_amount(object $pdo, string $processing_no, string $netAmount, string $grossAmount = ''): array
 {
-    voucher_apply_exact_amount($amount);
-    return update_amount($pdo, $processing_no, $amount);
+    voucher_apply_exact_amount($netAmount);
+    if ($grossAmount !== '') {
+        voucher_apply_exact_amount($grossAmount);
+    }
+
+    return update_amount($pdo, $processing_no, $netAmount, $grossAmount);
 }
 
 function update_voucher_receiving_details(

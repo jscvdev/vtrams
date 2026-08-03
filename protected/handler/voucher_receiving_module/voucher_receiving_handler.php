@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "particulars",
             "tin_employee_no",
             "amount",
+            "gross_amount",
             "voucher_type",
             "voucher_date",
             "office_from",
@@ -45,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'particulars' => 'particulars',
             'tin_employee_no' => 'tin_employee_no',
             'amount' => 'amount',
+            'gross_amount' => 'gross_amount',
             'voucher_type' => 'voucher_type',
             'voucher_date' => 'voucher_date',
             'office_from' => 'office_from',
@@ -90,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $editAmountDesignations = voucher_logged_user_designations();
                     $canEditVoucherAmount = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
                         || voucher_user_has_designation($editAmountDesignations, 'Processor')
+                        || voucher_user_has_designation($editAmountDesignations, 'Accountant III')
                         || voucher_user_has_designation($editAmountDesignations, 'Budget Unit')
                         || voucher_user_has_designation($editAmountDesignations, 'Budget Officer');
                     $canEditVoucherDetails = $canEditVoucherAmount
@@ -107,6 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($canEditVoucherAmount) {
                         $variables_to_check['amount'] = $amount;
+                        if ($gross_amount !== '') {
+                            $variables_to_check['gross_amount'] = $gross_amount;
+                        }
                     } elseif ($canEditVoucherDetails) {
                         $variables_to_check['voucher_date'] = $voucher_date;
                     }
@@ -151,7 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         $canEditDvNo = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
-                            || voucher_user_has_designation($editAmountDesignations, 'Processor');
+                            || voucher_user_has_designation($editAmountDesignations, 'Processor')
+                            || voucher_user_has_designation($editAmountDesignations, 'Accountant III');
                         if ($canEditDvNo) {
                             $dvTrim = trim((string) $dv_no);
                             if ($dvTrim !== '' && strtoupper($dvTrim) !== 'TBD') {
@@ -162,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         if ($canEditVoucherAmount) {
-                            $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount);
+                            $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount, $gross_amount);
                             $logAmount = $amountUpdate['effective_amount'] ?? $amount;
                         }
 

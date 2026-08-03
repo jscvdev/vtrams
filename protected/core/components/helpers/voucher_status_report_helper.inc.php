@@ -346,6 +346,10 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'payee' => trim((string) ($row['payee'] ?? '')),
         'particulars' => trim((string) ($row['particulars'] ?? '')),
         'amount' => amount_resolve_charged_or_amount($row['charged_amount'] ?? '', $row['amount'] ?? ''),
+        'amount_gross' => ensure_amount_two_decimals(amount_pdo_value_to_string($row['amount'] ?? '')),
+        'amount_charged' => amount_is_non_zero($row['charged_amount'] ?? null)
+            ? ensure_amount_two_decimals(amount_pdo_value_to_string($row['charged_amount']))
+            : '',
         'voucher_type' => trim((string) ($row['voucher_type'] ?? '')),
         'office_from' => $officeFrom,
         'origin_office' => $originOffice,

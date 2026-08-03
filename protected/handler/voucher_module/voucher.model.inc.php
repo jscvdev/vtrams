@@ -606,3 +606,20 @@ function sync_voucher_tracking_charged_amount(object $pdo, string $processing_no
 
     return $statement->rowCount() > 0;
 }
+
+/**
+ * Mirror gross amount on voucher_tracking after an amount edit.
+ */
+function sync_voucher_tracking_gross_amount(object $pdo, string $processing_no, string $amount): bool
+{
+    vouchers_amount_ensure_string_column($pdo);
+    $amount = ensure_amount_two_decimals($amount);
+
+    $query = 'UPDATE voucher_tracking SET amount = :amount WHERE processing_no = :processing_no';
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':amount', $amount, PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}

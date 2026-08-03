@@ -102,6 +102,7 @@ $header_text = $pageTitleHelper->getHeaderText();
         asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
         asset_stylesheet($vtramsStylesHref . 'modern_filter_card.css', $vtramsStylesDir . '/modern_filter_card.css');
         asset_stylesheet($vtramsStylesHref . 'voucher_premium_modal.css', $vtramsStylesDir . '/voucher_premium_modal.css');
+        asset_stylesheet($vtramsStylesHref . 'voucher_amount_stack.css', $vtramsStylesDir . '/voucher_amount_stack.css');
     } elseif ($file_name == 'upload.php') {
         asset_base_stylesheets($vtramsStylesHref, $vtramsStylesDir);
         asset_stylesheet($vtramsStylesHref . 'ustyle.css', $vtramsStylesDir . '/ustyle.css');

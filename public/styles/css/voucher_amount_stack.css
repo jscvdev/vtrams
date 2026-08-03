@@ -1,0 +1,53 @@
+td.voucher-amount-stack-cell {
+    padding: 8px 12px !important;
+    vertical-align: middle;
+}
+
+.voucher-amount-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    min-width: 136px;
+}
+
+.voucher-amount-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+}
+
+.voucher-amount-row__label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.voucher-amount-row--gross .voucher-amount-row__label {
+    color: #16a34a;
+}
+
+.voucher-amount-row--net .voucher-amount-row__label {
+    color: #2563eb;
+}
+
+.voucher-amount-row--net {
+    margin-top: 5px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.voucher-amount-row__value {
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    color: #0f172a;
+    line-height: 1.25;
+    white-space: nowrap;
+    text-align: right;
+}
