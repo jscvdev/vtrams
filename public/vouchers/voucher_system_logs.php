@@ -333,6 +333,64 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
             white-space: normal;
             word-break: break-word;
         }
+
+        .voucher-amount-split-panel {
+            margin-top: 8px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #fafafa;
+        }
+
+        .voucher-amount-split-panel__title {
+            margin: 0 0 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .voucher-amount-split-panel__body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .voucher-amount-split-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .voucher-amount-split-field__label {
+            margin: 0;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .voucher-amount-split-field--gross .voucher-amount-split-field__label {
+            color: #16a34a;
+        }
+
+        .voucher-amount-split-field--net .voucher-amount-split-field__label {
+            color: #2563eb;
+        }
+
+        .voucher-amount-split-field__input {
+            width: 100%;
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            background: #ffffff !important;
+            padding: 10px 12px !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            font-variant-numeric: tabular-nums;
+            color: #0f172a !important;
+        }
     </style>
 
     <div class="popup-form voucher-premium-modal popup-form--compact" id="popupForm">
@@ -387,13 +445,22 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                                 <input type="text" name="tin_employee_no" class="tin_employee_no form-custom-input" id="tin_employee_no" value="" readonly>
                             </div>
                             <div class="label-input__container number-input amount_primary_block">
-                                <label for="int_amount">Amount</label>
-                                <input type="text" name="string_amount" class="string_amount form-custom-input" id="int_amount" readonly>
+                                <label for="int_amount" class="amount_main_label">Amount</label>
+                                <input type="text" name="string_amount" class="string_amount form-custom-input amount_main_display" id="int_amount" readonly>
                                 <input type="hidden" name="amount" class="amount" value="">
-                            </div>
-                            <div class="label-input__container number-input charged_amount_container" style="display: none;">
-                                <label for="charged_string_amount">Charged Amount (Edited)</label>
-                                <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input" id="charged_string_amount" style="color: red;" readonly>
+                                <div class="voucher-amount-split-panel" id="voucherAmountSplitPanel" style="display: none;">
+                                    <p class="voucher-amount-split-panel__title">Amount</p>
+                                    <div class="voucher-amount-split-panel__body">
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--gross original_charged_container" style="display: none;">
+                                            <label for="original_string_amount" class="voucher-amount-split-field__label">Gross</label>
+                                            <input type="text" name="original_string_amount" class="original_string_amount form-custom-input voucher-amount-split-field__input" id="original_string_amount" readonly>
+                                        </div>
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--net charged_amount_container" style="display: none;">
+                                            <label for="charged_string_amount" class="voucher-amount-split-field__label">Net</label>
+                                            <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input voucher-amount-split-field__input" id="charged_string_amount" readonly>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="label-input__container">
                                 <label for="voucher_date">Voucher Date</label>
@@ -572,9 +639,8 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                 </thead>
                 <tbody id="target_body">
                     <?php while ($row = $fetch_voucher_action_logs->fetch(PDO::FETCH_ASSOC)) :
-                        $amountRaw = amount_pdo_value_to_string($row['amount_log'] ?? $row['amount'] ?? '');
-                        $amountNormalized = normalize_amount_string($amountRaw);
-                        $amountShown = format_amount_display($amountRaw);
+                        $amountGross = amount_pdo_value_to_string($row['amount_log'] ?? $row['amount'] ?? '');
+                        $amountCharged = amount_pdo_value_to_string($row['charged_amount'] ?? '');
                         $actionDisplay = voucher_system_log_action_display(
                             (string) ($row['action'] ?? ''),
                             (string) ($row['action_by'] ?? ''),
@@ -602,7 +668,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                             </td>
                             <td data-label="processing_no"><?php echo htmlspecialchars((string) ($row['processing_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="payee"><?php echo htmlspecialchars((string) ($row['payee'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="amount" class="amount-cell" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>" data-amount-formatted="php" data-amount-skip="1"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($amountGross, $amountCharged); ?>
                             <td data-label="action_display">
                                 <?php if ($actionDisplay !== '') : ?>
                                     <span class="vstat-status-badge"><?php echo htmlspecialchars($actionDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -614,8 +680,8 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                             <td data-label="ada_check_no" class="hidden"><?php echo htmlspecialchars((string) ($row['ada_check_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="address" class="hidden"><?php echo htmlspecialchars((string) ($row['address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="particulars" class="hidden"><?php echo htmlspecialchars((string) ($row['particulars'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars($amountRaw, ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="charged_amount" class="hidden"></td>
+                            <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars($amountGross, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="charged_amount" class="hidden"><?php echo htmlspecialchars($amountCharged, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="tin_employee_no" class="hidden"><?php echo htmlspecialchars((string) ($row['tin_employee_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_date" class="hidden"><?php echo htmlspecialchars((string) ($row['voucher_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="voucher_type" class="hidden"><?php echo htmlspecialchars((string) ($row['voucher_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
@@ -960,12 +1026,12 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         var amountOriginal = typeof normalizeAmountInput === 'function'
             ? normalizeAmountInput(cellText(row, 'amount_original'))
             : cellText(row, 'amount_original');
-        var amountTd = row.querySelector('[data-label="amount"]');
-        var amountDisplay = amountTd ? String(amountTd.textContent || '').trim() : '';
         var charged_amount = typeof normalizeAmountInput === 'function'
             ? normalizeAmountInput(cellText(row, 'charged_amount'))
             : cellText(row, 'charged_amount');
-        var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
+        var amount = typeof resolveEffectiveAmount === 'function'
+            ? resolveEffectiveAmount(amountOriginal, charged_amount)
+            : (isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal);
         var voucher_date = cellText(row, 'voucher_date');
         var office_from = cellText(row, 'office_from');
         var office_to = cellText(row, 'office_to');
@@ -991,11 +1057,15 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         document.querySelector('.address').value = address;
         document.querySelector('.particulars').value = particulars;
         document.querySelector('.tin_employee_no').value = tin_employee_no;
-        document.querySelector('.amount').value = amount;
-        if (typeof setAmountDisplayValue === 'function') {
-            setAmountDisplayValue(document.querySelector('.string_amount'), amountDisplay || amount);
+        if (typeof populateAmountSplitView === 'function') {
+            populateAmountSplitView(amountOriginal, charged_amount);
         } else {
-            document.querySelector('.string_amount').value = amountDisplay || amount;
+            document.querySelector('.amount').value = amount;
+            if (typeof setAmountDisplayValue === 'function') {
+                setAmountDisplayValue(document.querySelector('.string_amount'), amount);
+            } else {
+                document.querySelector('.string_amount').value = amount;
+            }
         }
         document.querySelector('.voucher_date').value = voucher_date;
         document.querySelector('.office_from').value = office_from;
@@ -1034,24 +1104,6 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
             }
         }
 
-        var amountPrimaryBlock = document.querySelector('.amount_primary_block');
-        var chargedContainer = document.querySelector('.charged_amount_container');
-        var chargedStringInput = document.getElementById('charged_string_amount');
-        var hasCharged = isNonZeroAmount(charged_amount);
-
-        if (hasCharged) {
-            if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
-            if (chargedContainer) chargedContainer.style.display = 'flex';
-            if (chargedStringInput && typeof setAmountDisplayValue === 'function') {
-                setAmountDisplayValue(chargedStringInput, charged_amount);
-            } else if (chargedStringInput) {
-                chargedStringInput.value = charged_amount;
-            }
-        } else {
-            if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
-            if (chargedContainer) chargedContainer.style.display = 'none';
-            if (chargedStringInput) chargedStringInput.value = '';
-        }
     }
 
     document.querySelectorAll('.btn').forEach(function(button) {

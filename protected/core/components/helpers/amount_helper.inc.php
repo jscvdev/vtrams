@@ -113,11 +113,18 @@ function format_amount_display(mixed $raw): string
 }
 
 /** True when charged_amount should display as a separate net line. */
-function amount_show_charged_net(mixed $charged): bool
+function amount_show_charged_net(mixed $charged, mixed $gross = null): bool
 {
     $chargedStr = trim(amount_pdo_value_to_string($charged));
+    if ($chargedStr === '' || $chargedStr === '0' || $chargedStr === '0.00') {
+        return false;
+    }
 
-    return $chargedStr !== '' && $chargedStr !== '0' && $chargedStr !== '0.00';
+    if ($gross !== null && amounts_equal_string($gross, $chargedStr)) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -127,7 +134,7 @@ function voucher_amount_stack_parts(mixed $grossAmount, mixed $chargedAmount = n
 {
     $gross = amount_pdo_value_to_string($grossAmount);
     $net = amount_pdo_value_to_string($chargedAmount ?? '');
-    $showNet = amount_show_charged_net($net);
+    $showNet = amount_show_charged_net($net, $gross);
     $effective = $showNet ? $net : $gross;
 
     return [
@@ -143,22 +150,23 @@ function voucher_amount_stack_inner_html(mixed $grossAmount, mixed $chargedAmoun
 {
     $parts = voucher_amount_stack_parts($grossAmount, $chargedAmount);
     $grossEsc = htmlspecialchars($parts['gross'], ENT_QUOTES, 'UTF-8');
+
+    if (!$parts['show_net']) {
+        return '<span class="voucher-amount-row__value voucher-amount-single" data-amount-part="gross">' . $grossEsc . '</span>';
+    }
+
     $netEsc = htmlspecialchars($parts['net'], ENT_QUOTES, 'UTF-8');
 
     $html = '<div class="voucher-amount-stack">'
         . '<div class="voucher-amount-row voucher-amount-row--gross">'
         . '<span class="voucher-amount-row__label">Gross</span>'
         . '<span class="voucher-amount-row__value" data-amount-part="gross">' . $grossEsc . '</span>'
+        . '</div>'
+        . '<div class="voucher-amount-row voucher-amount-row--net">'
+        . '<span class="voucher-amount-row__label">Net</span>'
+        . '<span class="voucher-amount-row__value" data-amount-part="net">' . $netEsc . '</span>'
+        . '</div>'
         . '</div>';
-
-    if ($parts['show_net']) {
-        $html .= '<div class="voucher-amount-row voucher-amount-row--net">'
-            . '<span class="voucher-amount-row__label">Net</span>'
-            . '<span class="voucher-amount-row__value" data-amount-part="net">' . $netEsc . '</span>'
-            . '</div>';
-    }
-
-    $html .= '</div>';
 
     return $html;
 }

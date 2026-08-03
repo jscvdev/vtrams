@@ -814,8 +814,10 @@ if ($scriptName !== '') {
                     const voucherType = row.voucher_type || 'Unknown';
                     stats.voucherType[voucherType] = (stats.voucherType[voucherType] || 0) + 1;
 
-                    // Amount by voucher type (prefer charged_amount when set on voucher_tracking)
-                    const amountSource = isNonZeroAmount(row.charged_amount) ? row.charged_amount : (row.amount || '');
+                    // Amount by voucher type (gross unless net differs)
+                    const amountSource = typeof resolveEffectiveAmount === 'function'
+                        ? resolveEffectiveAmount(row.amount || '', row.charged_amount || '')
+                        : (isNonZeroAmount(row.charged_amount) ? row.charged_amount : (row.amount || ''));
                     const amount = parseFloat(normalizeAmountInput(amountSource)) || 0;
                     stats.amountByType[voucherType] = (stats.amountByType[voucherType] || 0) + amount;
 

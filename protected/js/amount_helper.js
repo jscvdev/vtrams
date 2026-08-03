@@ -38,6 +38,93 @@ function isNonZeroAmount(raw) {
     return normalized !== '' && !/^0+\.?0*$/.test(normalized);
 }
 
+function amountsEqualString(a, b) {
+    return normalizeAmountInput(a) === normalizeAmountInput(b);
+}
+
+/** True when net should display separately from gross (non-zero and different). */
+function shouldShowChargedNet(charged, gross) {
+    if (!isNonZeroAmount(charged)) {
+        return false;
+    }
+    if (gross !== undefined && gross !== null && String(gross).trim() !== '') {
+        return !amountsEqualString(charged, gross);
+    }
+    return true;
+}
+
+function resolveEffectiveAmount(gross, charged) {
+    var grossNorm = normalizeAmountInput(gross);
+    var chargedNorm = normalizeAmountInput(charged);
+    return shouldShowChargedNet(chargedNorm, grossNorm) ? chargedNorm : grossNorm;
+}
+
+function buildAmountStackHtml(gross, charged) {
+    var grossNorm = normalizeAmountInput(gross);
+    var chargedNorm = normalizeAmountInput(charged);
+    var showNet = shouldShowChargedNet(chargedNorm, grossNorm);
+    if (grossNorm === '' && !showNet) {
+        return '—';
+    }
+
+    if (!showNet) {
+        return '<span class="voucher-amount-row__value voucher-amount-single">' + formatAmountDisplay(grossNorm) + '</span>';
+    }
+
+    var html = '<div class="voucher-amount-stack">'
+        + '<div class="voucher-amount-row voucher-amount-row--gross">'
+        + '<span class="voucher-amount-row__label">Gross</span>'
+        + '<span class="voucher-amount-row__value" data-amount-part="gross">' + formatAmountDisplay(grossNorm) + '</span>'
+        + '</div>'
+        + '<div class="voucher-amount-row voucher-amount-row--net">'
+        + '<span class="voucher-amount-row__label">Net</span>'
+        + '<span class="voucher-amount-row__value" data-amount-part="net">' + formatAmountDisplay(chargedNorm) + '</span>'
+        + '</div>'
+        + '</div>';
+    return html;
+}
+
+function setAmountSplitViewMode(showSplit) {
+    var amountMainLabel = document.querySelector('.amount_main_label');
+    var amountMainDisplay = document.querySelector('.amount_main_display');
+    var splitPanel = document.getElementById('voucherAmountSplitPanel');
+    if (amountMainLabel) amountMainLabel.style.display = showSplit ? 'none' : '';
+    if (amountMainDisplay) amountMainDisplay.style.display = showSplit ? 'none' : '';
+    if (splitPanel) splitPanel.style.display = showSplit ? 'block' : 'none';
+}
+
+function populateAmountSplitView(gross, charged) {
+    var grossNorm = normalizeAmountInput(gross);
+    var chargedNorm = normalizeAmountInput(charged);
+    var showSplit = shouldShowChargedNet(chargedNorm, grossNorm);
+    var stringAmountInput = document.querySelector('.amount_main_display') || document.querySelector('.string_amount');
+    var originalStringInput = document.getElementById('original_string_amount');
+    var chargedStringInput = document.getElementById('charged_string_amount');
+    var amountHidden = document.querySelector('.amount');
+    var effective = showSplit ? chargedNorm : grossNorm;
+
+    setAmountSplitViewMode(showSplit);
+
+    if (amountHidden) {
+        amountHidden.value = effective;
+    }
+
+    if (showSplit) {
+        if (originalStringInput) setAmountDisplayValue(originalStringInput, grossNorm);
+        if (chargedStringInput) setAmountDisplayValue(chargedStringInput, chargedNorm);
+        if (stringAmountInput) stringAmountInput.value = '';
+    } else {
+        if (stringAmountInput) setAmountDisplayValue(stringAmountInput, grossNorm);
+        if (originalStringInput) originalStringInput.value = '';
+        if (chargedStringInput) chargedStringInput.value = '';
+    }
+
+    var originalContainer = document.querySelector('.original_charged_container');
+    var chargedContainer = document.querySelector('.charged_amount_container');
+    if (originalContainer) originalContainer.style.display = showSplit ? 'flex' : 'none';
+    if (chargedContainer) chargedContainer.style.display = showSplit ? 'flex' : 'none';
+}
+
 function syncAmountFields(sourceValue, outputElement) {
     if (!outputElement) return;
     var normalized = normalizeAmountInput(sourceValue);
@@ -79,7 +166,10 @@ function formatAmountStackCells() {
         var net = td.getAttribute('data-amount-net') || '';
         var grossEl = td.querySelector('[data-amount-part="gross"]');
         var netEl = td.querySelector('[data-amount-part="net"]');
-        if (grossEl && gross) {
+        var singleEl = td.querySelector('.voucher-amount-single');
+        if (singleEl && gross) {
+            singleEl.textContent = formatAmountDisplay(gross);
+        } else if (grossEl && gross) {
             grossEl.textContent = formatAmountDisplay(gross);
         }
         if (netEl && net) {

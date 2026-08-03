@@ -831,7 +831,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                                 </td>
                                 <td><?php echo htmlspecialchars((string) $entry['processing_no'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars((string) $entry['payee'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><?php echo htmlspecialchars(format_amount_display((string) $entry['amount']), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php echo voucher_amount_stack_cell_html($entry['amount_gross'] ?? '', $entry['amount_charged'] ?? ''); ?>
                                 <td><?php echo htmlspecialchars((string) ($entry['origin_office'] ?: $entry['office_from'] ?: '—'), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <?php if (!empty($entry['is_paid'])) : ?>
@@ -919,6 +919,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
 </div>
 <div class="overlay voucher-premium-overlay" id="statusReportOverlay" style="display:none;"></div>
 
+<script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/voucher_process_history_display.js"></script>
 <script>
     (function() {
@@ -1185,7 +1186,14 @@ $statusReportRowMetaLabel = $isDefaultPreview
             document.getElementById('sr_payee').textContent = entry.payee || '—';
             document.getElementById('sr_status_pill').innerHTML = renderStatusPill(entry);
             document.getElementById('sr_origin').textContent = entry.origin_office || entry.office_from || '—';
-            document.getElementById('sr_amount').textContent = entry.amount || '—';
+            const amountEl = document.getElementById('sr_amount');
+            if (amountEl) {
+                if (typeof buildAmountStackHtml === 'function') {
+                    amountEl.innerHTML = buildAmountStackHtml(entry.amount_gross || entry.amount || '', entry.amount_charged || '');
+                } else {
+                    amountEl.textContent = entry.amount || '—';
+                }
+            }
             document.getElementById('sr_route_type').textContent = entry.category_label || '—';
             document.getElementById('sr_latest').textContent = (entry.voucher_status || '—') + (entry.datetime_status ? (' · ' + entry.datetime_status) : '');
             const remarksCard = document.getElementById('sr_latest_remarks_card');
