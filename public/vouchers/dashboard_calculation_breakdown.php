@@ -360,7 +360,7 @@ if ($scriptName !== '') {
                     setRefreshStatus('Update failed · retrying…');
                     return;
                 }
-                if (data && Array.isArray(data.rows)) {
+                if (data && (data.section_timing || Array.isArray(data.rows) || data.ok)) {
                     updateCalculationBreakdown(data.section_timing || null);
                     setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
                     return;

@@ -34,15 +34,16 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     try {
         $params = [];
         $searchActive = $search !== '';
+        $selectColumns = voucher_tracking_dashboard_fetch_columns_sql();
 
         if ($calculationMode && $searchActive) {
             // Full-database search for calculation breakdown (ignores type/office/date filters).
-            $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+            $query = 'SELECT ' . $selectColumns . ' FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
             $query .= voucher_tracking_dashboard_search_sql('vt');
             voucher_tracking_dashboard_bind_search_params($params, $search);
             $query .= ' ORDER BY COALESCE(NULLIF(vt.datetime_status, \'\'), vt.voucher_date, vt.datetime_encoded) DESC';
         } else {
-            $query = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+            $query = 'SELECT ' . $selectColumns . ' FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
 
             if ($voucher_type !== null && $voucher_type !== '') {
                 $query .= ' AND vt.voucher_type = :voucher_type';
@@ -91,13 +92,21 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
             $pdo,
             $rows,
             voucher_tracking_dashboard_breakdown_sections(),
-            $breakdownLimit
+            $breakdownLimit,
+            $calculationMode
         );
-        header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode([
-            'rows' => $rows,
+
+        $payload = [
             'section_timing' => $sectionTiming,
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        if ($calculationMode) {
+            $payload['ok'] = true;
+        } else {
+            $payload['analytics'] = voucher_tracking_dashboard_build_analytics_stats($rows);
+        }
+
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         header('Content-Type: application/json; charset=UTF-8');
         http_response_code(500);
@@ -171,6 +180,55 @@ if ($scriptName !== '') {
         overflow: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
+        position: relative;
+    }
+
+    .analytics-dashboard-loader {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(245, 246, 248, 0.82);
+        backdrop-filter: blur(2px);
+        z-index: 5;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .analytics-dashboard-loader--hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .analytics-dashboard-loader__inner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid #eef2f7;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .analytics-dashboard-loader__spinner {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid rgba(148, 163, 184, 0.35);
+        border-top-color: #4A76FF;
+        animation: analyticsDashboardSpin 0.75s linear infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes analyticsDashboardSpin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     .analytics-dashboard-scale {
@@ -634,6 +692,12 @@ if ($scriptName !== '') {
         </div>
 
         <div class="analytics-dashboard-viewport" id="analyticsDashboardViewport">
+            <div class="analytics-dashboard-loader" id="analyticsDashboardLoader" role="status" aria-live="polite" aria-label="Loading dashboard data">
+                <div class="analytics-dashboard-loader__inner">
+                    <div class="analytics-dashboard-loader__spinner" aria-hidden="true"></div>
+                    <span>Loading dashboard data…</span>
+                </div>
+            </div>
             <div class="analytics-dashboard-scale" id="analyticsDashboardScale">
     <div class="analytics-tab-panel dashboard-tab-panel is-active" id="dashboardTabAnalytics">
         <div class="analytics-stats-grid" id="overallTable"></div>
@@ -717,9 +781,12 @@ if ($scriptName !== '') {
             const yearDateFilter = document.getElementById('yearDateFilter');
             const applyBtn = document.getElementById('applyFiltersBtn');
             const refreshStatusEl = document.getElementById('dashboardRefreshStatus');
+            const dashboardLoader = document.getElementById('analyticsDashboardLoader');
             const REFRESH_INTERVAL_MS = 15000;
+            const MIN_LOADER_MS = 350;
             let refreshTimer = null;
             let fetchInFlight = false;
+            let loaderShownAt = 0;
 
             // Chart contexts
             const ctxVoucherType = document.getElementById('voucherTypeChart').getContext('2d');
@@ -800,6 +867,27 @@ if ($scriptName !== '') {
                 });
             });
 
+            function showDashboardLoader() {
+                if (!dashboardLoader) {
+                    return;
+                }
+                loaderShownAt = Date.now();
+                dashboardLoader.classList.remove('analytics-dashboard-loader--hidden');
+                dashboardLoader.setAttribute('aria-hidden', 'false');
+            }
+
+            function hideDashboardLoader() {
+                if (!dashboardLoader) {
+                    return;
+                }
+                const elapsed = loaderShownAt > 0 ? (Date.now() - loaderShownAt) : MIN_LOADER_MS;
+                const wait = Math.max(0, MIN_LOADER_MS - elapsed);
+                setTimeout(() => {
+                    dashboardLoader.classList.add('analytics-dashboard-loader--hidden');
+                    dashboardLoader.setAttribute('aria-hidden', 'true');
+                }, wait);
+            }
+
             function processData(data) {
                 const stats = {
                     voucherType: {},
@@ -838,8 +926,14 @@ if ($scriptName !== '') {
                 return stats;
             }
 
-            function updateCharts(data) {
-                const stats = processData(data);
+            function updateCharts(stats) {
+                const normalizedStats = stats && typeof stats === 'object' ? stats : processData([]);
+                const voucherTypeMap = normalizedStats.voucherType || {};
+                const amountByTypeMap = normalizedStats.amountByType || {};
+                const monthlyMap = normalizedStats.monthly || {};
+                const totalEntries = normalizedStats.totalEntries || 0;
+                const totalAmount = normalizedStats.totalAmount || 0;
+                const voucherTypeCount = Object.keys(voucherTypeMap).length;
 
                 // Color palettes aligned with dashboard theme
                 const baseColors = [
@@ -863,8 +957,8 @@ if ($scriptName !== '') {
 
                 // ==== VOUCHER TYPE DOUGHNUT CHART ====
                 if (voucherTypeChart) voucherTypeChart.destroy();
-                const voucherTypeLabels = Object.keys(stats.voucherType);
-                const voucherTypeData = Object.values(stats.voucherType);
+                const voucherTypeLabels = Object.keys(voucherTypeMap);
+                const voucherTypeData = Object.values(voucherTypeMap);
                 voucherTypeChart = new Chart(ctxVoucherType, {
                     type: 'doughnut',
                     data: {
@@ -887,8 +981,8 @@ if ($scriptName !== '') {
 
                 // ==== AMOUNT BY VOUCHER TYPE BAR CHART ====
                 if (amountChart) amountChart.destroy();
-                const amountLabels = Object.keys(stats.amountByType);
-                const amountData = Object.values(stats.amountByType);
+                const amountLabels = Object.keys(amountByTypeMap);
+                const amountData = Object.values(amountByTypeMap);
                 amountChart = new Chart(ctxAmount, {
                     type: 'bar',
                     data: {
@@ -922,12 +1016,12 @@ if ($scriptName !== '') {
 
                 // ==== MONTHLY TRENDS LINE CHART ====
                 if (monthlyChart) monthlyChart.destroy();
-                const monthlyLabels = Object.keys(stats.monthly).sort((a, b) => {
+                const monthlyLabels = Object.keys(monthlyMap).sort((a, b) => {
                     const dateA = new Date(a);
                     const dateB = new Date(b);
                     return dateA - dateB;
                 });
-                const monthlyData = monthlyLabels.map(m => stats.monthly[m] || 0);
+                const monthlyData = monthlyLabels.map(m => monthlyMap[m] || 0);
                 monthlyChart = new Chart(ctxMonthly, {
                     type: 'line',
                     data: {
@@ -974,19 +1068,19 @@ if ($scriptName !== '') {
 
                 const statCards = [{
                         label: 'Total Vouchers',
-                        value: stats.totalEntries,
+                        value: totalEntries,
                         icon: 'ri-file-list-3-line',
                         tone: 'blue'
                     },
                     {
                         label: 'Total Amount',
-                        value: '₱' + formatPesoAmount(stats.totalAmount),
+                        value: '₱' + formatPesoAmount(totalAmount),
                         icon: 'ri-money-dollar-circle-line',
                         tone: 'green'
                     },
                     {
                         label: 'Voucher Types',
-                        value: Object.keys(stats.voucherType).length,
+                        value: voucherTypeCount,
                         icon: 'ri-stack-line',
                         tone: 'amber'
                     }
@@ -1163,15 +1257,27 @@ if ($scriptName !== '') {
             }
 
             function applyVoucherData(data) {
+                if (data === null) {
+                    updateCharts(null);
+                    updateSectionTiming(null);
+                    setRefreshStatus('Update failed · retrying…');
+                    return;
+                }
+                if (data && data.analytics) {
+                    updateCharts(data.analytics);
+                    updateSectionTiming(data.section_timing || null);
+                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
+                    return;
+                }
                 if (Array.isArray(data)) {
                     console.error('Voucher data fetch returned unexpected array payload');
-                    updateCharts([]);
+                    updateCharts(null);
                     updateSectionTiming(null);
                     setRefreshStatus('Update failed · retrying…');
                     return;
                 }
                 if (data && Array.isArray(data.rows)) {
-                    updateCharts(data.rows);
+                    updateCharts(processData(data.rows));
                     updateSectionTiming(data.section_timing || null);
                     setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
                     return;
@@ -1183,7 +1289,7 @@ if ($scriptName !== '') {
                     console.error('Invalid data format received:', data);
                     setRefreshStatus('Update failed · retrying…');
                 }
-                updateCharts([]);
+                updateCharts(null);
                 updateSectionTiming(null);
             }
 
@@ -1201,33 +1307,31 @@ if ($scriptName !== '') {
                 return FETCH_VOUCHER_DATA + (q ? joiner + q : '');
             }
 
-            function safeFetch(url, callback) {
-                fetch(url, {
-                        credentials: 'same-origin',
-                        cache: 'no-store'
-                    })
-                    .then(res => {
-                        if (!res.ok) {
-                            console.error('Voucher data fetch failed HTTP', res.status, url);
-                        }
-                        return parseFetchResponse(res);
-                    })
-                    .then(data => callback(data))
-                    .catch(err => {
-                        console.error('Error fetching voucher data:', err);
-                        callback(null);
-                    });
-            }
-
             function fetchFilteredData() {
                 if (fetchInFlight) {
                     return;
                 }
                 fetchInFlight = true;
-                safeFetch(buildFetchUrl(), data => {
-                    fetchInFlight = false;
-                    applyVoucherData(data);
-                });
+                showDashboardLoader();
+                fetch(buildFetchUrl(), {
+                        credentials: 'same-origin',
+                        cache: 'no-store'
+                    })
+                    .then(res => {
+                        if (!res.ok) {
+                            console.error('Voucher data fetch failed HTTP', res.status);
+                        }
+                        return parseFetchResponse(res);
+                    })
+                    .then(data => applyVoucherData(data))
+                    .catch(err => {
+                        console.error('Error fetching voucher data:', err);
+                        applyVoucherData(null);
+                    })
+                    .finally(() => {
+                        fetchInFlight = false;
+                        hideDashboardLoader();
+                    });
             }
 
             function startAutoRefresh() {
@@ -1267,5 +1371,4 @@ if ($scriptName !== '') {
 
     </body>
 
-    </html>
     </html>

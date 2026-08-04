@@ -3591,6 +3591,65 @@ function voucher_tracking_build_total_processing_breakdown(
     ];
 }
 
+/** Slim columns for dashboard fetch (avoids loading unused wide/text columns). */
+function voucher_tracking_dashboard_fetch_columns_sql(): string
+{
+    return 'vt.processing_no, vt.payee, vt.dv_no, vt.voucher_type, vt.amount, vt.charged_amount, vt.voucher_date,'
+        . ' vt.status, vt.datetime_status, vt.total_processing_time, vt.datetime_encoded';
+}
+
+/**
+ * Aggregate chart/stat metrics from dashboard voucher rows (server-side).
+ *
+ * @param list<array<string, mixed>> $rows
+ * @return array{
+ *   voucherType: array<string, int>,
+ *   amountByType: array<string, float>,
+ *   monthly: array<string, int>,
+ *   totalEntries: int,
+ *   totalAmount: float
+ * }
+ */
+function voucher_tracking_dashboard_build_analytics_stats(array $rows): array
+{
+    require_once __DIR__ . '/amount_helper.inc.php';
+
+    $stats = [
+        'voucherType' => [],
+        'amountByType' => [],
+        'monthly' => [],
+        'totalEntries' => 0,
+        'totalAmount' => 0.0,
+    ];
+
+    foreach ($rows as $row) {
+        $voucherType = trim((string) ($row['voucher_type'] ?? ''));
+        if ($voucherType === '') {
+            $voucherType = 'Unknown';
+        }
+        $stats['voucherType'][$voucherType] = ($stats['voucherType'][$voucherType] ?? 0) + 1;
+
+        $effective = amount_resolve_charged_or_amount($row['charged_amount'] ?? '', $row['amount'] ?? '');
+        $normalized = normalize_amount_string($effective);
+        $amount = $normalized !== '' ? (float) $normalized : 0.0;
+        $stats['amountByType'][$voucherType] = ($stats['amountByType'][$voucherType] ?? 0.0) + $amount;
+
+        $voucherDate = trim((string) ($row['voucher_date'] ?? ''));
+        if ($voucherDate !== '') {
+            $ts = strtotime($voucherDate);
+            if ($ts !== false) {
+                $monthYear = date('M Y', $ts);
+                $stats['monthly'][$monthYear] = ($stats['monthly'][$monthYear] ?? 0) + 1;
+            }
+        }
+
+        $stats['totalEntries']++;
+        $stats['totalAmount'] += $amount;
+    }
+
+    return $stats;
+}
+
 /** Static rules text for dashboard processing-time calculation breakdown. */
 function voucher_tracking_dashboard_timing_calculation_rules(): array
 {
@@ -3619,7 +3678,8 @@ function voucher_tracking_build_section_timing_report(
     object $pdo,
     array $voucherRows,
     ?array $breakdownSections = null,
-    ?int $recentVoucherLimit = null
+    ?int $recentVoucherLimit = null,
+    bool $includeCalculationBreakdown = false
 ): array {
     $processingNos = [];
     $rowByPn = [];
@@ -3650,7 +3710,7 @@ function voucher_tracking_build_section_timing_report(
             $openEndTs = $statusTs;
         }
 
-        $calculationTrace = [];
+        $calculationTrace = $includeCalculationBreakdown ? [] : null;
         $durations = voucher_tracking_section_durations_from_actions(
             $logsByPn[$pn] ?? [],
             $openEndTs,
@@ -3692,7 +3752,7 @@ function voucher_tracking_build_section_timing_report(
             }
         }
 
-        $byVoucher[] = [
+        $voucherEntry = [
             'processing_no' => $pn,
             'payee' => trim((string) ($trackingRow['payee'] ?? '')),
             'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
@@ -3704,8 +3764,10 @@ function voucher_tracking_build_section_timing_report(
                 $logsByPn[$pn] ?? [],
                 $pdo
             ),
-            'calculation' => [
-                'section_trace' => $calculationTrace,
+        ];
+        if ($includeCalculationBreakdown) {
+            $voucherEntry['calculation'] = [
+                'section_trace' => is_array($calculationTrace) ? $calculationTrace : ['events' => [], 'segments' => []],
                 'total' => $isPaid
                     ? voucher_tracking_build_total_processing_breakdown(
                         $pdo,
@@ -3714,8 +3776,9 @@ function voucher_tracking_build_section_timing_report(
                         $openEndTs
                     )
                     : null,
-            ],
-        ];
+            ];
+        }
+        $byVoucher[] = $voucherEntry;
     }
 
     foreach ($sections as $section) {
@@ -3761,25 +3824,28 @@ function voucher_tracking_build_section_timing_report(
     );
     $recentLimit = max(1, min($maxLimit, $recentLimit));
     $byVoucherRecent = array_slice($byVoucher, 0, $recentLimit);
-    $calculationBreakdown = array_map(
-        static fn(array $row): array => [
-            'processing_no' => $row['processing_no'] ?? '',
-            'payee' => $row['payee'] ?? '',
-            'dv_no' => $row['dv_no'] ?? '',
-            'total_processing_time' => $row['total_processing_time'] ?? '',
-            'sections_label' => $row['sections_label'] ?? [],
-            'calculation' => $row['calculation'] ?? null,
-        ],
-        $byVoucherRecent
-    );
 
-    return [
+    $result = [
         'sections' => $sections,
         'by_voucher_sections' => voucher_tracking_dashboard_breakdown_voucher_column_sections(),
         'summary' => $summary,
         'by_voucher' => $byVoucherRecent,
         'by_voucher_limit' => $recentLimit,
-        'calculation_breakdown' => [
+    ];
+
+    if ($includeCalculationBreakdown) {
+        $calculationBreakdown = array_map(
+            static fn(array $row): array => [
+                'processing_no' => $row['processing_no'] ?? '',
+                'payee' => $row['payee'] ?? '',
+                'dv_no' => $row['dv_no'] ?? '',
+                'total_processing_time' => $row['total_processing_time'] ?? '',
+                'sections_label' => $row['sections_label'] ?? [],
+                'calculation' => $row['calculation'] ?? null,
+            ],
+            $byVoucherRecent
+        );
+        $result['calculation_breakdown'] = [
             'rules' => voucher_tracking_dashboard_timing_calculation_rules(),
             'data_sources' => [
                 'voucher_action_logs',
@@ -3787,6 +3853,8 @@ function voucher_tracking_build_section_timing_report(
                 'user_group',
             ],
             'vouchers' => $calculationBreakdown,
-        ],
-    ];
+        ];
+    }
+
+    return $result;
 }
