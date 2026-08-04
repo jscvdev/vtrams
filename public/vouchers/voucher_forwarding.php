@@ -163,18 +163,27 @@ $showEditCol = (
 $ada_options = [];
 $ada_option_defaults = [];
 $ada_signatory_bundles_indexed = [];
+$ada_signatory_offices = [];
+$ada_can_select_signatory_office = false;
+$ada_default_office = '';
 if ($showCashierArchiveCol) {
     try {
         require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
         utilities_signatory_ensure_schema($pdo);
         $ada_signatory_bundles_indexed = utilities_fetch_ada_signatory_bundles_indexed($pdo);
-        $adaBundle = utilities_fetch_ada_signatory_bundle($pdo, utilities_signatory_default_office());
+        $ada_default_office = utilities_signatory_default_office();
+        $ada_can_select_signatory_office = utilities_signatory_can_select_office();
+        $ada_signatory_offices = utilities_signatory_fetch_offices($pdo);
+        $adaBundle = utilities_fetch_ada_signatory_bundle($pdo, $ada_default_office);
         $ada_options = $adaBundle['options'];
         $ada_option_defaults = $adaBundle['defaults'];
     } catch (Throwable $e) {
         $ada_options = [];
         $ada_option_defaults = [];
         $ada_signatory_bundles_indexed = [];
+        $ada_signatory_offices = [];
+        $ada_can_select_signatory_office = false;
+        $ada_default_office = '';
     }
 }
 ?>
@@ -1117,16 +1126,8 @@ if ($showCashierArchiveCol) {
                 color: #64748b;
             }
 
-            .bulk-pay-voucher-table input.form-custom-input {
-                width: 100%;
-                min-width: 140px;
-            }
-
             .bulk-pay-ada-field {
-                margin-bottom: 16px;
-                padding: 20px;
-                display: flex;
-                justify-content: center;
+                margin-bottom: 8px;
             }
 
             .bulk-pay-ada-field label {
@@ -1139,13 +1140,39 @@ if ($showCashierArchiveCol) {
 
             .bulk-pay-ada-field input.form-custom-input {
                 width: 100%;
-                max-width: 320px;
+                max-width: 100%;
+                text-align: center !important;
+                padding: 5px;
+            }
+
+            .bulk-pay-voucher-hint {
+                margin: 0 0 14px;
+                font-size: 13px;
+                color: #64748b;
             }
 
             .bulk-pay-voucher-list-wrap {
                 max-height: 360px;
                 overflow: auto;
-                margin: 0 0 4px;
+                margin: 0;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+            }
+
+            #overlayBulkPayVoucher {
+                z-index: 10000;
+            }
+
+            #bulkPayVoucherModal {
+                z-index: 10001;
+            }
+
+            #bulkPayVoucherModal .popupForm-body__container {
+                padding: 20px 24px 8px;
+            }
+
+            #bulkPayVoucherModal .popupForm-footer__container {
+                padding: 12px 24px 20px;
             }
         </style>
         <?php if ($isLiaisonOfficer) : ?>
@@ -2864,6 +2891,12 @@ if ($showCashierArchiveCol) {
                                                 $ada_signatory_bundles_indexed,
                                                 JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
                                             ) ?>;
+            var fwdAdaSignatoryOffices = <?= json_encode(
+                                                $ada_signatory_offices,
+                                                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
+                                            ) ?>;
+            var fwdCanSelectAdaSignatoryOffice = <?= json_encode($ada_can_select_signatory_office) ?>;
+            var fwdAdaDefaultOffice = <?= json_encode($ada_default_office, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
             var bulkPayUrl = '../../protected/handler/voucher_archiving_module/voucher_bulk_pay_handler.php';
             var bulkPayToken = <?= json_encode($bulkForwardToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
             window.bulkPayToken = bulkPayToken;
@@ -2965,6 +2998,10 @@ if ($showCashierArchiveCol) {
                 if (adaInput) {
                     adaInput.required = true;
                 }
+                var adaOfficeWrap = document.getElementById('fwd_ada_office_wrap');
+                if (adaOfficeWrap) {
+                    adaOfficeWrap.style.display = 'none';
+                }
                 var titleEl = document.getElementById('archive_process_form_title');
                 if (titleEl) {
                     titleEl.textContent = 'Process Voucher';
@@ -3044,6 +3081,12 @@ if ($showCashierArchiveCol) {
                 if (bulkOverlay) {
                     bulkOverlay.style.display = 'block';
                 }
+                var bulkAdaInput = document.getElementById('bulk_pay_ada_check_no');
+                if (bulkAdaInput) {
+                    window.setTimeout(function() {
+                        bulkAdaInput.focus();
+                    }, 0);
+                }
             }
 
             function collectBulkPayAdaCheckNos() {
@@ -3066,7 +3109,7 @@ if ($showCashierArchiveCol) {
             }
 
             function openBulkProcessModal() {
-                fwdApplyAdaSignatoryDefaults();
+                fwdApplyAdaSignatoryOfficeUi('');
                 var adaFieldWrap = document.getElementById('fwd_bulk_ada_check_wrap');
                 if (adaFieldWrap) {
                     adaFieldWrap.style.display = 'none';
@@ -3292,6 +3335,133 @@ if ($showCashierArchiveCol) {
                 });
             }
 
+            function fwdListAdaOfficeOptions() {
+                var offices = Array.isArray(fwdAdaSignatoryOffices) ? fwdAdaSignatoryOffices.slice() : [];
+                var bundles = fwdAdaSignatoryBundles || {};
+                Object.keys(bundles).forEach(function(key) {
+                    if (key === '__default__') {
+                        return;
+                    }
+                    var exists = offices.some(function(office) {
+                        return String(office).toLowerCase() === String(key).toLowerCase();
+                    });
+                    if (!exists) {
+                        offices.push(key);
+                    }
+                });
+                offices.sort(function(a, b) {
+                    return String(a).localeCompare(String(b), undefined, {
+                        sensitivity: 'base'
+                    });
+                });
+                return offices;
+            }
+
+            function fwdPopulateAdaOfficeSelect(selectedOffice) {
+                var select = document.getElementById('fwd_ada_office_select');
+                if (!select) {
+                    return;
+                }
+                var offices = fwdListAdaOfficeOptions();
+                var resolved = String(selectedOffice || fwdAdaDefaultOffice || offices[0] || '').trim();
+
+                select.innerHTML = '';
+                if (!offices.length) {
+                    var emptyOpt = document.createElement('option');
+                    emptyOpt.value = '';
+                    emptyOpt.disabled = true;
+                    emptyOpt.selected = true;
+                    emptyOpt.textContent = '(No offices configured)';
+                    select.appendChild(emptyOpt);
+                    return;
+                }
+
+                offices.forEach(function(officeName) {
+                    var option = document.createElement('option');
+                    option.value = officeName;
+                    option.textContent = officeName;
+                    if (resolved !== '' && String(officeName).toLowerCase() === resolved.toLowerCase()) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                if (!select.value && offices.length) {
+                    select.selectedIndex = 0;
+                }
+            }
+
+            function fwdResolveBulkPaySignatoryOffice() {
+                var resolvedOffices = [];
+                bulkPayProcessingNos.forEach(function(processingNo) {
+                    var row = fwdBulkPayRowForProcessingNo(processingNo);
+                    var officeFrom = fwdBulkPayCellText(row, 'office_from');
+                    var encodedFrom = fwdBulkPayCellText(row, 'encoded_from');
+                    var resolved = fwdResolveAdaOfficeKey(officeFrom, encodedFrom);
+                    if (resolved !== '') {
+                        var exists = resolvedOffices.some(function(office) {
+                            return office.toLowerCase() === resolved.toLowerCase();
+                        });
+                        if (!exists) {
+                            resolvedOffices.push(resolved);
+                        }
+                    }
+                });
+                return resolvedOffices.length === 1 ? resolvedOffices[0] : '';
+            }
+
+            function fwdShouldShowAdaOfficeSelect() {
+                return !!fwdCanSelectAdaSignatoryOffice || bulkPayMode;
+            }
+
+            function fwdApplyAdaSignatoryOfficeUi(preferredOffice) {
+                var wrap = document.getElementById('fwd_ada_office_wrap');
+                var select = document.getElementById('fwd_ada_office_select');
+                var showOfficeSelect = fwdShouldShowAdaOfficeSelect();
+                if (wrap) {
+                    wrap.style.display = showOfficeSelect ? '' : 'none';
+                }
+                if (!showOfficeSelect) {
+                    var fwdForm = document.getElementById('myForm_Forwarding');
+                    var officeFrom = '';
+                    var encodedFrom = '';
+                    if (fwdForm) {
+                        var officeFromEl = fwdForm.querySelector('[name="office_from"]');
+                        var encodedFromEl = fwdForm.querySelector('[name="encoded_from"]');
+                        officeFrom = officeFromEl ? String(officeFromEl.value || '').trim() : '';
+                        encodedFrom = encodedFromEl ? String(encodedFromEl.value || '').trim() : '';
+                    }
+                    fwdApplyAdaSignatoryForOffice(officeFrom, encodedFrom);
+                    return;
+                }
+
+                var office = String(preferredOffice || '').trim();
+                if (!office && select && select.value) {
+                    office = String(select.value || '').trim();
+                }
+                if (!office && bulkPayMode) {
+                    office = fwdResolveBulkPaySignatoryOffice();
+                }
+                if (!office) {
+                    var fwdFormSingle = document.getElementById('myForm_Forwarding');
+                    if (fwdFormSingle) {
+                        var officeFromElSingle = fwdFormSingle.querySelector('[name="office_from"]');
+                        var encodedFromElSingle = fwdFormSingle.querySelector('[name="encoded_from"]');
+                        office = fwdResolveAdaOfficeKey(
+                            officeFromElSingle ? officeFromElSingle.value : '',
+                            encodedFromElSingle ? encodedFromElSingle.value : ''
+                        );
+                    }
+                }
+                if (!office) {
+                    office = String(fwdAdaDefaultOffice || '').trim();
+                }
+
+                fwdPopulateAdaOfficeSelect(office);
+                var selectedOffice = select ? String(select.value || '').trim() : office;
+                fwdApplyAdaSignatoryForOffice(selectedOffice, '');
+            }
+
             function fwdApplyAdaSignatoryForOffice(officeFrom, encodedFrom) {
                 var form = document.getElementById('myForm_ArchiveProcessing');
                 if (!form) return;
@@ -3307,16 +3477,7 @@ if ($showCashierArchiveCol) {
             }
 
             function fwdApplyAdaSignatoryDefaults() {
-                var fwdForm = document.getElementById('myForm_Forwarding');
-                var officeFrom = '';
-                var encodedFrom = '';
-                if (fwdForm) {
-                    var officeFromEl = fwdForm.querySelector('[name="office_from"]');
-                    var encodedFromEl = fwdForm.querySelector('[name="encoded_from"]');
-                    officeFrom = officeFromEl ? String(officeFromEl.value || '').trim() : '';
-                    encodedFrom = encodedFromEl ? String(encodedFromEl.value || '').trim() : '';
-                }
-                fwdApplyAdaSignatoryForOffice(officeFrom, encodedFrom);
+                fwdApplyAdaSignatoryOfficeUi('');
             }
 
             function fwdIsInvalidAdaCheckNo(value) {
@@ -3606,6 +3767,13 @@ if ($showCashierArchiveCol) {
                     });
                 }
 
+                var adaOfficeSelect = document.getElementById('fwd_ada_office_select');
+                if (adaOfficeSelect) {
+                    adaOfficeSelect.addEventListener('change', function() {
+                        fwdApplyAdaSignatoryForOffice(String(adaOfficeSelect.value || '').trim(), '');
+                    });
+                }
+
                 fwdApplyAdaSignatoryDefaults();
 
                 var adaDate = document.getElementById('fwd_ada_date');
@@ -3682,8 +3850,16 @@ if ($showCashierArchiveCol) {
                     });
                 }
                 if (bulkPayOverlay) {
-                    bulkPayOverlay.addEventListener('click', function() {
-                        closeBulkPayVoucherModal(true);
+                    bulkPayOverlay.addEventListener('click', function(e) {
+                        if (e.target === bulkPayOverlay) {
+                            closeBulkPayVoucherModal(true);
+                        }
+                    });
+                }
+                var bulkPayModalEl = document.getElementById('bulkPayVoucherModal');
+                if (bulkPayModalEl) {
+                    bulkPayModalEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
                     });
                 }
                 document.querySelectorAll('#my-Table input.voucher-bulk-pay-select').forEach(function(cb) {
@@ -3694,32 +3870,30 @@ if ($showCashierArchiveCol) {
         })();
     </script>
     <!-- Bulk Pay Voucher: shared ADA/Check No. for all selected vouchers before Process Voucher -->
-    <div class="overlay voucher-premium-overlay" id="overlayBulkPayVoucher" style="display: none;" aria-hidden="true">
-        <div class="popup-form voucher-premium-modal fwd-process-document-modal" id="bulkPayVoucherModal" style="display: none;">
-            <div class="popupForm-box__container flex-row">
-                <div class="popupForm-header__container">
-                    <p id="bulk_pay_voucher_title">Pay Vouchers</p>
-                    <i class="ri-close-fill close-icon" id="close_bulk_pay_voucher_header" role="button" tabindex="0" aria-label="Close"></i>
-                </div>
+    <div class="overlay voucher-premium-overlay" id="overlayBulkPayVoucher" style="display: none;" aria-hidden="true"></div>
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="bulkPayVoucherModal" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p id="bulk_pay_voucher_title">Pay Vouchers</p>
+                <i class="ri-close-fill close-icon" id="close_bulk_pay_voucher_header" role="button" tabindex="0" aria-label="Close"></i>
+            </div>
+            <div class="f-container">
                 <div class="popupForm-body__container">
-                    <div class="label-input__container">
-                        <div class="bulk-pay-ada-field">
-                            <label for="bulk_pay_ada_check_no">ADA/Check No.</label>
-                            <input type="text" class="ada_check_no form-custom-input" id="bulk_pay_ada_check_no" name="bulk_pay_ada_check_no" placeholder="ADA/Check No." style="border:2px solid red;" autocomplete="off">
-                        </div>
-                        <p style="margin: 0 0 12px; font-size: 13px; color: #64748b;">The same ADA/Check No. will apply to all selected vouchers.</p>
-                        <div class="bulk-pay-voucher-list-wrap" id="bulkPayVoucherList"></div>
+                    <div class="bulk-pay-ada-field">
+                        <label for="bulk_pay_ada_check_no">ADA/Check No.</label>
+                        <input type="text" class="form-custom-input" id="bulk_pay_ada_check_no" name="bulk_pay_ada_check_no" placeholder="Enter ADA/Check No." autocomplete="off">
+                    </div>
+                    <p class="bulk-pay-voucher-hint">The same ADA/Check No. will apply to all selected vouchers.</p>
+                    <div class="bulk-pay-voucher-list-wrap" id="bulkPayVoucherList"></div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn transparent primary" id="bulkPayVoucherContinue" type="button">CONTINUE</button>
+                        <button class="btn secondary transparent" id="close_bulk_pay_voucher_footer" type="button">CANCEL</button>
                     </div>
                 </div>
             </div>
-            <div class="popupForm-footer__container">
-                <div class="footer-button__container">
-                    <button class="btn transparent primary" id="bulkPayVoucherContinue" type="button">CONTINUE</button>
-                    <button class="btn secondary transparent" id="close_bulk_pay_voucher_footer" type="button">CANCEL</button>
-                </div>
-            </div>
         </div>
-    </div>
     </div>
     <!-- Process Voucher: end-of-body so it is not inside #main / #popupForm; second layer uses #overlayArchiveProcess + higher z-index -->
     <div class="overlay overlay-archive-process" id="overlayArchiveProcess" style="display: none;" aria-hidden="true"></div>
@@ -3733,6 +3907,10 @@ if ($showCashierArchiveCol) {
                 <div class="box-body__container flex-row">
                     <div class="popupForm-body__container">
                         <div class="form-container">
+                            <div class="label-input__container" id="fwd_ada_office_wrap" style="display: none;">
+                                <label for="fwd_ada_office_select">Office</label>
+                                <select class="form-custom-input" id="fwd_ada_office_select"></select>
+                            </div>
                             <div class="label-input__container">
                                 <label for="">Certified Correct:</label>
                                 <select name="certified_correct" class="form-custom-input" required>
