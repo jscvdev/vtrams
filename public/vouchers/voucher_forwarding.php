@@ -138,6 +138,7 @@ $target = array_values(array_filter(array_map(
 $isLiaisonOfficer = in_array('Liaison Officer', $target, true);
 $bulkForwardToken = (string) ($_SESSION['token'] ?? '');
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
+$isCashierBulkPay = $showCashierArchiveCol;
 $hideForwardForCashiersUnit = in_array("Cashiers Unit", $target, true);
 $showForwardCol = !$hideForwardForCashiersUnit;
 $showProcessCol = in_array("Accounting Unit", $target) || in_array("Processor", $target);
@@ -1055,6 +1056,15 @@ if ($showCashierArchiveCol) {
                 box-shadow: 0 6px 16px rgba(37, 99, 235, 0.34);
             }
 
+            .voucher-bulk-forward-btn--pay {
+                background: linear-gradient(135deg, #dc2626, #b91c1c);
+                box-shadow: 0 4px 12px rgba(220, 38, 38, 0.28);
+            }
+
+            .voucher-bulk-forward-btn--pay:hover:not(:disabled) {
+                box-shadow: 0 6px 16px rgba(220, 38, 38, 0.34);
+            }
+
             .voucher-bulk-forward-btn:disabled {
                 opacity: 0.55;
                 cursor: not-allowed;
@@ -1083,6 +1093,60 @@ if ($showCashierArchiveCol) {
                 cursor: pointer;
                 accent-color: #2563eb;
             }
+
+            .bulk-pay-voucher-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+
+            .bulk-pay-voucher-table th,
+            .bulk-pay-voucher-table td {
+                padding: 10px 12px;
+                border-bottom: 1px solid #e5e7eb;
+                text-align: left;
+                vertical-align: middle;
+            }
+
+            .bulk-pay-voucher-table th {
+                background: #f8fafc;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .bulk-pay-voucher-table input.form-custom-input {
+                width: 100%;
+                min-width: 140px;
+            }
+
+            .bulk-pay-ada-field {
+                margin-bottom: 16px;
+                padding: 20px;
+                display: flex;
+                justify-content: center;
+            }
+
+            .bulk-pay-ada-field label {
+                display: block;
+                margin-bottom: 6px;
+                font-size: 13px;
+                font-weight: 600;
+                color: #334155;
+            }
+
+            .bulk-pay-ada-field input.form-custom-input {
+                width: 100%;
+                max-width: 320px;
+            }
+
+            .bulk-pay-voucher-list-wrap {
+                max-height: 360px;
+                overflow: auto;
+                margin: 0 0 4px;
+            }
         </style>
         <?php if ($isLiaisonOfficer) : ?>
             <div class="voucher-bulk-forward-bar is-visible" id="voucherBulkForwardBar">
@@ -1096,6 +1160,18 @@ if ($showCashierArchiveCol) {
                 </button>
                 <span class="voucher-bulk-forward-status" id="voucherBulkForwardStatus"></span>
             </div>
+        <?php elseif ($isCashierBulkPay) : ?>
+            <div class="voucher-bulk-forward-bar is-visible" id="voucherBulkPayBar">
+                <label>
+                    <input type="checkbox" id="voucherBulkPaySelectAll" aria-label="Select all payable vouchers on this page">
+                    Select all on page
+                </label>
+                <button type="button" class="voucher-bulk-forward-btn voucher-bulk-forward-btn--pay" id="voucherBulkPayBtn">
+                    <i class="ri-wallet-3-line" aria-hidden="true"></i>
+                    Pay Selected
+                </button>
+                <span class="voucher-bulk-forward-status" id="voucherBulkPayStatus"></span>
+            </div>
         <?php endif; ?>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
@@ -1103,6 +1179,8 @@ if ($showCashierArchiveCol) {
                     <tr>
                         <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
                             <th class="voucher-bulk-select-cell" aria-label="Select for bulk forward"></th>
+                        <?php elseif ($isCashierBulkPay) : ?>
+                            <th class="voucher-bulk-select-cell" aria-label="Select for bulk pay"></th>
                         <?php endif; ?>
                         <th class="voucher-row-menu-cell" aria-label="Menu"></th>
                         <th>Processing No.</th>
@@ -1126,11 +1204,23 @@ if ($showCashierArchiveCol) {
                             $forwarding_process_history,
                             $forwardingHistoryMap
                         );
+                        $rowTransmitStatus = trim((string) ($row['transmit'] ?? ''));
+                        $rowTransmitEmpty = $rowTransmitStatus === 'No' || $rowTransmitStatus === '';
+                        $rowTransmitYes = $rowTransmitStatus === 'Yes';
+                        $rowBulkPayable = $isCashierBulkPay
+                            && (in_array('Cashiers Unit', $target, true) || in_array('Cashier', $target, true))
+                            && ($rowTransmitEmpty || $rowTransmitYes);
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
                                 <td class="voucher-bulk-select-cell" data-label="">
                                     <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
+                                </td>
+                            <?php elseif ($isCashierBulkPay) : ?>
+                                <td class="voucher-bulk-select-cell" data-label="">
+                                    <?php if ($rowBulkPayable) : ?>
+                                        <input type="checkbox" class="voucher-bulk-pay-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?> for bulk pay">
+                                    <?php endif; ?>
                                 </td>
                             <?php endif; ?>
                             <td class="voucher-row-menu-cell" data-label="">
@@ -2774,6 +2864,362 @@ if ($showCashierArchiveCol) {
                                                 $ada_signatory_bundles_indexed,
                                                 JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE
                                             ) ?>;
+            var bulkPayUrl = '../../protected/handler/voucher_archiving_module/voucher_bulk_pay_handler.php';
+            var bulkPayToken = <?= json_encode($bulkForwardToken, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+            window.bulkPayToken = bulkPayToken;
+            var bulkPaySelectAllEl = document.getElementById('voucherBulkPaySelectAll');
+            var bulkPayBtn = document.getElementById('voucherBulkPayBtn');
+            var bulkPayStatusEl = document.getElementById('voucherBulkPayStatus');
+            var bulkPayInFlight = false;
+            var bulkPayMode = false;
+            var bulkPayProcessingNos = [];
+            var bulkPayAdaCheckNos = {};
+
+            function fwdBulkPayEscapeHtml(value) {
+                if (value == null) {
+                    return '';
+                }
+                var div = document.createElement('div');
+                div.textContent = String(value);
+                return div.innerHTML;
+            }
+
+            function fwdBulkPayRowForProcessingNo(processingNo) {
+                var normalized = String(processingNo || '').trim();
+                if (normalized === '') {
+                    return null;
+                }
+                var rows = document.querySelectorAll('#my-Table tbody tr');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var cell = row.querySelector('[data-label="processing_no"]');
+                    if (cell && String(cell.textContent || '').trim() === normalized) {
+                        return row;
+                    }
+                }
+                return null;
+            }
+
+            function fwdBulkPayCellText(row, label) {
+                if (!row) {
+                    return '';
+                }
+                var cell = row.querySelector('[data-label="' + label + '"]');
+                return cell ? String(cell.textContent || '').trim() : '';
+            }
+
+            function selectedBulkPayProcessingNos() {
+                return Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-pay-select:checked'))
+                    .map(function(cb) {
+                        return String(cb.value || '').trim();
+                    })
+                    .filter(function(pn) {
+                        return pn !== '';
+                    });
+            }
+
+            function syncBulkPaySelectAllState() {
+                if (!bulkPaySelectAllEl) {
+                    return;
+                }
+                var boxes = Array.from(document.querySelectorAll('#my-Table input.voucher-bulk-pay-select'));
+                if (boxes.length === 0) {
+                    bulkPaySelectAllEl.checked = false;
+                    bulkPaySelectAllEl.indeterminate = false;
+                    return;
+                }
+                var checkedCount = boxes.filter(function(cb) {
+                    return cb.checked;
+                }).length;
+                bulkPaySelectAllEl.checked = checkedCount === boxes.length;
+                bulkPaySelectAllEl.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+            }
+
+            function setBulkPayStatus(message) {
+                if (bulkPayStatusEl) {
+                    bulkPayStatusEl.textContent = message || '';
+                }
+            }
+
+            function resetBulkPayMode() {
+                bulkPayMode = false;
+                bulkPayProcessingNos = [];
+                bulkPayAdaCheckNos = {};
+                var bulkModal = document.getElementById('bulkPayVoucherModal');
+                var bulkOverlay = document.getElementById('overlayBulkPayVoucher');
+                if (bulkModal) {
+                    bulkModal.style.display = 'none';
+                }
+                if (bulkOverlay) {
+                    bulkOverlay.style.display = 'none';
+                }
+                var bulkAdaInput = document.getElementById('bulk_pay_ada_check_no');
+                if (bulkAdaInput) {
+                    bulkAdaInput.value = '';
+                }
+                var adaFieldWrap = document.getElementById('fwd_bulk_ada_check_wrap');
+                if (adaFieldWrap) {
+                    adaFieldWrap.style.display = '';
+                }
+                var adaInput = document.getElementById('fwd_ada_check_no');
+                if (adaInput) {
+                    adaInput.required = true;
+                }
+                var titleEl = document.getElementById('archive_process_form_title');
+                if (titleEl) {
+                    titleEl.textContent = 'Process Voucher';
+                }
+                var printBtn = document.getElementById('fwd_passData');
+                if (printBtn) {
+                    printBtn.style.display = '';
+                }
+            }
+
+            function buildBulkPayVoucherList(processingNos) {
+                var listEl = document.getElementById('bulkPayVoucherList');
+                if (!listEl) {
+                    return;
+                }
+                var sharedAda = '';
+                var sharedAdaSet = false;
+                processingNos.forEach(function(processingNo) {
+                    var row = fwdBulkPayRowForProcessingNo(processingNo);
+                    var adaCheckNo = fwdBulkPayCellText(row, 'ada_check_no');
+                    if (typeof fwdIsInvalidAdaCheckNo === 'function' && fwdIsInvalidAdaCheckNo(adaCheckNo)) {
+                        return;
+                    }
+                    if (!sharedAdaSet) {
+                        sharedAda = adaCheckNo;
+                        sharedAdaSet = true;
+                    } else if (sharedAda !== adaCheckNo) {
+                        sharedAda = '';
+                    }
+                });
+                var bulkAdaInput = document.getElementById('bulk_pay_ada_check_no');
+                if (bulkAdaInput) {
+                    bulkAdaInput.value = sharedAda;
+                }
+                var rowsHtml = processingNos.map(function(processingNo) {
+                    var row = fwdBulkPayRowForProcessingNo(processingNo);
+                    return '<tr>' +
+                        '<td>' + fwdBulkPayEscapeHtml(processingNo) + '</td>' +
+                        '<td>' + fwdBulkPayEscapeHtml(fwdBulkPayCellText(row, 'payee')) + '</td>' +
+                        '<td>' + fwdBulkPayEscapeHtml(fwdBulkPayCellText(row, 'dv_no')) + '</td>' +
+                        '</tr>';
+                }).join('');
+                listEl.innerHTML = '<table class="bulk-pay-voucher-table">' +
+                    '<thead><tr><th>Processing No.</th><th>Payee</th><th>DV No.</th></tr></thead>' +
+                    '<tbody>' + rowsHtml + '</tbody></table>';
+            }
+
+            function closeBulkPayVoucherModal(resetAll) {
+                var bulkModal = document.getElementById('bulkPayVoucherModal');
+                var bulkOverlay = document.getElementById('overlayBulkPayVoucher');
+                if (bulkModal) {
+                    bulkModal.style.display = 'none';
+                }
+                if (bulkOverlay) {
+                    bulkOverlay.style.display = 'none';
+                }
+                if (resetAll) {
+                    resetBulkPayMode();
+                }
+            }
+
+            function openBulkPayVoucherModal(processingNos) {
+                bulkPayMode = true;
+                bulkPayProcessingNos = processingNos.slice();
+                bulkPayAdaCheckNos = {};
+                var titleEl = document.getElementById('bulk_pay_voucher_title');
+                if (titleEl) {
+                    titleEl.textContent = 'Pay Vouchers (' + processingNos.length + ')';
+                }
+                buildBulkPayVoucherList(processingNos);
+                var bulkModal = document.getElementById('bulkPayVoucherModal');
+                var bulkOverlay = document.getElementById('overlayBulkPayVoucher');
+                if (bulkModal) {
+                    bulkModal.style.display = 'block';
+                    bulkModal.style.animation = 'slideIn 0.5s ease';
+                }
+                if (bulkOverlay) {
+                    bulkOverlay.style.display = 'block';
+                }
+            }
+
+            function collectBulkPayAdaCheckNos() {
+                var adaInput = document.getElementById('bulk_pay_ada_check_no');
+                var value = adaInput ? String(adaInput.value || '').trim() : '';
+                if (typeof fwdIsInvalidAdaCheckNo === 'function' && fwdIsInvalidAdaCheckNo(value)) {
+                    return {
+                        map: {},
+                        invalid: bulkPayProcessingNos.slice()
+                    };
+                }
+                var map = {};
+                bulkPayProcessingNos.forEach(function(processingNo) {
+                    map[processingNo] = value;
+                });
+                return {
+                    map: map,
+                    invalid: []
+                };
+            }
+
+            function openBulkProcessModal() {
+                fwdApplyAdaSignatoryDefaults();
+                var adaFieldWrap = document.getElementById('fwd_bulk_ada_check_wrap');
+                if (adaFieldWrap) {
+                    adaFieldWrap.style.display = 'none';
+                }
+                var adaInput = document.getElementById('fwd_ada_check_no');
+                if (adaInput) {
+                    adaInput.required = false;
+                }
+                var titleEl = document.getElementById('archive_process_form_title');
+                if (titleEl) {
+                    titleEl.textContent = 'Process Vouchers (' + bulkPayProcessingNos.length + ')';
+                }
+                var printBtn = document.getElementById('fwd_passData');
+                if (printBtn) {
+                    printBtn.style.display = 'none';
+                }
+                var adaDate = document.getElementById('fwd_ada_date');
+                if (adaDate) {
+                    adaDate.value = new Date().toISOString().split('T')[0];
+                }
+                var ovProc = document.getElementById('overlayArchiveProcess');
+                if (ovProc) {
+                    ovProc.style.display = 'block';
+                }
+                var adaForm = document.getElementById('archiveAdaForm');
+                if (adaForm) {
+                    adaForm.style.display = 'block';
+                    adaForm.style.animation = 'slideIn 0.5s ease';
+                }
+                var ov = document.getElementById('overlay');
+                if (ov) {
+                    ov.style.display = 'block';
+                }
+            }
+
+            function proceedBulkPayToProcess() {
+                var collected = collectBulkPayAdaCheckNos();
+                if (collected.invalid.length > 0) {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Enter a valid ADA/Check No. for all selected vouchers.', 'error', 5000);
+                    }
+                    var adaInput = document.getElementById('bulk_pay_ada_check_no');
+                    if (adaInput && typeof fwdNotifyInvalidAdaCheckNo === 'function') {
+                        fwdNotifyInvalidAdaCheckNo(adaInput);
+                    }
+                    return;
+                }
+                bulkPayAdaCheckNos = collected.map;
+                closeBulkPayVoucherModal(false);
+                openBulkProcessModal();
+            }
+
+            function runBulkPay() {
+                if (bulkPayInFlight) {
+                    return;
+                }
+                var processingNos = selectedBulkPayProcessingNos();
+                if (processingNos.length === 0) {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Select at least one voucher to pay.', 'warning', 2800);
+                    }
+                    return;
+                }
+                openBulkPayVoucherModal(processingNos);
+            }
+
+            function fwdBulkPaySendSaveData() {
+                var formData = fwdCollectArchiveProcessFormData();
+                var required = ['certified_correct', 'approved_by', 'agency_authorized_signatory', 'ada_check_date'];
+                var missing = required.filter(function(key) {
+                    return String(formData[key] || '').trim() === '';
+                });
+                if (missing.length > 0) {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Complete all signatory fields before paying selected vouchers.', 'warning', 3500);
+                    }
+                    return;
+                }
+
+                var confirmMsg = 'Pay ' + bulkPayProcessingNos.length + ' selected voucher(s)? They will be processed one at a time.';
+                var proceed = function() {
+                    bulkPayInFlight = true;
+                    if (bulkPayBtn) {
+                        bulkPayBtn.disabled = true;
+                    }
+                    setBulkPayStatus('Paying…');
+                    fetch(bulkPayUrl, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                token: window.bulkPayToken || bulkPayToken,
+                                processing_nos: bulkPayProcessingNos,
+                                ada_check_nos: bulkPayAdaCheckNos,
+                                certified_correct: formData.certified_correct,
+                                approved_by: formData.approved_by,
+                                agency_authorized_signatory: formData.agency_authorized_signatory,
+                                ada_check_date: formData.ada_check_date
+                            })
+                        })
+                        .then(function(r) {
+                            return r.json().then(function(payload) {
+                                return {
+                                    ok: r.ok,
+                                    payload: payload
+                                };
+                            });
+                        })
+                        .then(function(res) {
+                            bulkPayInFlight = false;
+                            if (bulkPayBtn) {
+                                bulkPayBtn.disabled = false;
+                            }
+                            var payload = res.payload || {};
+                            if (payload.ok === true) {
+                                var msg = payload.message || ('Paid ' + (payload.paid || 0) + ' voucher(s).');
+                                if (payload.token) {
+                                    window.bulkPayToken = payload.token;
+                                }
+                                setBulkPayStatus(msg);
+                                if (typeof showNotify === 'function') {
+                                    showNotify(msg, Number(payload.failed || 0) > 0 ? 'warning' : 'success', 4000);
+                                }
+                                closeArchiveAdaPopup();
+                                window.location.href = 'voucher_forwarding.php';
+                                return;
+                            }
+                            var err = payload.error || payload.message || 'Bulk pay failed.';
+                            setBulkPayStatus('');
+                            if (typeof showNotify === 'function') {
+                                showNotify(err, 'error', 5000);
+                            }
+                        })
+                        .catch(function() {
+                            bulkPayInFlight = false;
+                            if (bulkPayBtn) {
+                                bulkPayBtn.disabled = false;
+                            }
+                            setBulkPayStatus('');
+                            if (typeof showNotify === 'function') {
+                                showNotify('Bulk pay request failed.', 'error', 4000);
+                            }
+                        });
+                };
+
+                if (typeof functionAlert === 'function') {
+                    functionAlert(confirmMsg, 'bulk-pay-confirm', proceed);
+                } else if (window.confirm(confirmMsg)) {
+                    proceed();
+                }
+            }
 
             function fwdNormalizeAdaOfficeKey(value) {
                 return String(value || '').trim().replace(/\s+/g, ' ');
@@ -2943,6 +3389,10 @@ if ($showCashierArchiveCol) {
             }
 
             function fwdArchiveSendSaveData() {
+                if (bulkPayMode) {
+                    fwdBulkPaySendSaveData();
+                    return;
+                }
                 fwdSyncPayVoucherAdaCheckNo();
                 var adaInput = document.getElementById('fwd_ada_check_no') || document.getElementById('ada_check_no');
                 if (fwdIsInvalidAdaCheckNo(adaInput ? adaInput.value : '')) {
@@ -3098,6 +3548,7 @@ if ($showCashierArchiveCol) {
             }
 
             function closeArchiveAdaPopup() {
+                resetBulkPayMode();
                 var adaEl = document.getElementById('archiveAdaForm');
                 if (adaEl) {
                     adaEl.style.display = 'none';
@@ -3199,9 +3650,77 @@ if ($showCashierArchiveCol) {
                 var cf = document.getElementById('close_archive_ada_footer');
                 if (cx) cx.addEventListener('click', closeArchiveAdaPopup);
                 if (cf) cf.addEventListener('click', closeArchiveAdaPopup);
+
+                if (bulkPaySelectAllEl) {
+                    bulkPaySelectAllEl.addEventListener('change', function() {
+                        var checked = !!bulkPaySelectAllEl.checked;
+                        bulkPaySelectAllEl.indeterminate = false;
+                        document.querySelectorAll('#my-Table input.voucher-bulk-pay-select').forEach(function(cb) {
+                            cb.checked = checked;
+                        });
+                        syncBulkPaySelectAllState();
+                    });
+                }
+                if (bulkPayBtn) {
+                    bulkPayBtn.addEventListener('click', runBulkPay);
+                }
+                var bulkPayContinueBtn = document.getElementById('bulkPayVoucherContinue');
+                if (bulkPayContinueBtn) {
+                    bulkPayContinueBtn.addEventListener('click', proceedBulkPayToProcess);
+                }
+                var bulkPayCloseHeader = document.getElementById('close_bulk_pay_voucher_header');
+                var bulkPayCloseFooter = document.getElementById('close_bulk_pay_voucher_footer');
+                var bulkPayOverlay = document.getElementById('overlayBulkPayVoucher');
+                if (bulkPayCloseHeader) {
+                    bulkPayCloseHeader.addEventListener('click', function() {
+                        closeBulkPayVoucherModal(true);
+                    });
+                }
+                if (bulkPayCloseFooter) {
+                    bulkPayCloseFooter.addEventListener('click', function() {
+                        closeBulkPayVoucherModal(true);
+                    });
+                }
+                if (bulkPayOverlay) {
+                    bulkPayOverlay.addEventListener('click', function() {
+                        closeBulkPayVoucherModal(true);
+                    });
+                }
+                document.querySelectorAll('#my-Table input.voucher-bulk-pay-select').forEach(function(cb) {
+                    cb.addEventListener('change', syncBulkPaySelectAllState);
+                });
+                syncBulkPaySelectAllState();
             });
         })();
     </script>
+    <!-- Bulk Pay Voucher: shared ADA/Check No. for all selected vouchers before Process Voucher -->
+    <div class="overlay voucher-premium-overlay" id="overlayBulkPayVoucher" style="display: none;" aria-hidden="true">
+        <div class="popup-form voucher-premium-modal fwd-process-document-modal" id="bulkPayVoucherModal" style="display: none;">
+            <div class="popupForm-box__container flex-row">
+                <div class="popupForm-header__container">
+                    <p id="bulk_pay_voucher_title">Pay Vouchers</p>
+                    <i class="ri-close-fill close-icon" id="close_bulk_pay_voucher_header" role="button" tabindex="0" aria-label="Close"></i>
+                </div>
+                <div class="popupForm-body__container">
+                    <div class="label-input__container">
+                        <div class="bulk-pay-ada-field">
+                            <label for="bulk_pay_ada_check_no">ADA/Check No.</label>
+                            <input type="text" class="ada_check_no form-custom-input" id="bulk_pay_ada_check_no" name="bulk_pay_ada_check_no" placeholder="ADA/Check No." style="border:2px solid red;" autocomplete="off">
+                        </div>
+                        <p style="margin: 0 0 12px; font-size: 13px; color: #64748b;">The same ADA/Check No. will apply to all selected vouchers.</p>
+                        <div class="bulk-pay-voucher-list-wrap" id="bulkPayVoucherList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="popupForm-footer__container">
+                <div class="footer-button__container">
+                    <button class="btn transparent primary" id="bulkPayVoucherContinue" type="button">CONTINUE</button>
+                    <button class="btn secondary transparent" id="close_bulk_pay_voucher_footer" type="button">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
     <!-- Process Voucher: end-of-body so it is not inside #main / #popupForm; second layer uses #overlayArchiveProcess + higher z-index -->
     <div class="overlay overlay-archive-process" id="overlayArchiveProcess" style="display: none;" aria-hidden="true"></div>
     <div class="popup-form voucher-premium-modal popup-form--compact fwd-process-document-modal" id="archiveAdaForm" style="display: none;">
@@ -3293,7 +3812,7 @@ if ($showCashierArchiveCol) {
                     </div>
                     <div class="popupForm-body__container">
                         <div class="form-container">
-                            <div class="label-input__container">
+                            <div class="label-input__container" id="fwd_bulk_ada_check_wrap">
                                 <label for="">ADA/Check No:</label>
                                 <input type="text" class="form-custom-input" name="ada_check_no" id="fwd_ada_check_no" required style="border: 2px solid red;">
                             </div>

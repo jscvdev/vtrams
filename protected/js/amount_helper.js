@@ -67,20 +67,20 @@ function buildAmountStackHtml(gross, charged) {
         return '—';
     }
 
-    if (!showNet) {
-        return '<span class="voucher-amount-row__value voucher-amount-single">' + formatAmountDisplay(grossNorm) + '</span>';
-    }
-
     var html = '<div class="voucher-amount-stack">'
         + '<div class="voucher-amount-row voucher-amount-row--gross">'
         + '<span class="voucher-amount-row__label">Gross</span>'
         + '<span class="voucher-amount-row__value" data-amount-part="gross">' + formatAmountDisplay(grossNorm) + '</span>'
-        + '</div>'
-        + '<div class="voucher-amount-row voucher-amount-row--net">'
-        + '<span class="voucher-amount-row__label">Net</span>'
-        + '<span class="voucher-amount-row__value" data-amount-part="net">' + formatAmountDisplay(chargedNorm) + '</span>'
-        + '</div>'
         + '</div>';
+
+    if (showNet) {
+        html += '<div class="voucher-amount-row voucher-amount-row--net">'
+            + '<span class="voucher-amount-row__label">Net</span>'
+            + '<span class="voucher-amount-row__value" data-amount-part="net">' + formatAmountDisplay(chargedNorm) + '</span>'
+            + '</div>';
+    }
+
+    html += '</div>';
     return html;
 }
 
@@ -166,10 +166,7 @@ function formatAmountStackCells() {
         var net = td.getAttribute('data-amount-net') || '';
         var grossEl = td.querySelector('[data-amount-part="gross"]');
         var netEl = td.querySelector('[data-amount-part="net"]');
-        var singleEl = td.querySelector('.voucher-amount-single');
-        if (singleEl && gross) {
-            singleEl.textContent = formatAmountDisplay(gross);
-        } else if (grossEl && gross) {
+        if (grossEl && gross) {
             grossEl.textContent = formatAmountDisplay(gross);
         }
         if (netEl && net) {

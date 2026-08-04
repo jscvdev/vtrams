@@ -151,22 +151,21 @@ function voucher_amount_stack_inner_html(mixed $grossAmount, mixed $chargedAmoun
     $parts = voucher_amount_stack_parts($grossAmount, $chargedAmount);
     $grossEsc = htmlspecialchars($parts['gross'], ENT_QUOTES, 'UTF-8');
 
-    if (!$parts['show_net']) {
-        return '<span class="voucher-amount-row__value voucher-amount-single" data-amount-part="gross">' . $grossEsc . '</span>';
-    }
-
-    $netEsc = htmlspecialchars($parts['net'], ENT_QUOTES, 'UTF-8');
-
     $html = '<div class="voucher-amount-stack">'
         . '<div class="voucher-amount-row voucher-amount-row--gross">'
         . '<span class="voucher-amount-row__label">Gross</span>'
         . '<span class="voucher-amount-row__value" data-amount-part="gross">' . $grossEsc . '</span>'
-        . '</div>'
-        . '<div class="voucher-amount-row voucher-amount-row--net">'
-        . '<span class="voucher-amount-row__label">Net</span>'
-        . '<span class="voucher-amount-row__value" data-amount-part="net">' . $netEsc . '</span>'
-        . '</div>'
         . '</div>';
+
+    if ($parts['show_net']) {
+        $netEsc = htmlspecialchars($parts['net'], ENT_QUOTES, 'UTF-8');
+        $html .= '<div class="voucher-amount-row voucher-amount-row--net">'
+            . '<span class="voucher-amount-row__label">Net</span>'
+            . '<span class="voucher-amount-row__value" data-amount-part="net">' . $netEsc . '</span>'
+            . '</div>';
+    }
+
+    $html .= '</div>';
 
     return $html;
 }
