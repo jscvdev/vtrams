@@ -1241,7 +1241,7 @@ $totalRows = $displayTotal;
         var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
         var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
 
-        var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
+        var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
         var convertedBack = normalizeAmountInput(String(amount));
 
         document.querySelector('.processing_no').value = processing_no;
@@ -1273,7 +1273,7 @@ $totalRows = $displayTotal;
         var stringAmountInput = document.querySelector('.string_amount');
         var originalStringInput = document.getElementById('original_string_amount');
         var chargedStringInput = document.getElementById('charged_string_amount');
-        var hasCharged = isNonZeroAmount(charged_amount);
+        var hasCharged = hasDistinctNetAmount(amountOriginal, charged_amount);
 
         if (originalContainer) originalContainer.style.display = 'none';
         if (chargedContainer) chargedContainer.style.display = 'none';

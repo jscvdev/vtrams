@@ -45,24 +45,28 @@ function voucher_pending_to_incoming(
     ?string $coa_category_override = null,
     ?string $coa_subsection_override = null
 ) {
-    $amount = voucher_prepare_stored_amount($pdo, $amount);
-    // Fetch original amount and COA data (if any) from voucher_receiving
+    // Preserve stored gross/charged from receiving; POST amount may be the effective net value.
+    $grossAmount = $amount;
     $charged_amount = null;
     $supporting_documents = null;
     $coa_options = null;
     $coa_category = null;
     $coa_subsection = null;
-    $selectQuery = "SELECT charged_amount, supporting_documents, coa_options, coa_category, coa_subsection FROM voucher_receiving WHERE processing_no = :processing_no";
+    $selectQuery = "SELECT amount, charged_amount, supporting_documents, coa_options, coa_category, coa_subsection FROM voucher_receiving WHERE processing_no = :processing_no";
     $selectStmt = $pdo->prepare($selectQuery);
     $selectStmt->bindParam(":processing_no", $processing_no);
     $selectStmt->execute();
     if ($row = $selectStmt->fetch(PDO::FETCH_ASSOC)) {
-        $charged_amount = $row['charged_amount'] ?? null;
+        $resolvedAmounts = voucher_resolve_stored_amounts($row, $grossAmount);
+        $grossAmount = $resolvedAmounts['gross'];
+        $charged_amount = $resolvedAmounts['charged'];
         $supporting_documents = $row['supporting_documents'] ?? null;
         $coa_options = $row['coa_options'] ?? null;
         $coa_category = $row['coa_category'] ?? null;
         $coa_subsection = $row['coa_subsection'] ?? null;
     }
+
+    $amount = voucher_prepare_stored_amount($pdo, $grossAmount);
 
     if ($coa_options_override !== null && trim($coa_options_override) !== '') {
         $coa_options = $coa_options_override;
@@ -220,24 +224,28 @@ function voucher_pending_to_sent(
     ?string $coa_category_override = null,
     ?string $coa_subsection_override = null
 ) {
-    $amount = voucher_prepare_stored_amount($pdo, $amount);
-    // Fetch original amount and COA data (if any) from voucher_receiving
+    // Preserve stored gross/charged from receiving; POST amount may be the effective net value.
+    $grossAmount = $amount;
     $charged_amount = null;
     $supporting_documents = null;
     $coa_options = null;
     $coa_category = null;
     $coa_subsection = null;
-    $selectQuery = "SELECT charged_amount, supporting_documents, coa_options, coa_category, coa_subsection FROM voucher_receiving WHERE processing_no = :processing_no";
+    $selectQuery = "SELECT amount, charged_amount, supporting_documents, coa_options, coa_category, coa_subsection FROM voucher_receiving WHERE processing_no = :processing_no";
     $selectStmt = $pdo->prepare($selectQuery);
     $selectStmt->bindParam(":processing_no", $processing_no);
     $selectStmt->execute();
     if ($row = $selectStmt->fetch(PDO::FETCH_ASSOC)) {
-        $charged_amount = $row['charged_amount'] ?? null;
+        $resolvedAmounts = voucher_resolve_stored_amounts($row, $grossAmount);
+        $grossAmount = $resolvedAmounts['gross'];
+        $charged_amount = $resolvedAmounts['charged'];
         $supporting_documents = $row['supporting_documents'] ?? null;
         $coa_options = $row['coa_options'] ?? null;
         $coa_category = $row['coa_category'] ?? null;
         $coa_subsection = $row['coa_subsection'] ?? null;
     }
+
+    $amount = voucher_prepare_stored_amount($pdo, $grossAmount);
 
     if ($coa_options_override !== null && trim($coa_options_override) !== '') {
         $coa_options = $coa_options_override;

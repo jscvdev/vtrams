@@ -58,34 +58,48 @@ function voucher_insert_into_receving(
     string $coa_category = null,
     string $coa_subsection = null
 ) {
-    $amount = voucher_prepare_stored_amount($pdo, $amount);
+    $grossAmount = $amount;
+    $charged_amount = null;
     $transmit = 'No';
 
-    // Preserve existing process_history so receiving doesn't "reset" history to the latest action only.
-    // Prefer voucher_incoming (same stage), fallback to voucher_tracking (global).
+    // Preserve gross/charged from incoming; POST amount may be the effective net value.
     $process_history = null;
     try {
-        $histStmt = $pdo->prepare("SELECT process_history FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1");
-        $histStmt->bindParam(":processing_no", $processing_no);
-        $histStmt->execute();
-        $row = $histStmt->fetch(PDO::FETCH_ASSOC);
-        $histValue = trim((string)($row['process_history'] ?? ''));
-        if ($histValue !== '') {
-            $process_history = $histValue;
-        } else {
-            $histStmt2 = $pdo->prepare("SELECT process_history FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1");
-            $histStmt2->bindParam(":processing_no", $processing_no);
-            $histStmt2->execute();
-            $row2 = $histStmt2->fetch(PDO::FETCH_ASSOC);
-            $histValue2 = trim((string)($row2['process_history'] ?? ''));
-            if ($histValue2 !== '') {
-                $process_history = $histValue2;
+        $amountStmt = $pdo->prepare(
+            'SELECT amount, charged_amount, process_history, supporting_documents FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1'
+        );
+        $amountStmt->bindParam(':processing_no', $processing_no);
+        $amountStmt->execute();
+        if ($row = $amountStmt->fetch(PDO::FETCH_ASSOC)) {
+            $resolvedAmounts = voucher_resolve_stored_amounts($row, $grossAmount);
+            $grossAmount = $resolvedAmounts['gross'];
+            $charged_amount = $resolvedAmounts['charged'];
+            $supporting_documents = $row['supporting_documents'] ?? null;
+            $histValue = trim((string) ($row['process_history'] ?? ''));
+            if ($histValue !== '') {
+                $process_history = $histValue;
             }
         }
     } catch (PDOException $e) {
-        // Best-effort: if process_history cannot be read, proceed without it.
-        $process_history = null;
+        // Best-effort: keep caller-provided supporting_documents when lookup fails.
     }
+
+    if ($process_history === null) {
+        try {
+            $histStmt2 = $pdo->prepare('SELECT process_history FROM voucher_tracking WHERE processing_no = :processing_no LIMIT 1');
+            $histStmt2->bindParam(':processing_no', $processing_no);
+            $histStmt2->execute();
+            $row2 = $histStmt2->fetch(PDO::FETCH_ASSOC);
+            $histValue2 = trim((string) ($row2['process_history'] ?? ''));
+            if ($histValue2 !== '') {
+                $process_history = $histValue2;
+            }
+        } catch (PDOException $e) {
+            $process_history = null;
+        }
+    }
+
+    $amount = voucher_prepare_stored_amount($pdo, $grossAmount);
 
     $query = "INSERT INTO voucher_receiving (
                     processing_no,
@@ -97,6 +111,7 @@ function voucher_insert_into_receving(
                     particulars,
                     tin_employee_no,
                     amount,
+                    charged_amount,
                     voucher_type,
                     voucher_date,
                     datetime_forwarded,
@@ -128,6 +143,7 @@ function voucher_insert_into_receving(
                     :particulars,
                     :tin_employee_no,
                     :amount,
+                    :charged_amount,
                     :voucher_type,
                     :voucher_date,
                     :datetime_forwarded,
@@ -161,6 +177,7 @@ function voucher_insert_into_receving(
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
     $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
+    $statement->bindValue(':charged_amount', $charged_amount, $charged_amount === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);

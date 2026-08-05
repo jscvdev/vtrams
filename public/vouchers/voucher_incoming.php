@@ -1876,7 +1876,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
             var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
 
             // Use charged amount for processing if present; otherwise original.
-            var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
+            var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
 
             const convertedBack = normalizeAmountInput(String(amount));
 
@@ -1978,7 +1978,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
             const originalStringInput = document.getElementById('original_string_amount');
             const chargedStringInput = document.getElementById('charged_string_amount');
 
-            const hasCharged = isNonZeroAmount(charged_amount);
+            const hasCharged = hasDistinctNetAmount(amountOriginal, charged_amount);
 
             if (hasCharged) {
                 // Show charged amount only; primary Amount stays in DOM (hidden) for submit

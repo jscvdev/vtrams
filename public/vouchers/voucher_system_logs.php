@@ -1031,7 +1031,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
             : cellText(row, 'charged_amount');
         var amount = typeof resolveEffectiveAmount === 'function'
             ? resolveEffectiveAmount(amountOriginal, charged_amount)
-            : (isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal);
+            : (hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal);
         var voucher_date = cellText(row, 'voucher_date');
         var office_from = cellText(row, 'office_from');
         var office_to = cellText(row, 'office_to');

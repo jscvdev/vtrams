@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_special_access_helper.inc.php';

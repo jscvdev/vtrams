@@ -53,6 +53,11 @@ function shouldShowChargedNet(charged, gross) {
     return true;
 }
 
+/** Alias used by voucher portal pages (gross, net argument order). */
+function hasDistinctNetAmount(gross, net) {
+    return shouldShowChargedNet(net, gross);
+}
+
 function resolveEffectiveAmount(gross, charged) {
     var grossNorm = normalizeAmountInput(gross);
     var chargedNorm = normalizeAmountInput(charged);

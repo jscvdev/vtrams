@@ -2420,8 +2420,8 @@ if ($showCashierArchiveCol) {
             var coa_subsection_cell = row.querySelector('[data-label="coa_subsection"]');
             var coa_subsection = coa_subsection_cell ? coa_subsection_cell.textContent : '';
 
-            // Use charged amount for processing if present; otherwise original.
-            var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
+            // Use net only when it differs from gross; otherwise keep gross.
+            var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
 
             const convertedBack = normalizeAmountInput(String(amount));
 
@@ -2499,7 +2499,7 @@ if ($showCashierArchiveCol) {
             if (originalStringInput) originalStringInput.disabled = true;
             if (chargedStringInput) chargedStringInput.disabled = true;
 
-            const hasCharged = isNonZeroAmount(charged_amount);
+            const hasCharged = hasDistinctNetAmount(amountOriginal, charged_amount);
             setAmountSplitViewMode(hasCharged);
 
             if (hasCharged) {
@@ -2754,7 +2754,7 @@ if ($showCashierArchiveCol) {
                         chargedStringInput.disabled = false;
                         setAmountDisplayValue(
                             chargedStringInput,
-                            isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal
+                            hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal
                         );
                     }
 
@@ -2768,7 +2768,7 @@ if ($showCashierArchiveCol) {
                     const intAmountInput = document.getElementById('int_amount');
                     if (intAmountInput) {
                         intAmountInput.value = normalizeAmountInput(
-                            isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal
+                            hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal
                         );
                     }
 
@@ -4344,3 +4344,7 @@ if ($showCashierArchiveCol) {
 </body>
 
 </html>
+</html>
+
+
+

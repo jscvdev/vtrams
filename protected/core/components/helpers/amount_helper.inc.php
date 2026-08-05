@@ -89,14 +89,15 @@ function amount_is_non_zero(mixed $raw): bool
     return !preg_match('/^0+\.?0*$/', $normalized);
 }
 
-/** Prefer charged_amount when set and non-zero; otherwise use amount. */
+/** Prefer charged_amount when set, non-zero, and different from gross; otherwise use amount. */
 function amount_resolve_charged_or_amount(mixed $charged, mixed $amount): string
 {
-    if (amount_is_non_zero($charged)) {
+    $gross = ensure_amount_two_decimals(amount_pdo_value_to_string($amount));
+    if (amount_is_non_zero($charged) && !amounts_equal_string($charged, $amount)) {
         return ensure_amount_two_decimals(amount_pdo_value_to_string($charged));
     }
 
-    return ensure_amount_two_decimals(amount_pdo_value_to_string($amount));
+    return $gross;
 }
 
 function format_amount_display(mixed $raw): string
@@ -125,6 +126,34 @@ function amount_show_charged_net(mixed $charged, mixed $gross = null): bool
     }
 
     return true;
+}
+
+/**
+ * Resolve gross/charged from a stored row; fallback gross is used only when row amount is empty.
+ *
+ * @return array{gross: string, charged: ?string}
+ */
+function voucher_resolve_stored_amounts(array $row, string $fallbackGross = ''): array
+{
+    $gross = trim($fallbackGross);
+    $storedGross = trim(amount_pdo_value_to_string($row['amount'] ?? ''));
+    if ($storedGross !== '') {
+        $gross = $storedGross;
+    }
+
+    $grossNorm = ensure_amount_two_decimals($gross);
+    $charged = null;
+    if (amount_is_non_zero($row['charged_amount'] ?? null)) {
+        $chargedRaw = amount_pdo_value_to_string($row['charged_amount']);
+        if (amount_show_charged_net($chargedRaw, $grossNorm)) {
+            $charged = ensure_amount_two_decimals($chargedRaw);
+        }
+    }
+
+    return [
+        'gross' => $grossNorm,
+        'charged' => $charged,
+    ];
 }
 
 /**

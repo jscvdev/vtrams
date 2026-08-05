@@ -32,19 +32,21 @@ function incoming_voucher_delete_from_sent(object $pdo, string $processing_no) {
 
 function voucher_incoming_sent_to_receiving(object $pdo, string $ors_no, string $ada_check_no, string $processing_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $datetime_action, string $office_from, string $office_to, string $sender_udc, string $receiver_udc, 
 string $encoded_by, string $encoded_from, string $datetime_encoded, string $process_status, string $combined_remarks) {
-    $amount = voucher_prepare_stored_amount($pdo, $amount);
-    $transmit = 'No';
-
-    // Carry supporting_documents, charged_amount, and process_history forward from voucher_incoming
+    $grossAmount = $amount;
     $charged_amount = null;
     $supporting_documents = null;
     $process_history = null;
-    $selectQuery = "SELECT charged_amount, supporting_documents, process_history FROM voucher_incoming WHERE processing_no = :processing_no";
+    $transmit = 'No';
+
+    // Preserve gross/charged from incoming; POST amount may be the effective net value.
+    $selectQuery = 'SELECT amount, charged_amount, supporting_documents, process_history FROM voucher_incoming WHERE processing_no = :processing_no';
     $selectStmt = $pdo->prepare($selectQuery);
-    $selectStmt->bindParam(":processing_no", $processing_no);
+    $selectStmt->bindParam(':processing_no', $processing_no);
     $selectStmt->execute();
     if ($row = $selectStmt->fetch(PDO::FETCH_ASSOC)) {
-        $charged_amount = $row['charged_amount'] ?? null;
+        $resolvedAmounts = voucher_resolve_stored_amounts($row, $grossAmount);
+        $grossAmount = $resolvedAmounts['gross'];
+        $charged_amount = $resolvedAmounts['charged'];
         $supporting_documents = $row['supporting_documents'] ?? null;
         $histValue = trim((string) ($row['process_history'] ?? ''));
         if ($histValue !== '') {
@@ -66,6 +68,8 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
         }
     }
 
+    $amount = voucher_prepare_stored_amount($pdo, $grossAmount);
+
     $query = "INSERT INTO voucher_receiving (processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, voucher_date, datetime_forwarded, office_from, office_to, sender_udc, receiver_udc, encoded_by, encoded_from, datetime_encoded, forwarded_by, transmit, process_status, remarks, sender_remarks, supporting_documents, process_history) 
                         VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :voucher_date, :datetime_forwarded, :office_from, :office_to, :sender_udc, :receiver_udc, :encoded_by, :encoded_from, :datetime_encoded, :forwarded_by, :transmit, :process_status, :remarks, :sender_remarks, :supporting_documents, :process_history)";
 
@@ -80,7 +84,7 @@ string $encoded_by, string $encoded_from, string $datetime_encoded, string $proc
     $statement->bindParam(":particulars",$particulars);
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
     $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
-    $statement->bindParam(":charged_amount",$charged_amount);
+    $statement->bindValue(':charged_amount', $charged_amount, $charged_amount === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
     $statement->bindParam(":voucher_type",$voucher_type);
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":datetime_forwarded",$datetime_action);

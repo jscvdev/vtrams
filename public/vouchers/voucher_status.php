@@ -989,7 +989,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         var charged_amount = typeof normalizeAmountInput === 'function'
             ? normalizeAmountInput(cellText(row, 'charged_amount'))
             : cellText(row, 'charged_amount');
-        var amount = isNonZeroAmount(charged_amount) ? charged_amount : amountOriginal;
+        var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
         var voucher_date = cellText(row, 'voucher_date');
         var office_from = cellText(row, 'office_from');
         var office_to = cellText(row, 'office_to');
@@ -1061,7 +1061,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         var amountPrimaryBlock = document.querySelector('.amount_primary_block');
         var chargedContainer = document.querySelector('.charged_amount_container');
         var chargedStringInput = document.getElementById('charged_string_amount');
-        var hasCharged = isNonZeroAmount(charged_amount);
+        var hasCharged = hasDistinctNetAmount(amountOriginal, charged_amount);
 
         if (hasCharged) {
             if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
