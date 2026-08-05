@@ -92,10 +92,10 @@ try {
             $currTime
         ) {
             $stmt = $pdo->prepare('INSERT INTO voucher_archives (
-                processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, voucher_type, certified_correct, approved_by, agency_authorized_signatory, voucher_date, ada_check_date,
+                processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, certified_correct, approved_by, agency_authorized_signatory, voucher_date, ada_check_date,
                 office_to, office_from, encoded_by, datetime_encoded, remarks, datetime_action, action, action_by, process_history
             ) VALUES (
-                :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :certified_correct, :approved_by, :agency_authorized_signatory, :voucher_date, :ada_check_date,
+                :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :certified_correct, :approved_by, :agency_authorized_signatory, :voucher_date, :ada_check_date,
                 :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history
             )');
             $delstmt = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
@@ -129,6 +129,12 @@ try {
                 $ada_check_date = trim((string) ($row['ada_check_date'] ?? ''));
                 $office_from = trim((string) ($row['office_from'] ?? ''));
 
+                $fallbackAmount = (string) ($row['final_amount'] ?? ($row['amount'] ?? ''));
+                $amounts = voucher_archive_amounts_for_insert($pdo, $processingNo, $fallbackAmount);
+                $grossAmount = $amounts['gross'];
+                $chargedAmount = $amounts['charged'];
+                $logAmount = amount_resolve_charged_or_amount($chargedAmount ?? '', $grossAmount);
+
                 $stmt->execute([
                     ':processing_no' => $processingNo,
                     ':ors_no' => $row['ors_no'] ?? null,
@@ -138,7 +144,8 @@ try {
                     ':address' => $row['address'] ?? null,
                     ':particulars' => $row['particulars'] ?? null,
                     ':tin_employee_no' => $row['tin_employee_no'] ?? null,
-                    ':amount' => $row['final_amount'] ?? null,
+                    ':amount' => $grossAmount,
+                    ':charged_amount' => $chargedAmount,
                     ':voucher_type' => $row['voucher_type'] ?? null,
                     ':certified_correct' => $row['certified_correct'] ?? null,
                     ':approved_by' => $row['approved_by'] ?? null,
@@ -187,7 +194,7 @@ try {
                     (string) ($row['address'] ?? ''),
                     (string) ($row['particulars'] ?? ''),
                     (string) ($row['tin_employee_no'] ?? ''),
-                    normalize_amount_string((string) ($row['amount'] ?? '')),
+                    normalize_amount_string($logAmount),
                     (string) ($row['voucher_type'] ?? ''),
                     (string) ($row['voucher_date'] ?? ''),
                     $action,

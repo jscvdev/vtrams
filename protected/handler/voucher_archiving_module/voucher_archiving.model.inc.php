@@ -3,6 +3,36 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
+
+/**
+ * Resolve gross/net from voucher_receiving before archive; POST amount may be effective net only.
+ *
+ * @return array{gross: string, charged: ?string}
+ */
+function voucher_archive_amounts_for_insert(object $pdo, string $processing_no, string $fallbackAmount = ''): array
+{
+    $grossAmount = $fallbackAmount;
+    $charged_amount = null;
+
+    $selectStmt = $pdo->prepare(
+        'SELECT amount, charged_amount FROM voucher_receiving WHERE processing_no = :processing_no LIMIT 1'
+    );
+    $selectStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $selectStmt->execute();
+    if ($row = $selectStmt->fetch(PDO::FETCH_ASSOC)) {
+        $resolved = voucher_resolve_stored_amounts($row, $grossAmount);
+        $grossAmount = $resolved['gross'];
+        $charged_amount = $resolved['charged'];
+    }
+
+    return [
+        'gross' => voucher_prepare_stored_amount($pdo, $grossAmount),
+        'charged' => $charged_amount !== null
+            ? voucher_prepare_stored_amount($pdo, $charged_amount)
+            : null,
+    ];
+}
 
 function archiving_delete_from_voucher_receiving(object $pdo, string $processing_no) {
     $query = "DELETE FROM voucher_receiving WHERE processing_no = :processing_no";
@@ -16,10 +46,13 @@ function archiving_delete_from_voucher_receiving(object $pdo, string $processing
 }
 function insert_to_voucher_archive(object $pdo, string $processing_no, string $ors_no, string $ada_check_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_date,
                                       string $priority, string $action, string $action_by, string $datetime_action, string $office_from, string $office_to, string $encoded_by, string $receiver_udc) {
-    $amount = voucher_prepare_stored_amount($pdo, $amount);
-    $query = "INSERT INTO voucher_archives (processing_no, ors_no, ada_check_no, dv_no, payee, address, tin_employee_no, particulars, amount, voucher_date,
+    $amounts = voucher_archive_amounts_for_insert($pdo, $processing_no, $amount);
+    $amount = $amounts['gross'];
+    $charged_amount = $amounts['charged'];
+
+    $query = "INSERT INTO voucher_archives (processing_no, ors_no, ada_check_no, dv_no, payee, address, tin_employee_no, particulars, amount, charged_amount, voucher_date,
         priority, action, action_by, datetime_action, office_from, office_to, encoded_by, receiver_udc) 
-                        VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :tin_employee_no, :particulars, :amount, :voucher_date,
+                        VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :tin_employee_no, :particulars, :amount, :charged_amount, :voucher_date,
         :priority, :action, :action_by, :datetime_action, :office_from, :office_to, :encoded_by, :receiver_udc)";
 
     $statement = $pdo->prepare($query);
@@ -33,6 +66,11 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
     $statement->bindParam(":tin_employee_no",$tin_employee_no);
     $statement->bindParam(":particulars",$particulars);
     $statement->bindValue(":amount", $amount, PDO::PARAM_STR);
+    if ($charged_amount === null) {
+        $statement->bindValue(':charged_amount', null, PDO::PARAM_NULL);
+    } else {
+        $statement->bindValue(':charged_amount', $charged_amount, PDO::PARAM_STR);
+    }
     $statement->bindParam(":voucher_date",$voucher_date);
     $statement->bindParam(":priority",$priority);
     $statement->bindParam(":action",$action);

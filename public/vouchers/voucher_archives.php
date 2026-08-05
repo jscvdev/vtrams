@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../protected/core/components/notifications/notificat
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/schema_cache_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 AuditHelper::logPageView('Voucher Archives');
 include('../../protected/handler/archiving_module/archiving_errhandler.inc.php');
 require_once __DIR__ . '/checklist_config.php';
@@ -510,13 +511,7 @@ $c2 = 0;
                             <td data-label="payee"><?php echo $row['payee']; ?></td>
                             <td data-label="address" class="status"><?php echo $row['address']; ?></td>
                             <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                            <?php
-                            $baseAmount = (string) ($row['amount'] ?? '');
-                            $charged = isset($row['charged_amount']) ? trim((string) $row['charged_amount']) : '';
-                            $showChargedAmount = $charged !== '' && $charged !== '0' && $charged !== '0.00';
-                            $effectiveAmount = $showChargedAmount ? $charged : $baseAmount;
-                            ?>
-                            <td data-label="amount" class="amount" data-amount="<?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $showChargedAmount ? ' data-amount-charged="1"' : ''; ?>><?php echo htmlspecialchars($effectiveAmount, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($row['amount'] ?? '', $row['charged_amount'] ?? ''); ?>
                             <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string)($row['amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>

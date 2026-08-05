@@ -144,10 +144,10 @@ $loadStmt = $pdo->prepare(
 );
 
 $archiveInsert = $pdo->prepare('INSERT INTO voucher_archives (
-    processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, voucher_type, certified_correct, approved_by, agency_authorized_signatory, voucher_date, ada_check_date,
+    processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, certified_correct, approved_by, agency_authorized_signatory, voucher_date, ada_check_date,
     office_to, office_from, encoded_by, datetime_encoded, remarks, datetime_action, action, action_by, process_history
 ) VALUES (
-    :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :voucher_type, :certified_correct, :approved_by, :agency_authorized_signatory, :voucher_date, :ada_check_date,
+    :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :certified_correct, :approved_by, :agency_authorized_signatory, :voucher_date, :ada_check_date,
     :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history
 )');
 $tempDelete = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
@@ -227,8 +227,10 @@ $tx = db_transaction(
                 continue;
             }
 
-            $amount = amount_resolve_charged_or_amount($row['charged_amount'] ?? '', $row['amount'] ?? '');
-            $amount = ensure_amount_two_decimals($amount);
+            $amounts = voucher_archive_amounts_for_insert($pdo, $processingNo, '');
+            $grossAmount = $amounts['gross'];
+            $chargedAmount = $amounts['charged'];
+            $logAmount = amount_resolve_charged_or_amount($chargedAmount ?? '', $grossAmount);
             $processHistory = voucher_bulk_pay_normalize_process_history($row['process_history'] ?? '');
             $officeFrom = trim((string) ($row['office_from'] ?? ''));
 
@@ -241,7 +243,8 @@ $tx = db_transaction(
                 ':address' => $row['address'] ?? null,
                 ':particulars' => $row['particulars'] ?? null,
                 ':tin_employee_no' => $row['tin_employee_no'] ?? null,
-                ':amount' => $amount,
+                ':amount' => $grossAmount,
+                ':charged_amount' => $chargedAmount,
                 ':voucher_type' => $row['voucher_type'] ?? null,
                 ':certified_correct' => $certifiedCorrect,
                 ':approved_by' => $approvedBy,
@@ -290,7 +293,7 @@ $tx = db_transaction(
                 (string) ($row['address'] ?? ''),
                 (string) ($row['particulars'] ?? ''),
                 (string) ($row['tin_employee_no'] ?? ''),
-                $amount,
+                $logAmount,
                 (string) ($row['voucher_type'] ?? ''),
                 (string) ($row['voucher_date'] ?? ''),
                 $action,
