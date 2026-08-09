@@ -470,17 +470,22 @@ function voucher_status_report_attach_section_breakdowns(PDO $pdo, array $entrie
 
     foreach ($entries as $index => $entry) {
         $pn = trim((string) ($entry['processing_no'] ?? ''));
+        $logs = $logsByPn[$pn] ?? [];
+        $entries[$index]['remarks'] = voucher_tracking_resolve_combined_remarks(
+            trim((string) ($entry['remarks'] ?? '')),
+            $logs
+        );
         $entries[$index]['section_breakdown'] = voucher_status_report_build_section_breakdown(
             $pdo,
-            $entry,
+            $entries[$index],
             $trackingRowsByPn[$pn] ?? [],
-            $logsByPn[$pn] ?? []
+            $logs
         );
         $entries[$index]['section_breakdown_tpt'] = voucher_status_report_total_processing_time_label(
             $pdo,
-            $entry,
+            $entries[$index],
             $trackingRowsByPn[$pn] ?? [],
-            $logsByPn[$pn] ?? []
+            $logs
         );
     }
 

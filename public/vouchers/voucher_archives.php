@@ -264,6 +264,182 @@ $c2 = 0;
             border-color: #8fb2ff;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
+
+        .voucher-row-menu-cell {
+            width: 44px;
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .voucher-row-menu {
+            position: relative;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .voucher-row-menu-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            color: #4b5563;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease, transform 120ms ease;
+        }
+
+        .voucher-row-menu-trigger:hover,
+        .voucher-row-menu.is-open .voucher-row-menu-trigger {
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            border-color: #c7d7fe;
+            color: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.16);
+            transform: translateY(-1px);
+        }
+
+        .voucher-row-menu-trigger i {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .voucher-row-menu-dropdown {
+            position: fixed;
+            z-index: 501;
+            width: 128px;
+            min-width: 128px;
+            max-width: 128px;
+            padding: 4px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .voucher-row-menu-dropdown.is-open {
+            display: block;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 32px;
+            margin: 0;
+            padding: 6px 8px !important;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            box-shadow: none;
+            box-sizing: border-box;
+            transition: background 120ms ease, color 120ms ease;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn i {
+            width: 16px;
+            flex: 0 0 16px;
+            font-size: 15px;
+            color: #6b7280;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn span {
+            flex: 1 1 auto;
+            line-height: 1.2;
+            text-align: left;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn:hover {
+            background: #f3f6fb;
+            color: #1d4ed8;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-item.btn:hover i {
+            color: #2563eb;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            width: 100%;
+            min-height: 32px;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 8px;
+            box-sizing: border-box;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: 0.01em;
+            color: #374151;
+            text-decoration: none;
+            background: transparent;
+            cursor: pointer;
+            transition: background 120ms ease, color 120ms ease;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link i {
+            width: 16px;
+            flex: 0 0 16px;
+            font-size: 15px;
+            color: #6b7280;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link span {
+            flex: 1 1 auto;
+            text-align: left;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover {
+            background: #f3f6fb;
+            color: #1d4ed8;
+        }
+
+        .voucher-row-menu-dropdown .voucher-row-menu-link:hover i {
+            color: #2563eb;
+        }
+
+        .vstat-status-badge {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            border: 1px solid #dbeafe;
+            color: #1e40af;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.35;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .vstat-status-badge--archived {
+            background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+            border-color: #fde68a;
+            color: #92400e;
+        }
     </style>
     <div class="voucher-card voucher-card--filter">
         <div class="filter-toolbar">
@@ -358,19 +534,24 @@ $c2 = 0;
                                 <label for="">TIN/Employee No.</label>
                                 <input type="text" name="tin_employee_no" class="tin_employee_no form-custom-input" id="tin_employee_no" value="" placeholder="TIN/Employee No.">
                             </div>
-                            <div class="label-input__container number-input">
-                                <label for="">Amount</label>
-                                <input type="number" min="1" oninput="this.value =
- !!this.value && Math.abs(this.value) >= 1 ? Math.abs(this.value) : null" name="amount" class="amount form-custom-input" value="1" placeholder="Amount" required>
-                            </div>
-                            <!-- Only shown when an original/charged pair exists -->
-                            <div class="label-input__container number-input hidden_input original_charged_container">
-                                <label for="">Original Amount</label>
-                                <input type="text" name="original_string_amount" class="original_string_amount form-custom-input" id="original_string_amount" placeholder="Original Amount" readonly>
-                            </div>
-                            <div class="label-input__container number-input hidden_input charged_amount_container">
-                                <label for="">Charged Amount (Edited)</label>
-                                <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input" id="charged_string_amount" placeholder="Charged Amount (Edited)" style="color: red;" readonly>
+                            <div class="label-input__container number-input amount_primary_block">
+                                <label for="" class="amount_main_label">Amount</label>
+                                <input type="text" name="string_amount" class="string_amount form-custom-input amount_main_display" id="string_amount" placeholder="Amount" readonly>
+                                <input type="hidden" name="amount" class="amount" id="int_amount" value="">
+                                <input type="hidden" name="gross_amount" id="gross_amount" value="">
+                                <div class="voucher-amount-split-panel" id="voucherAmountSplitPanel" style="display: none;">
+                                    <p class="voucher-amount-split-panel__title">Amount</p>
+                                    <div class="voucher-amount-split-panel__body">
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--gross original_charged_container" style="display: none;">
+                                            <label for="original_string_amount" class="voucher-amount-split-field__label">Gross</label>
+                                            <input type="text" name="original_string_amount" class="original_string_amount form-custom-input voucher-amount-split-field__input" id="original_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--net charged_amount_container" style="display: none;">
+                                            <label for="charged_string_amount" class="voucher-amount-split-field__label">Net</label>
+                                            <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input voucher-amount-split-field__input" id="charged_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="label-input__container">
                                 <label for="">Voucher Date</label>
@@ -436,13 +617,30 @@ $c2 = 0;
                 position: relative;
                 display: flex;
                 flex-direction: column;
+                flex: 1;
+                min-height: 0;
+            }
+
+            .main.main--voucher-dashboard {
+                height: calc(100dvh - 4rem);
+                max-height: calc(100dvh - 4rem);
+                overflow: hidden;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem;
+            }
+
+            .main--voucher-dashboard .voucher-card--table {
+                flex: 1;
+                min-height: 0;
             }
 
             .voucher-card--table .content-wrapper {
                 flex: 1;
                 min-height: 0;
                 overflow: auto;
-                max-height: 70vh;
+                max-height: none;
             }
 
             .voucher-table-empty-hint {
@@ -468,76 +666,115 @@ $c2 = 0;
                 padding: 10px 0 0;
                 margin-top: auto;
             }
+
+            #my-Table td.voucher-amount-stack-cell {
+                min-width: 148px;
+                vertical-align: middle;
+            }
         </style>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
                 <thead>
                     <tr>
+                        <th class="voucher-row-menu-cell" aria-label="Menu"></th>
                         <th>Processing No.</th>
                         <th>ORS No.</th>
                         <th>DV No.</th>
-                        <th>ADA/Check No.</th>
                         <th>Payee Name</th>
-                        <th>Address</th>
-                        <th>Particulars</th>
                         <th>Amount</th>
-                        <th>Voucher Date</th>
-                        <th>Type</th>
-                        <th>Date/Time Forwarded</th>
-                        <th>History</th>
-                        <th>View</th>
+                        <th>Status</th>
+                        <th>Remarks</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($row = $fetch_voucher_archives_data->fetch(PDO::FETCH_ASSOC)) : ?>
-                <tr>
-                        <form action="#" method="POST">
-                            <td data-label="processing_no"><?php echo $row['processing_no']; ?></td>
-                            <td data-label="ors_no"><?php echo $row['ors_no']; ?></td>
-                            <td data-label="dv_no"><?php echo $row['dv_no']; ?></td>
-                            <?php
-                            $adaCheckNo = '';
-                            if (isset($row['ada_check_no'])) {
-                                $adaCheckNo = (string) $row['ada_check_no'];
-                            } elseif (isset($row['check_no']) && (string) $row['check_no'] !== '') {
-                                $adaCheckNo = (string) $row['check_no'];
-                            } elseif (isset($row['ada_no'])) {
-                                $adaCheckNo = (string) $row['ada_no'];
+                    <?php while ($row = $fetch_voucher_archives_data->fetch(PDO::FETCH_ASSOC)) :
+                        $adaCheckNo = '';
+                        if (isset($row['ada_check_no'])) {
+                            $adaCheckNo = (string) $row['ada_check_no'];
+                        } elseif (isset($row['check_no']) && (string) $row['check_no'] !== '') {
+                            $adaCheckNo = (string) $row['check_no'];
+                        } elseif (isset($row['ada_no'])) {
+                            $adaCheckNo = (string) $row['ada_no'];
+                        }
+
+                        $remarksRaw = trim((string) ($row['remarks'] ?? ''));
+                        $remarksLatest = '';
+                        if ($remarksRaw !== '') {
+                            $pattern = '/(?:^|,\s*)([^,]+?):\s*(.*?)(?=(?:,\s*[^,]+?:\s)|$)/s';
+                            if (preg_match_all($pattern, $remarksRaw, $m) && !empty($m[0])) {
+                                $idx = count($m[0]) - 1;
+                                $remarksLatest = trim((string) $m[1][$idx] . ': ' . (string) $m[2][$idx]);
+                            } else {
+                                $parts = array_map('trim', explode(',', $remarksRaw));
+                                $remarksLatest = (string) end($parts);
                             }
-                            ?>
-                            <td data-label="ada_check_no"><?php echo htmlspecialchars($adaCheckNo, ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="voucher_type" class="hidden"><?php echo isset($row['voucher_type']) ? $row['voucher_type'] : ''; ?></td>
-                            <td data-label="ada_check_date" class="hidden"><?php echo $row['ada_check_date']; ?></td>
-                            <td data-label="payee"><?php echo $row['payee']; ?></td>
-                            <td data-label="address" class="status"><?php echo $row['address']; ?></td>
-                            <td data-label="particulars"><?php echo $row['particulars']; ?></td>
-                            <?php echo voucher_amount_stack_cell_html($row['amount'] ?? '', $row['charged_amount'] ?? ''); ?>
-                            <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string)($row['amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
-                            <td data-label="voucher_date"><?php echo $row['voucher_date']; ?></td>
-                            <td data-label="voucher_type_display" class="voucher-type-cell"><?php echo voucher_type_badge_html((string)($row['voucher_type'] ?? '')); ?></td>
-                            <td data-label="datetime_action"><?php echo $row['datetime_action']; ?></td>
-                            <td data-label="priority" class="prioritized hidden"><?php echo $row['priority']; ?></td>
-                            <td data-label="office_from" class="hidden"><?php echo $row['office_from']; ?></td>
-                            <td data-label="office_to" class="hidden"><?php echo $row['office_to']; ?></td>
-                            <td data-label="sender_udc" class="hidden"><?php echo $row['sender_udc']; ?></td>
-                            <td data-label="receiver_udc" class="hidden"><?php echo $row['receiver_udc']; ?></td>
-                            <td data-label="encoded_by" class="hidden"><?php echo $row['encoded_by']; ?></td>
-                            <td data-label="datetime_encoded" class="hidden"><?php echo $row['datetime_encoded']; ?></td>
-                            <td data-label="certified_correct" class="hidden"><?php echo $row['certified_correct']; ?></td>
-                            <td data-label="approved_by" class="hidden"><?php echo $row['approved_by']; ?></td>
-                            <td data-label="agency_authorized_signatory" class="hidden"><?php echo $row['agency_authorized_signatory']; ?></td>
-                            <td data-label="tin_employee_no" class="hidden"><?php echo $row['tin_employee_no']; ?></td>
-                            <td data-label="remarks" class="hidden"><?php echo isset($row['remarks']) ? htmlspecialchars($row['remarks']) : ''; ?></td>
-                            <td data-label="process_history" class="hidden"><?php echo isset($row['process_history']) ? htmlspecialchars($row['process_history']) : ''; ?></td>
+                        }
 
-                            <td data-label="history">
-                                <button class="btn tertiary" name="btn-history" type="button">View</button>
+                        $archiveAction = trim((string) ($row['action'] ?? ''));
+                        $isPaidArchive = stripos($archiveAction, 'processed') !== false
+                            || stripos($archiveAction, 'paid') !== false
+                            || stripos($archiveAction, 'archived') !== false;
+                    ?>
+                        <tr>
+                            <td class="voucher-row-menu-cell" data-label="">
+                                <div class="voucher-row-menu">
+                                    <button type="button" class="voucher-row-menu-trigger" aria-label="Row actions" aria-haspopup="true" aria-expanded="false">
+                                        <i class="ri-more-2-fill" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="voucher-row-menu-dropdown" role="menu">
+                                        <button class="btn tertiary voucher-row-menu-item" name="btn-view" type="button" role="menuitem">
+                                            <i class="ri-eye-line" aria-hidden="true"></i>
+                                            <span>View</span>
+                                        </button>
+                                        <button class="btn tertiary voucher-row-menu-item" name="btn-history" type="button" role="menuitem">
+                                            <i class="ri-history-line" aria-hidden="true"></i>
+                                            <span>History</span>
+                                        </button>
+                                        <a class="voucher-row-menu-link" href="voucher_status_report.php?q=<?php echo htmlspecialchars((string) ($row['processing_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" role="menuitem">
+                                            <i class="ri-file-list-3-line" aria-hidden="true"></i>
+                                            <span>Report</span>
+                                        </a>
+                                    </div>
+                                </div>
                             </td>
-
-                            <td data-label=""><button class="btn tertiary pPop" id="openPopup" name="btn-view" type="button">View</button></td>
-                        </form>
-                </tr>
+                            <td data-label="processing_no"><?php echo htmlspecialchars((string) ($row['processing_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="ors_no"><?php echo htmlspecialchars((string) ($row['ors_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="dv_no"><?php echo htmlspecialchars((string) ($row['dv_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="payee"><?php echo htmlspecialchars((string) ($row['payee'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($row['amount'] ?? '', $row['charged_amount'] ?? '', 'amount-cell'); ?>
+                            <td data-label="archive_status_display">
+                                <?php if ($archiveAction !== '') : ?>
+                                    <span class="vstat-status-badge<?= $isPaidArchive ? ' vstat-status-badge--archived' : '' ?>"><?php echo htmlspecialchars($archiveAction, ENT_QUOTES, 'UTF-8'); ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="remarks_display" class="return-remarks-cell"><?php
+                                echo $remarksLatest !== ''
+                                    ? '<span class="remarks-badge">' . htmlspecialchars($remarksLatest, ENT_QUOTES, 'UTF-8') . '</span>'
+                                    : '';
+                            ?></td>
+                            <td data-label="ada_check_no" class="hidden"><?php echo htmlspecialchars($adaCheckNo, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="voucher_type" class="hidden"><?php echo htmlspecialchars((string) ($row['voucher_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="ada_check_date" class="hidden"><?php echo htmlspecialchars((string) ($row['ada_check_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="address" class="hidden"><?php echo htmlspecialchars((string) ($row['address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="particulars" class="hidden"><?php echo htmlspecialchars((string) ($row['particulars'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="amount_original" class="hidden"><?php echo htmlspecialchars((string) ($row['amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="charged_amount" class="hidden"><?php echo htmlspecialchars((string) ($row['charged_amount'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="voucher_date" class="hidden"><?php echo htmlspecialchars((string) ($row['voucher_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="datetime_action" class="hidden"><?php echo htmlspecialchars((string) ($row['datetime_action'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="priority" class="prioritized hidden"><?php echo htmlspecialchars((string) ($row['priority'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="office_from" class="hidden"><?php echo htmlspecialchars((string) ($row['office_from'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="office_to" class="hidden"><?php echo htmlspecialchars((string) ($row['office_to'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="sender_udc" class="hidden"><?php echo htmlspecialchars((string) ($row['sender_udc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="receiver_udc" class="hidden"><?php echo htmlspecialchars((string) ($row['receiver_udc'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="encoded_by" class="hidden"><?php echo htmlspecialchars((string) ($row['encoded_by'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="datetime_encoded" class="hidden"><?php echo htmlspecialchars((string) ($row['datetime_encoded'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="certified_correct" class="hidden"><?php echo htmlspecialchars((string) ($row['certified_correct'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="approved_by" class="hidden"><?php echo htmlspecialchars((string) ($row['approved_by'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="agency_authorized_signatory" class="hidden"><?php echo htmlspecialchars((string) ($row['agency_authorized_signatory'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="tin_employee_no" class="hidden"><?php echo htmlspecialchars((string) ($row['tin_employee_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="remarks" class="hidden"><?php echo htmlspecialchars($remarksRaw, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="process_history" class="hidden"><?php echo htmlspecialchars((string) ($row['process_history'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                        </tr>
                     <?php endwhile; ?>
                 </tbody>
             </table>
@@ -611,6 +848,165 @@ $c2 = 0;
         </div>
     </div>
 </div>
+<script>
+    (function() {
+        var table = document.getElementById('my-Table');
+        if (!table) return;
+
+        var contentWrapper = table.closest('.content-wrapper');
+
+        function getMenuDropdown(menu) {
+            return menu._portedDropdown || menu.querySelector('.voucher-row-menu-dropdown');
+        }
+
+        function resetRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            if (!dropdown) return;
+
+            dropdown.classList.remove('is-open');
+            dropdown.style.top = '';
+            dropdown.style.left = '';
+            dropdown.style.width = '';
+            dropdown.style.minWidth = '';
+            dropdown.style.maxWidth = '';
+
+            if (menu._portedDropdown) {
+                menu.appendChild(dropdown);
+                menu._portedDropdown = null;
+            }
+
+            dropdown._ownerRow = null;
+        }
+
+        function positionRowMenuDropdown(menu) {
+            var dropdown = getMenuDropdown(menu);
+            var trigger = menu.querySelector('.voucher-row-menu-trigger');
+            if (!dropdown || !trigger) return;
+
+            if (!menu._portedDropdown) {
+                menu._portedDropdown = dropdown;
+                dropdown._ownerRow = menu.closest('tr');
+                document.body.appendChild(dropdown);
+            }
+
+            dropdown.classList.add('is-open');
+
+            var rect = trigger.getBoundingClientRect();
+            var dropdownWidth = dropdown.offsetWidth || 128;
+            var centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+            dropdown.style.top = (rect.bottom + 4) + 'px';
+
+            var dropdownRect = dropdown.getBoundingClientRect();
+            if (dropdownRect.bottom > window.innerHeight - 8) {
+                dropdown.style.top = Math.max(8, rect.top - dropdownRect.height - 4) + 'px';
+            }
+            dropdownWidth = dropdownRect.width || dropdownWidth;
+            centeredLeft = rect.left + (rect.width / 2) - (dropdownWidth / 2);
+            dropdown.style.left = Math.max(8, Math.min(centeredLeft, window.innerWidth - dropdownWidth - 8)) + 'px';
+        }
+
+        function syncOpenRowMenu() {
+            var openMenu = table.querySelector('.voucher-row-menu.is-open');
+            if (openMenu) {
+                positionRowMenuDropdown(openMenu);
+            }
+        }
+
+        function closeAllRowMenus(exceptMenu) {
+            table.querySelectorAll('.voucher-row-menu.is-open').forEach(function(menu) {
+                if (exceptMenu && menu === exceptMenu) {
+                    return;
+                }
+                menu.classList.remove('is-open');
+                resetRowMenuDropdown(menu);
+                var trigger = menu.querySelector('.voucher-row-menu-trigger');
+                if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        table.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.voucher-row-menu-trigger');
+            if (trigger) {
+                e.preventDefault();
+                e.stopPropagation();
+                var menu = trigger.closest('.voucher-row-menu');
+                if (!menu) return;
+                var willOpen = !menu.classList.contains('is-open');
+                closeAllRowMenus(willOpen ? menu : null);
+                menu.classList.toggle('is-open', willOpen);
+                trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                if (willOpen) {
+                    positionRowMenuDropdown(menu);
+                } else {
+                    resetRowMenuDropdown(menu);
+                }
+                return;
+            }
+
+            if (e.target.closest('[name="btn-view"]') || e.target.closest('[name="btn-history"]') || e.target.closest('.voucher-row-menu-link')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.voucher-row-menu') && !e.target.closest('.voucher-row-menu-dropdown')) {
+                closeAllRowMenus();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAllRowMenus();
+            }
+        });
+
+        if (contentWrapper) {
+            contentWrapper.addEventListener('scroll', syncOpenRowMenu, { passive: true });
+        }
+
+        window.addEventListener('resize', syncOpenRowMenu);
+    })();
+</script>
+<script>
+    (function() {
+        var main = document.getElementById('main');
+        var tableCard = document.querySelector('.voucher-card--table');
+        var tableWrapper = tableCard ? tableCard.querySelector('.content-wrapper') : null;
+        if (!main || !tableCard || !tableWrapper) return;
+
+        var layoutTimer = null;
+
+        function fitArchivesViewport() {
+            var wrapperTop = tableWrapper.getBoundingClientRect().top;
+            var pagination = tableCard.querySelector('.voucher-pagination-footer');
+            var paginationHeight = pagination ? pagination.offsetHeight : 0;
+            var bottomGap = 20;
+            var available = window.innerHeight - wrapperTop - paginationHeight - bottomGap;
+            tableWrapper.style.maxHeight = Math.max(160, available) + 'px';
+        }
+
+        function scheduleArchivesLayoutSync() {
+            if (layoutTimer) {
+                clearTimeout(layoutTimer);
+            }
+            layoutTimer = setTimeout(fitArchivesViewport, 80);
+        }
+
+        window.addEventListener('resize', scheduleArchivesLayoutSync);
+        window.addEventListener('load', scheduleArchivesLayoutSync);
+
+        if (window.ResizeObserver) {
+            var layoutObserver = new ResizeObserver(scheduleArchivesLayoutSync);
+            layoutObserver.observe(main);
+            layoutObserver.observe(tableCard);
+        }
+
+        scheduleArchivesLayoutSync();
+    })();
+</script>
 
 <script>
     (function() {
@@ -777,121 +1173,135 @@ $c2 = 0;
         return html;
     }
 
-    // Get all buttons with class 'btn-forward'
-    var buttons = document.querySelectorAll('.btn');
+    function cellText(row, label) {
+        var cell = row.querySelector('[data-label="' + label + '"]');
+        return cell ? String(cell.textContent || '').trim() : '';
+    }
 
-    // Loop through each button and attach click event listener
-    buttons.forEach(function(button) {
+    function openArchivesHistoryModal(row) {
+        const modal = document.getElementById('historyModal');
+        const overlay = document.getElementById('historyOverlay');
+        const procNo = cellText(row, 'processing_no');
+        const combinedRemarks = row.querySelector('[data-label="remarks"]')?.textContent || '';
+        const processHistory = row.querySelector('[data-label="process_history"]')?.textContent || '';
+        const procEl = document.getElementById('hist_processing_no');
+        const senderEl = document.getElementById('hist_sender_remarks');
+        const combinedEl = document.getElementById('hist_combined_remarks');
+        const histEl = document.getElementById('hist_process_history');
+
+        if (procEl) procEl.value = procNo;
+        if (senderEl) senderEl.textContent = '';
+        if (combinedEl) combinedEl.textContent = combinedRemarks && combinedRemarks.trim() !== '' ? combinedRemarks.trim() : '';
+        if (histEl) {
+            histEl.classList.add('hist-content--process-list');
+            histEl.innerHTML = renderProcessHistory(processHistory);
+        }
+
+        if (modal) modal.style.display = 'block';
+        if (overlay) overlay.style.display = 'block';
+    }
+
+    function populateArchivesViewModal(row) {
+        var processing_no = cellText(row, 'processing_no');
+        var ors_no = cellText(row, 'ors_no');
+        var dv_no = cellText(row, 'dv_no');
+        var ada_check_no = cellText(row, 'ada_check_no');
+        var voucher_type = cellText(row, 'voucher_type');
+        var ada_check_date = cellText(row, 'ada_check_date');
+        var payee = cellText(row, 'payee');
+        var address = cellText(row, 'address');
+        var particulars = cellText(row, 'particulars');
+        var tin_employee_no = cellText(row, 'tin_employee_no');
+        var amountTd = row.querySelector('[data-label="amount"]');
+        var grossFromStack = amountTd ? (amountTd.getAttribute('data-amount-gross') || '') : '';
+        var netFromStack = amountTd ? (amountTd.getAttribute('data-amount-net') || '') : '';
+        var amountOriginal = typeof normalizeAmountInput === 'function'
+            ? normalizeAmountInput(cellText(row, 'amount_original') || grossFromStack || (amountTd ? (amountTd.getAttribute('data-amount') || '') : ''))
+            : (cellText(row, 'amount_original') || grossFromStack);
+        var charged_amount = typeof normalizeAmountInput === 'function'
+            ? normalizeAmountInput(cellText(row, 'charged_amount') || netFromStack)
+            : (cellText(row, 'charged_amount') || netFromStack);
+        var voucher_date = cellText(row, 'voucher_date');
+        var passed_priority = cellText(row, 'priority');
+        var office_to = cellText(row, 'office_to');
+        var office_from = cellText(row, 'office_from');
+        var encoded_by = cellText(row, 'encoded_by');
+        var datetime_encoded = cellText(row, 'datetime_encoded');
+        var certified_correct = cellText(row, 'certified_correct');
+        var approved_by = cellText(row, 'approved_by');
+        var agency_authorized_signatory = cellText(row, 'agency_authorized_signatory');
+
+        document.querySelector('.processing_no').value = processing_no;
+        document.querySelector('.ors_no').value = ors_no;
+        document.querySelector('.dv_no').value = dv_no;
+        document.querySelector('.ada_check_no').value = ada_check_no;
+        document.querySelector('.voucher_type').value = voucher_type;
+        document.querySelector('.ada_check_date').value = ada_check_date;
+        document.querySelector('.payee').value = payee;
+        document.querySelector('.address').value = address;
+        document.querySelector('.particulars').value = particulars;
+        document.querySelector('.tin_employee_no').value = tin_employee_no;
+
+        const originalStringInput = document.getElementById('original_string_amount');
+        const chargedStringInput = document.getElementById('charged_string_amount');
+        if (originalStringInput) originalStringInput.disabled = true;
+        if (chargedStringInput) chargedStringInput.disabled = true;
+
+        if (typeof populateAmountSplitView === 'function') {
+            populateAmountSplitView(amountOriginal, charged_amount);
+        }
+
+        const grossHiddenInput = document.getElementById('gross_amount');
+        if (grossHiddenInput && typeof normalizeAmountInput === 'function') {
+            grossHiddenInput.value = normalizeAmountInput(amountOriginal);
+        }
+
+        document.querySelector('.voucher_date').value = voucher_date;
+        document.querySelector('.priority').value = passed_priority;
+        document.querySelector('.office_from').value = office_from;
+        document.querySelector('.office_to').value = office_to;
+        document.querySelector('.encoded_by').value = encoded_by;
+        document.querySelector('.datetime_encoded').value = datetime_encoded;
+        document.querySelector('.certified_correct').value = certified_correct;
+        document.querySelector('.approved_by').value = approved_by;
+        document.querySelector('.agency_authorized_signatory').value = agency_authorized_signatory;
+
+        document.querySelectorAll('.hidden_input').forEach(function(input) {
+            if (
+                input.classList.contains('original_charged_container') ||
+                input.classList.contains('charged_amount_container')
+            ) {
+                return;
+            }
+            input.style.display = 'none';
+        });
+    }
+
+    document.querySelectorAll('.btn').forEach(function(button) {
         button.addEventListener('click', function() {
-            // Get the row associated with the clicked button
             var row = this.closest('tr');
+            if (!row) {
+                var portaledDropdown = this.closest('.voucher-row-menu-dropdown');
+                if (portaledDropdown && portaledDropdown._ownerRow) {
+                    row = portaledDropdown._ownerRow;
+                }
+            }
+            if (!row) return;
 
             var name = this.getAttribute('name') || '';
             if (name === 'btn-history') {
-                const modal = document.getElementById('historyModal');
-                const overlay = document.getElementById('historyOverlay');
-
-                const procNo = row.querySelector('[data-label="processing_no"]')?.textContent?.trim() || '';
-                const combinedRemarks = row.querySelector('[data-label="remarks"]')?.textContent || '';
-                const processHistory = row.querySelector('[data-label="process_history"]')?.textContent || '';
-
-                const procEl = document.getElementById('hist_processing_no');
-                const senderEl = document.getElementById('hist_sender_remarks');
-                const combinedEl = document.getElementById('hist_combined_remarks');
-                const histEl = document.getElementById('hist_process_history');
-
-                if (procEl) procEl.value = procNo;
-                if (senderEl) senderEl.textContent = '';
-                if (combinedEl) combinedEl.textContent = combinedRemarks && combinedRemarks.trim() !== '' ? combinedRemarks.trim() : '';
-                if (histEl) {
-                    histEl.classList.add('hist-content--process-list');
-                    histEl.innerHTML = renderProcessHistory(processHistory);
-                }
-
-                if (modal) modal.style.display = 'block';
-                if (overlay) overlay.style.display = 'block';
+                openArchivesHistoryModal(row);
                 return;
             }
+            if (name !== 'btn-view') return;
 
-            // Extract data from the row
-            var processing_no = row.querySelector('[data-label="processing_no"]').textContent;
-            var ors_no = row.querySelector('[data-label="ors_no"]').textContent;
-            var dv_no = row.querySelector('[data-label="dv_no"]').textContent;
-            var ada_check_no_el = row.querySelector('[data-label="ada_check_no"]');
-            var ada_check_no = ada_check_no_el ? ada_check_no_el.textContent : '';
-            var voucher_type = row.querySelector('[data-label="voucher_type"]').textContent;
-            var ada_check_date = row.querySelector('[data-label="ada_check_date"]').textContent;
-            var payee = row.querySelector('[data-label="payee"]').textContent;
-            var address = row.querySelector('[data-label="address"]').textContent;
-            var particulars = row.querySelector('[data-label="particulars"]').textContent;
-            var amountOriginalCell = row.querySelector('[data-label="amount_original"]');
-            var amountTd = row.querySelector('[data-label="amount"]');
-            var amountOriginal = normalizeAmountInput(amountOriginalCell ? amountOriginalCell.textContent : (amountTd ? (amountTd.getAttribute('data-amount') || amountTd.textContent) : ''));
-            var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
-            var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
-            var amount = (charged_amount !== '') ? charged_amount : amountOriginal;
-            var voucher_date = row.querySelector('[data-label="voucher_date"]').textContent;
-            var passed_priority = row.querySelector('[data-label="priority"]').textContent;
-            var office_to = row.querySelector('[data-label="office_to"]').textContent;
-            var office_from = row.querySelector('[data-label="office_from"]').textContent;
-            var encoded_by = row.querySelector('[data-label="encoded_by"]').textContent;
-            var datetime_encoded = row.querySelector('[data-label="datetime_encoded"]').textContent;
-            var certified_correct = row.querySelector('[data-label="certified_correct"]').textContent;
-            var approved_by = row.querySelector('[data-label="approved_by"]').textContent;
-            var particulars = row.querySelector('[data-label="particulars"]').textContent;
-            var agency_authorized_signatory = row.querySelector('[data-label="agency_authorized_signatory"]').textContent;
-            var tin_employee_no = row.querySelector('[data-label="tin_employee_no"]').textContent;
-
-            // Send it via AJAX to the server
-            document.querySelector('.processing_no').value = processing_no;
-            document.querySelector('.ors_no').value = ors_no;
-            document.querySelector('.dv_no').value = dv_no;
-            document.querySelector('.ada_check_no').value = ada_check_no;
-            document.querySelector('.voucher_type').value = voucher_type;
-            document.querySelector('.ada_check_date').value = ada_check_date;
-            document.querySelector('.payee').value = payee;
-            document.querySelector('.address').value = address;
-            document.querySelector('.particulars').value = particulars;
-            document.querySelector('.amount').value = amount;
-            document.querySelector('.voucher_date').value = voucher_date;
-            document.querySelector('.priority').value = passed_priority;
-            document.querySelector('.office_from').value = office_from;
-            document.querySelector('.office_to').value = office_to;
-            document.querySelector('.encoded_by').value = encoded_by;
-            document.querySelector('.datetime_encoded').value = datetime_encoded;
-            document.querySelector('.certified_correct').value = certified_correct;
-            document.querySelector('.approved_by').value = approved_by;
-            document.querySelector('.agency_authorized_signatory').value = agency_authorized_signatory;
-            document.querySelector('.tin_employee_no').value = tin_employee_no;
-
-            // Hide original/charged containers by default
-            const originalContainer = document.querySelector('.original_charged_container');
-            const chargedContainer = document.querySelector('.charged_amount_container');
-            if (originalContainer) originalContainer.style.display = 'none';
-            if (chargedContainer) chargedContainer.style.display = 'none';
-
-            // If this voucher already has a charged_amount saved, show Original + Charged fields
-            if (charged_amount !== '') {
-                if (originalContainer) originalContainer.style.display = 'flex';
-                if (chargedContainer) chargedContainer.style.display = 'flex';
-
-                const originalStringInput = document.getElementById('original_string_amount');
-                const chargedStringInput = document.getElementById('charged_string_amount');
-
-                if (originalStringInput) setAmountDisplayValue(originalStringInput, amountOriginal);
-                if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
+            populateArchivesViewModal(row);
+            if (typeof openPopup === 'function') {
+                openPopup();
+            } else {
+                document.getElementById('popupForm').style.display = 'block';
+                document.getElementById('overlay').style.display = 'block';
             }
-
-            document.querySelectorAll('.hidden_input').forEach(function(input) {
-                if (
-                    input.classList.contains('original_charged_container') ||
-                    input.classList.contains('charged_amount_container')
-                ) {
-                    return;
-                }
-                input.style.display = 'none';
-            });
-
         });
     });
 </script>

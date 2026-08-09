@@ -3429,8 +3429,120 @@ function voucher_tracking_section_durations_from_actions(
 }
 
 /**
+ * Parse "Name: text, Name2: text2" combined remarks into ordered segments.
+ *
+ * @return list<string>
+ */
+function voucher_tracking_parse_combined_remark_segments(string $raw): array
+{
+    $raw = trim($raw);
+    if ($raw === '' || strcasecmp($raw, 'N/A') === 0) {
+        return [];
+    }
+
+    $pattern = '/(?:^|,\s*)([^,]+?):\s*(.*?)(?=(?:,\s*[^,]+?:\s)|$)/s';
+    if (preg_match_all($pattern, $raw, $matches) && !empty($matches[0])) {
+        $segments = [];
+        foreach ($matches[0] as $index => $_) {
+            $segment = trim((string) ($matches[1][$index] ?? '') . ': ' . (string) ($matches[2][$index] ?? ''));
+            if ($segment !== '' && $segment !== ':') {
+                $segments[] = $segment;
+            }
+        }
+
+        return $segments;
+    }
+
+    return [$raw];
+}
+
+/** Latest "Name: text" segment from combined remarks (for badge display). */
+function voucher_tracking_parse_latest_remark_segment(string $raw): string
+{
+    $segments = voucher_tracking_parse_combined_remark_segments($raw);
+    if ($segments === []) {
+        return '';
+    }
+
+    return (string) end($segments);
+}
+
+/**
+ * Build combined remarks from voucher_action_logs rows (chronological, de-duplicated segments).
+ *
+ * @param list<array{remarks?: string, action_by?: string, datetime_action?: string}> $logs
+ */
+function voucher_tracking_build_combined_remarks_from_action_logs(array $logs): string
+{
+    if ($logs === []) {
+        return '';
+    }
+
+    usort($logs, static function (array $a, array $b): int {
+        $tsA = strtotime(trim((string) ($a['datetime_action'] ?? '')));
+        $tsB = strtotime(trim((string) ($b['datetime_action'] ?? '')));
+        if ($tsA !== false && $tsB !== false && $tsA !== $tsB) {
+            return $tsA <=> $tsB;
+        }
+
+        return 0;
+    });
+
+    $seen = [];
+    $ordered = [];
+    foreach ($logs as $log) {
+        $raw = trim((string) ($log['remarks'] ?? ''));
+        if ($raw === '' || strcasecmp($raw, 'N/A') === 0) {
+            continue;
+        }
+
+        foreach (voucher_tracking_parse_combined_remark_segments($raw) as $segment) {
+            if ($segment === '' || isset($seen[$segment])) {
+                continue;
+            }
+            $seen[$segment] = true;
+            $ordered[] = $segment;
+        }
+    }
+
+    return implode(', ', $ordered);
+}
+
+/**
+ * Prefer action-log history when tracking remarks are empty or pay-overwritten.
+ *
+ * @param list<array{remarks?: string, action_by?: string, datetime_action?: string}> $logs
+ */
+function voucher_tracking_resolve_combined_remarks(string $trackingRemarks, array $logs): string
+{
+    $trackingRemarks = trim($trackingRemarks);
+    $fromLogs = voucher_tracking_build_combined_remarks_from_action_logs($logs);
+
+    if ($fromLogs === '') {
+        return $trackingRemarks;
+    }
+
+    if ($trackingRemarks === '' || strcasecmp($trackingRemarks, 'N/A') === 0) {
+        return $fromLogs;
+    }
+
+    if (strcasecmp($trackingRemarks, 'Payment Processed') === 0) {
+        return $fromLogs;
+    }
+
+    $merged = voucher_tracking_build_combined_remarks_from_action_logs(
+        array_merge(
+            [['remarks' => $trackingRemarks, 'datetime_action' => '']],
+            $logs
+        )
+    );
+
+    return $merged !== '' ? $merged : $trackingRemarks;
+}
+
+/**
  * @param list<string> $processingNos
- * @return array<string, list<array{action: string, action_by: string, action_from: string, datetime_action: string}>>
+ * @return array<string, list<array{action: string, action_by: string, action_from: string, datetime_action: string, remarks: string}>>
  */
 function voucher_tracking_fetch_action_logs_grouped(object $pdo, array $processingNos): array
 {
@@ -3443,7 +3555,7 @@ function voucher_tracking_fetch_action_logs_grouped(object $pdo, array $processi
     }
 
     $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
-    $sql = "SELECT processing_no, action, action_by, action_from, datetime_action
+    $sql = "SELECT processing_no, action, action_by, action_from, datetime_action, remarks
             FROM voucher_action_logs
             WHERE processing_no IN ({$placeholders})
             ORDER BY processing_no ASC, datetime_action ASC, id ASC";
@@ -3468,6 +3580,7 @@ function voucher_tracking_fetch_action_logs_grouped(object $pdo, array $processi
             'action_by' => (string) ($row['action_by'] ?? ''),
             'action_from' => (string) ($row['action_from'] ?? ''),
             'datetime_action' => (string) ($row['datetime_action'] ?? ''),
+            'remarks' => (string) ($row['remarks'] ?? ''),
         ];
     }
 

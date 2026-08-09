@@ -528,17 +528,23 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                 <input type="text" name="tin_employee_no" class="tin_employee_no form-custom-input" id="tin_employee_no" value="" placeholder="TIN/Employee No." readonly>
                             </div>
                             <div class="label-input__container number-input amount_primary_block">
-                                <label for="">Amount</label>
-                                <input type="text" name="string_amount" class="string_amount form-custom-input" id="int_amount" placeholder="Amount" required readonly>
-                                <input type="hidden" name="amount" class="amount" value="1">
-                                <!-- Shows the original Amount column value -->
-                                <div class="label-input__container number-input original_charged_container" style="margin-top: 4px;">
-                                    <input type="text" name="original_string_amount" class="original_string_amount form-custom-input" id="original_string_amount" placeholder="Amount" readonly>
+                                <label for="" class="amount_main_label">Amount</label>
+                                <input type="text" name="string_amount" class="string_amount form-custom-input amount_main_display" id="string_amount" placeholder="Amount" required readonly>
+                                <input type="hidden" name="amount" class="amount" id="int_amount" value="1">
+                                <input type="hidden" name="gross_amount" id="gross_amount" value="">
+                                <div class="voucher-amount-split-panel" id="voucherAmountSplitPanel" style="display: none;">
+                                    <p class="voucher-amount-split-panel__title">Amount</p>
+                                    <div class="voucher-amount-split-panel__body">
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--gross original_charged_container" style="display: none;">
+                                            <label for="original_string_amount" class="voucher-amount-split-field__label">Gross</label>
+                                            <input type="text" name="original_string_amount" class="original_string_amount form-custom-input voucher-amount-split-field__input" id="original_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                        <div class="voucher-amount-split-field voucher-amount-split-field--net charged_amount_container" style="display: none;">
+                                            <label for="charged_string_amount" class="voucher-amount-split-field__label">Net</label>
+                                            <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input voucher-amount-split-field__input" id="charged_string_amount" placeholder="0.00" readonly>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="label-input__container number-input charged_amount_container" style="display: none;">
-                                <label for="">Charged Amount (Edited)</label>
-                                <input type="text" name="charged_string_amount" class="charged_string_amount form-custom-input" id="charged_string_amount" placeholder="Charged Amount (Edited)" style="color: red;" readonly>
                             </div>
                             <div class="label-input__container">
                                 <label for="">Voucher Date</label>
@@ -1875,11 +1881,6 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
             var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
 
-            // Use charged amount for processing if present; otherwise original.
-            var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
-
-            const convertedBack = normalizeAmountInput(String(amount));
-
             // Send it via AJAX to the server
             document.querySelector('.processing_no').value = processing_no;
             document.querySelector('.dv_no').value = dv_no;
@@ -1889,8 +1890,6 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
             document.querySelector('.address').value = address;
             document.querySelector('.particulars').value = particulars;
             document.querySelector('.tin_employee_no').value = tin_employee_no;
-            document.querySelector('.amount').value = convertedBack;
-            setAmountDisplayValue(document.querySelector('.string_amount'), amount);
             document.querySelector('.voucher_date').value = voucher_date;
             document.querySelector('.office_from').value = office_from;
             document.querySelector('.office_to').value = office_to;
@@ -1967,31 +1966,24 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 }
             }
 
-            const amountPrimaryBlock = document.querySelector('.amount_primary_block');
-            const originalContainer = document.querySelector('.original_charged_container');
-            const chargedContainer = document.querySelector('.charged_amount_container');
-            const stringAmountInput = document.querySelector('.string_amount');
-
-            if (originalContainer) originalContainer.style.display = 'none';
-            if (chargedContainer) chargedContainer.style.display = 'none';
-
             const originalStringInput = document.getElementById('original_string_amount');
             const chargedStringInput = document.getElementById('charged_string_amount');
+            if (originalStringInput) originalStringInput.disabled = true;
+            if (chargedStringInput) chargedStringInput.disabled = true;
 
+            populateAmountSplitView(amountOriginal, charged_amount);
+
+            const grossHiddenInput = document.getElementById('gross_amount');
+            if (grossHiddenInput) {
+                grossHiddenInput.value = normalizeAmountInput(amountOriginal);
+            }
+
+            const stringAmountInput = document.querySelector('.string_amount');
             const hasCharged = hasDistinctNetAmount(amountOriginal, charged_amount);
-
-            if (hasCharged) {
-                // Show charged amount only; primary Amount stays in DOM (hidden) for submit
-                if (amountPrimaryBlock) amountPrimaryBlock.style.display = 'none';
-                if (stringAmountInput) stringAmountInput.removeAttribute('required');
-                if (chargedContainer) chargedContainer.style.display = 'flex';
-                if (chargedStringInput) setAmountDisplayValue(chargedStringInput, charged_amount);
-            } else {
-                if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
-                if (stringAmountInput) stringAmountInput.setAttribute('required', 'required');
-                if (chargedContainer) chargedContainer.style.display = 'none';
-                if (originalStringInput) originalStringInput.value = '';
-                if (chargedStringInput) chargedStringInput.value = '';
+            if (stringAmountInput && hasCharged) {
+                stringAmountInput.removeAttribute('required');
+            } else if (stringAmountInput) {
+                stringAmountInput.setAttribute('required', 'required');
             }
 
             if (name === "btn-view") {
@@ -2013,6 +2005,13 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 document.querySelector(".btn-dynamic").classList.remove("warning");
                 document.querySelector(".btn-dynamic").classList.add("success");
                 applyIncomingDvNoRules(voucher_type, process_history, row);
+                const isAccountingRole = targetArray2.includes("Accounting Unit")
+                    || targetArray2.includes("Processor")
+                    || targetArray2.includes("Accountant III");
+                if (isAccountingRole && chargedStringInput && hasCharged) {
+                    chargedStringInput.disabled = false;
+                    chargedStringInput.readOnly = false;
+                }
             } else if (name === "btn-return") {
                 setVoucherPortalViewMode(false);
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');

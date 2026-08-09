@@ -9,12 +9,12 @@
  *    voucher tables.
  *
  * Usage (CLI):
- *   c:\xampp\php\php.exe SQL/fix_missing_processed_by_logs.php           # dry-run
- *   c:\xampp\php\php.exe SQL/fix_missing_processed_by_logs.php --apply   # commit
+ *   c:\xampp\php\php.exe SQL/patch_fix.php           # dry-run
+ *   c:\xampp\php\php.exe SQL/patch_fix.php --apply   # commit
  *
  * Browser:
- *   http://localhost/vtrams/SQL/fix_missing_processed_by_logs.php
- *   http://localhost/vtrams/SQL/fix_missing_processed_by_logs.php?apply=1
+ *   http://localhost/vtrams/SQL/patch_fix.php
+ *   http://localhost/vtrams/SQL/patch_fix.php?apply=1
  */
 
 declare(strict_types=1);

@@ -536,6 +536,11 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                 accent-color: #2563eb;
                 opacity: 1;
             }
+
+            #my-Table td.voucher-amount-stack-cell {
+                min-width: 148px;
+                vertical-align: middle;
+            }
         </style>
         <div class="content-wrapper">
             <table class="table content_table content_table--dashboard" id="my-Table">
@@ -583,12 +588,8 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                                 $remarksLatest = $senderRemarksRaw;
                             }
                         }
-                        $amountRaw = amount_pdo_value_to_string($row['amount_resolved'] ?? $row['amount'] ?? '');
                         $amountOriginalRaw = amount_pdo_value_to_string($row['amount_original_resolved'] ?? $row['amount'] ?? '');
-                        $amountNormalized = normalize_amount_string($amountRaw);
-                        $amountShown = format_amount_display($amountRaw);
-                        $chargedRaw = trim((string) ($row['charged_amount'] ?? ''));
-                        $showChargedAmount = $chargedRaw !== '' && $chargedRaw !== '0' && $chargedRaw !== '0.00';
+                        $chargedRaw = amount_pdo_value_to_string($row['charged_amount'] ?? '');
                         $voucherStatus = trim((string) ($row['voucher_status'] ?? ''));
                         $isArchivedRow = stripos($voucherStatus, 'archived') !== false || stripos((string) ($row['address'] ?? ''), 'archived') !== false;
                         $coaOptions = trim((string) ($row['coa_options'] ?? ''));
@@ -615,7 +616,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                             </td>
                             <td data-label="processing_no"><?php echo htmlspecialchars((string) ($row['processing_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="payee"><?php echo htmlspecialchars((string) ($row['payee'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="amount" class="amount-cell" data-amount="<?php echo htmlspecialchars($amountNormalized, ENT_QUOTES, 'UTF-8'); ?>" data-amount-formatted="php" data-amount-skip="1"><?php echo htmlspecialchars($amountShown, ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php echo voucher_amount_stack_cell_html($amountOriginalRaw, $chargedRaw, 'amount-cell'); ?>
                             <td data-label="voucher_status_display">
                                 <?php if ($voucherStatus !== '') : ?>
                                     <span class="vstat-status-badge<?= $isArchivedRow ? ' vstat-status-badge--archived' : '' ?>"><?php echo htmlspecialchars($voucherStatus, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -981,15 +982,18 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         var address = cellText(row, 'address');
         var particulars = cellText(row, 'particulars');
         var tin_employee_no = cellText(row, 'tin_employee_no');
-        var amountOriginal = typeof normalizeAmountInput === 'function'
-            ? normalizeAmountInput(cellText(row, 'amount_original'))
-            : cellText(row, 'amount_original');
         var amountTd = row.querySelector('[data-label="amount"]');
-        var amountDisplay = amountTd ? String(amountTd.textContent || '').trim() : '';
+        var grossFromStack = amountTd ? (amountTd.getAttribute('data-amount-gross') || '') : '';
+        var netFromStack = amountTd ? (amountTd.getAttribute('data-amount-net') || '') : '';
+        var amountOriginal = typeof normalizeAmountInput === 'function'
+            ? normalizeAmountInput(cellText(row, 'amount_original') || grossFromStack)
+            : (cellText(row, 'amount_original') || grossFromStack);
         var charged_amount = typeof normalizeAmountInput === 'function'
-            ? normalizeAmountInput(cellText(row, 'charged_amount'))
-            : cellText(row, 'charged_amount');
-        var amount = hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal;
+            ? normalizeAmountInput(cellText(row, 'charged_amount') || netFromStack)
+            : (cellText(row, 'charged_amount') || netFromStack);
+        var amount = typeof hasDistinctNetAmount === 'function' && hasDistinctNetAmount(amountOriginal, charged_amount)
+            ? charged_amount
+            : amountOriginal;
         var voucher_date = cellText(row, 'voucher_date');
         var office_from = cellText(row, 'office_from');
         var office_to = cellText(row, 'office_to');
@@ -1017,9 +1021,9 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
         document.querySelector('.tin_employee_no').value = tin_employee_no;
         document.querySelector('.amount').value = amount;
         if (typeof setAmountDisplayValue === 'function') {
-            setAmountDisplayValue(document.querySelector('.string_amount'), amountDisplay || amount);
+            setAmountDisplayValue(document.querySelector('.string_amount'), amount);
         } else {
-            document.querySelector('.string_amount').value = amountDisplay || amount;
+            document.querySelector('.string_amount').value = amount;
         }
         document.querySelector('.voucher_date').value = voucher_date;
         document.querySelector('.office_from').value = office_from;
