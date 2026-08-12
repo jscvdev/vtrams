@@ -94,7 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         || voucher_user_has_designation($editAmountDesignations, 'Processor')
                         || voucher_user_has_designation($editAmountDesignations, 'Accountant III')
                         || voucher_user_has_designation($editAmountDesignations, 'Budget Unit')
-                        || voucher_user_has_designation($editAmountDesignations, 'Budget Officer');
+                        || voucher_user_has_designation($editAmountDesignations, 'Budget Officer')
+                        || voucher_user_has_designation($editAmountDesignations, 'Cashiers Unit')
+                        || voucher_user_has_designation($editAmountDesignations, 'Cashier');
                     $canEditVoucherDetails = $canEditVoucherAmount
                         || voucher_user_has_designation($editAmountDesignations, 'ICU');
 
@@ -158,7 +160,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $canEditDvNo = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
                             || voucher_user_has_designation($editAmountDesignations, 'Processor')
-                            || voucher_user_has_designation($editAmountDesignations, 'Accountant III');
+                            || voucher_user_has_designation($editAmountDesignations, 'Accountant III')
+                            || voucher_user_has_designation($editAmountDesignations, 'Cashiers Unit')
+                            || voucher_user_has_designation($editAmountDesignations, 'Cashier');
                         if ($canEditDvNo) {
                             $dvTrim = trim((string) $dv_no);
                             if ($dvTrim !== '' && strtoupper($dvTrim) !== 'TBD') {
