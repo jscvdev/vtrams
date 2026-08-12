@@ -156,6 +156,7 @@ $showEditCol = (
     || in_array('Processor', $target, true)
     || in_array('Accountant III', $target, true)
     || in_array('Budget Unit', $target, true)
+    || in_array('Cashiers Unit', $target, true)
     || in_array('Budget Officer', $target, true)
     || in_array('ICU', $target, true)
 );
@@ -2163,10 +2164,13 @@ if ($showCashierArchiveCol) {
         document.getElementById("dv_no").required = true;
         document.querySelector(".dv_no").readOnly = false;
     } else if (targetArray2.includes("Cashiers Unit") || targetArray2.includes("Cashier")) {
+        const orsInput = document.getElementById("ors_no");
         const adaInput = document.getElementById("ada_check_no");
         if (adaInput) {
             adaInput.required = true;
             adaInput.readOnly = false;
+            orsInput.readOnly = false;
+            document.querySelector(".dv_no").readOnly = false;
             adaInput.style.border = "2px solid red";
         }
     }
@@ -2353,7 +2357,8 @@ if ($showCashierArchiveCol) {
     function isAccountingAmountEditRole() {
         return targetArray2.includes('Accounting Unit') ||
             targetArray2.includes('Processor') ||
-            targetArray2.includes('Accountant III');
+            targetArray2.includes('Accountant III') ||
+            targetArray2.includes('Cashiers Unit');
     }
 
     function isAmountEditRole() {
@@ -2718,7 +2723,7 @@ if ($showCashierArchiveCol) {
                 var dvInput = document.getElementById('dv_no');
                 if (dvInput) {
                     dvInput.required = false;
-                    if (targetArray2.includes('Accounting Unit') || targetArray2.includes('Processor') || targetArray2.includes('Accountant III')) {
+                    if (targetArray2.includes('Accounting Unit') || targetArray2.includes('Processor') || targetArray2.includes('Accountant III') || targetArray2.includes('Cashiers Unit')) {
                         dvInput.readOnly = false;
                     }
                 }
@@ -4344,7 +4349,5 @@ if ($showCashierArchiveCol) {
 </body>
 
 </html>
+
 </html>
-
-
-
