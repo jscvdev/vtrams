@@ -885,6 +885,14 @@ $statusReportRowMetaLabel = $isDefaultPreview
                         <p class="status-breakdown-title"><i class="ri-route-line" aria-hidden="true"></i>Route Type</p>
                         <div class="status-breakdown-content" id="sr_route_type"></div>
                     </div>
+                    <div class="status-breakdown-card">
+                        <p class="status-breakdown-title"><i class="ri-file-list-2-line" aria-hidden="true"></i>ORS No.</p>
+                        <div class="status-breakdown-content" id="sr_ors_no"></div>
+                    </div>
+                    <div class="status-breakdown-card">
+                        <p class="status-breakdown-title"><i class="ri-file-text-line" aria-hidden="true"></i>DV No.</p>
+                        <div class="status-breakdown-content" id="sr_dv_no"></div>
+                    </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
                         <p class="status-breakdown-title"><i class="ri-time-line" aria-hidden="true"></i>Latest Action</p>
                         <div class="status-breakdown-content" id="sr_latest"></div>
@@ -1178,6 +1186,14 @@ $statusReportRowMetaLabel = $isDefaultPreview
             });
         }
 
+        function formatBreakdownIdentifier(value) {
+            const text = String(value || '').trim();
+            if (text === '' || text.toUpperCase() === 'TBD' || text.toUpperCase() === 'N/A') {
+                return '—';
+            }
+            return text;
+        }
+
         function openBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
             document.getElementById('statusReportModalTitle').textContent = 'Status Breakdown';
@@ -1195,6 +1211,8 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 }
             }
             document.getElementById('sr_route_type').textContent = entry.category_label || '—';
+            document.getElementById('sr_ors_no').textContent = formatBreakdownIdentifier(entry.ors_no);
+            document.getElementById('sr_dv_no').textContent = formatBreakdownIdentifier(entry.dv_no);
             document.getElementById('sr_latest').textContent = (entry.voucher_status || '—') + (entry.datetime_status ? (' · ' + entry.datetime_status) : '');
             const remarksCard = document.getElementById('sr_latest_remarks_card');
             const remarksEl = document.getElementById('sr_latest_remarks');

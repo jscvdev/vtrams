@@ -158,18 +158,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                         }
 
+                        $canEditOrsNo = voucher_user_has_designation($editAmountDesignations, 'Budget Unit')
+                            || voucher_user_has_designation($editAmountDesignations, 'Budget Officer')
+                            || voucher_user_has_designation($editAmountDesignations, 'Cashiers Unit')
+                            || voucher_user_has_designation($editAmountDesignations, 'Cashier');
+                        $canEditAdaCheckNo = voucher_user_has_designation($editAmountDesignations, 'Cashiers Unit')
+                            || voucher_user_has_designation($editAmountDesignations, 'Cashier');
                         $canEditDvNo = voucher_user_has_designation($editAmountDesignations, 'Accounting Unit')
                             || voucher_user_has_designation($editAmountDesignations, 'Processor')
                             || voucher_user_has_designation($editAmountDesignations, 'Accountant III')
                             || voucher_user_has_designation($editAmountDesignations, 'Cashiers Unit')
                             || voucher_user_has_designation($editAmountDesignations, 'Cashier');
+
+                        $identifiersUpdated = false;
+
+                        if ($canEditOrsNo) {
+                            $orsTrim = trim((string) $ors_no);
+                            if ($orsTrim !== '' && !voucher_field_is_placeholder($orsTrim)) {
+                                update_voucher_document($pdo, $orsTrim, $processing_no);
+                                $ors_no = $orsTrim;
+                                $identifiersUpdated = true;
+                            }
+                        }
+
                         if ($canEditDvNo) {
                             $dvTrim = trim((string) $dv_no);
                             if ($dvTrim !== '' && strtoupper($dvTrim) !== 'TBD') {
                                 update_voucher_dv_no($pdo, $dvTrim, $processing_no);
-                                voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dvTrim, $ada_check_no);
                                 $dv_no = $dvTrim;
+                                $identifiersUpdated = true;
                             }
+                        }
+
+                        if ($canEditAdaCheckNo) {
+                            $adaTrim = trim((string) $ada_check_no);
+                            if ($adaTrim !== '' && !voucher_field_is_placeholder($adaTrim)) {
+                                update_voucher_ada_check_no($pdo, $adaTrim, $processing_no);
+                                $ada_check_no = $adaTrim;
+                                $identifiersUpdated = true;
+                            }
+                        }
+
+                        if ($identifiersUpdated) {
+                            voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
                         }
 
                         if ($canEditVoucherAmount) {

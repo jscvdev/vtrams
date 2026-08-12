@@ -175,6 +175,11 @@ function update_voucher_dv_no(object $pdo, string $dv_no, string $processing_no)
     update_dv($pdo, $dv_no, $processing_no);
 }
 
+function update_voucher_ada_check_no(object $pdo, string $ada_check_no, string $processing_no)
+{
+    update_ada_check_no($pdo, $ada_check_no, $processing_no);
+}
+
 /**
  * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
  */

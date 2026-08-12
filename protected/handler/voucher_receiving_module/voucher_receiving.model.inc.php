@@ -441,6 +441,18 @@ function update_dv(object $pdo, string $dv_no, string $processing_no)
     return $statement->rowCount() > 0;
 }
 
+function update_ada_check_no(object $pdo, string $ada_check_no, string $processing_no)
+{
+    $query = "UPDATE voucher_receiving SET ada_check_no = :ada_check_no WHERE processing_no = :processing_no";
+
+    $statement = $pdo->prepare($query);
+    $statement->bindParam(':ada_check_no', $ada_check_no);
+    $statement->bindParam(':processing_no', $processing_no);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}
+
 /**
  * @return array{updated: bool, effective_amount: string, charged_amount: ?string}
  */
