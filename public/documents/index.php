@@ -27,6 +27,7 @@ if (!empty($_SESSION['logged_in'])) {
 }
 
 require_once '../../protected/page_title_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/asset_version_helper.inc.php';
 
 // Initialize page title helper
 /** @var PageTitleHelper $pageTitleHelper */
@@ -45,42 +46,14 @@ $header_text = $pageTitleHelper->getHeaderText();
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <base href="/vtrams/public/documents/">
     <title><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></title>
-    <!-- Styles -->
-    <link rel="stylesheet" href="../styles/css/base2.css">
+    <?php
+    $loginStylesDir = __DIR__ . '/../styles/css';
+    $loginStylesHref = '/vtrams/public/styles/css/';
+    asset_login_stylesheets($loginStylesHref, $loginStylesDir);
+    ?>
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <link rel="shortcut icon" href="../assets/icons/vtlogo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
-    <style>
-        /* Loader */
-        .loader-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(255, 255, 255, 0.6);
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .loader {
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #0072ff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
     <?php require_once '../../protected/core/components/notifications/notification.inc.php'; ?>
 </head>
 

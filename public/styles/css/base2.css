@@ -1,7 +1,3 @@
-@import 'hstyle.css';
-@import 'custom_buttons.css';
-
-
 /* Root layout */
 .auth-section {
     display: flex;
@@ -124,9 +120,37 @@
 }
 
 @keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
     100% {
         transform: rotate(360deg);
     }
+}
+
+/* Login overlay (index.php) */
+.loader-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.loader-modal.show {
+    display: flex;
+}
+
+.loader {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #0072ff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
 }
 
 /* ========== Popup Notifications ========== */

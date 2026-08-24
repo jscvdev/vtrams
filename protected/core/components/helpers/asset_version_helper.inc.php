@@ -46,6 +46,31 @@ function asset_base_stylesheets(string $hrefPrefix, string $absoluteDir): void
 }
 
 /**
+ * Stylesheets used by public/documents/index.php (login).
+ * Loaded as separate cache-busted files (not via @import).
+ *
+ * @return list<string>
+ */
+function asset_login_stylesheet_files(): array
+{
+    return [
+        'hstyle.css',
+        'custom_buttons.css',
+        'base2.css',
+    ];
+}
+
+/**
+ * Echo cache-busted links for the login page CSS.
+ */
+function asset_login_stylesheets(string $hrefPrefix, string $absoluteDir): void
+{
+    foreach (asset_login_stylesheet_files() as $styleFile) {
+        asset_stylesheet($hrefPrefix . $styleFile, $absoluteDir . '/' . $styleFile);
+    }
+}
+
+/**
  * Echo a cache-busted stylesheet link tag.
  */
 function asset_stylesheet(string $href, string $absolutePath): void
