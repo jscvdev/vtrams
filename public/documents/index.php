@@ -67,7 +67,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                 </div>
                 <div class="header-logo__container">
                     <a href="#" class="header__logo">
-                        <img src="../assets/img/vtlogo2.png" alt="DENR Logo">
+                        <img src="../assets/img/vtlogo3.png" alt="DENR Logo">
                     </a>
                     <p><?php echo htmlspecialchars($header_text, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
