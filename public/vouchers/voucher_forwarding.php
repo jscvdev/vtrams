@@ -650,6 +650,7 @@ if ($showCashierArchiveCol) {
                                 <input type="text" name="string_amount" class="string_amount form-custom-input amount_main_display" id="string_amount" placeholder="Amount" required readonly>
                                 <input type="hidden" name="amount" class="amount" id="int_amount" value="1">
                                 <input type="hidden" name="gross_amount" id="gross_amount" value="">
+                                <input type="hidden" name="apply_amount_update" id="apply_amount_update" value="0">
                                 <div class="voucher-amount-split-panel" id="voucherAmountSplitPanel" style="display: none;">
                                     <p class="voucher-amount-split-panel__title">Amount</p>
                                     <div class="voucher-amount-split-panel__body">
@@ -2288,11 +2289,17 @@ if ($showCashierArchiveCol) {
         if (splitPanel) splitPanel.style.display = showSplit ? 'block' : 'none';
     }
 
-    function watchAmountInput(inputElement, outputElement) {
-        if (!inputElement || !outputElement) return;
+    function watchAmountInput(inputElement, outputElements) {
+        if (!inputElement) return;
+
+        var outputs = Array.isArray(outputElements) ? outputElements : [outputElements];
+        outputs = outputs.filter(Boolean);
+        if (outputs.length === 0) return;
 
         inputElement.readOnly = false;
-        outputElement.readOnly = false;
+        outputs.forEach(function(outputElement) {
+            outputElement.readOnly = false;
+        });
 
         let lastValue = inputElement.value;
 
@@ -2300,7 +2307,9 @@ if ($showCashierArchiveCol) {
             const currentValue = inputElement.value;
             if (currentValue !== lastValue) {
                 lastValue = currentValue;
-                syncAmountFields(currentValue, outputElement);
+                outputs.forEach(function(outputElement) {
+                    syncAmountFields(currentValue, outputElement);
+                });
             }
         }
 
@@ -2309,15 +2318,21 @@ if ($showCashierArchiveCol) {
         }
     }
 
-    function enableAmountEditing() {
-        watchAmountInput(
-            document.getElementById('original_string_amount'),
-            document.getElementById('gross_amount')
-        );
-        watchAmountInput(
-            document.getElementById('charged_string_amount'),
-            document.getElementById('int_amount')
-        );
+    function enableAmountEditing(allowNet) {
+        var grossInput = document.getElementById('original_string_amount');
+        var grossHidden = document.getElementById('gross_amount');
+        var chargedInput = document.getElementById('charged_string_amount');
+        var intAmount = document.getElementById('int_amount');
+
+        if (grossInput && grossHidden && intAmount) {
+            watchAmountInput(
+                grossInput,
+                allowNet ? [grossHidden] : [grossHidden, intAmount]
+            );
+        }
+        if (allowNet && chargedInput && intAmount) {
+            watchAmountInput(chargedInput, intAmount);
+        }
     }
 
     function resetVoucherDetailEditing() {
@@ -2444,6 +2459,10 @@ if ($showCashierArchiveCol) {
             const grossHiddenInput = document.getElementById('gross_amount');
             if (grossHiddenInput) {
                 grossHiddenInput.value = normalizeAmountInput(amountOriginal);
+            }
+            const applyAmountUpdateInput = document.getElementById('apply_amount_update');
+            if (applyAmountUpdateInput) {
+                applyAmountUpdateInput.value = '0';
             }
 
             document.querySelector('.voucher_date').value = voucher_date;
@@ -2746,21 +2765,24 @@ if ($showCashierArchiveCol) {
                         "Edit Voucher" :
                         "Edit Amount";
 
+                    const editingDistinctNet = hasDistinctNetAmount(amountOriginal, charged_amount);
                     setAmountSplitViewMode(true);
                     if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                     if (stringAmountInput) stringAmountInput.removeAttribute('required');
                     if (originalContainer) originalContainer.style.display = 'flex';
-                    if (chargedContainer) chargedContainer.style.display = 'flex';
+                    if (chargedContainer) chargedContainer.style.display = editingDistinctNet ? 'flex' : 'none';
                     if (originalStringInput) {
                         originalStringInput.disabled = false;
                         setAmountDisplayValue(originalStringInput, amountOriginal);
                     }
                     if (chargedStringInput) {
-                        chargedStringInput.disabled = false;
-                        setAmountDisplayValue(
-                            chargedStringInput,
-                            hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal
-                        );
+                        if (editingDistinctNet) {
+                            chargedStringInput.disabled = false;
+                            setAmountDisplayValue(chargedStringInput, charged_amount);
+                        } else {
+                            chargedStringInput.disabled = true;
+                            chargedStringInput.value = '';
+                        }
                     }
 
                     const mainAmountInput = document.getElementById('string_amount');
@@ -2773,11 +2795,15 @@ if ($showCashierArchiveCol) {
                     const intAmountInput = document.getElementById('int_amount');
                     if (intAmountInput) {
                         intAmountInput.value = normalizeAmountInput(
-                            hasDistinctNetAmount(amountOriginal, charged_amount) ? charged_amount : amountOriginal
+                            editingDistinctNet ? charged_amount : amountOriginal
                         );
                     }
+                    const applyAmountUpdateInput = document.getElementById('apply_amount_update');
+                    if (applyAmountUpdateInput) {
+                        applyAmountUpdateInput.value = '1';
+                    }
 
-                    enableAmountEditing();
+                    enableAmountEditing(editingDistinctNet);
                 } else {
                     document.getElementById("form_title").textContent = "Edit Voucher";
 
@@ -2786,8 +2812,22 @@ if ($showCashierArchiveCol) {
                     if (stringAmountInput) stringAmountInput.removeAttribute('required');
                     if (originalContainer) originalContainer.style.display = 'none';
                     if (chargedContainer) chargedContainer.style.display = 'none';
-                    if (originalStringInput) originalStringInput.disabled = true;
-                    if (chargedStringInput) chargedStringInput.disabled = true;
+                    if (originalStringInput) {
+                        originalStringInput.disabled = true;
+                        originalStringInput.value = '';
+                    }
+                    if (chargedStringInput) {
+                        chargedStringInput.disabled = true;
+                        chargedStringInput.value = '';
+                    }
+                    const grossHiddenInput = document.getElementById('gross_amount');
+                    if (grossHiddenInput) {
+                        grossHiddenInput.value = '';
+                    }
+                    const applyAmountUpdateInput = document.getElementById('apply_amount_update');
+                    if (applyAmountUpdateInput) {
+                        applyAmountUpdateInput.value = '0';
+                    }
                 }
             }
         });
@@ -2800,23 +2840,40 @@ if ($showCashierArchiveCol) {
         form.addEventListener('submit', function() {
             const actionButton = document.querySelector('.btn-dynamic');
             const actionName = actionButton ? actionButton.getAttribute('name') : '';
+            const grossHidden = document.getElementById('gross_amount');
+            const applyAmountUpdateInput = document.getElementById('apply_amount_update');
+
             if (actionName !== 'edit_voucher_amount') {
+                if (grossHidden) {
+                    grossHidden.value = '';
+                }
+                if (applyAmountUpdateInput) {
+                    applyAmountUpdateInput.value = '0';
+                }
                 return;
             }
 
             const intAmount = document.getElementById('int_amount');
-            const grossHidden = document.getElementById('gross_amount');
             const grossInput = document.getElementById('original_string_amount');
             const chargedInput = document.getElementById('charged_string_amount');
+            const applyAmountUpdate = applyAmountUpdateInput && applyAmountUpdateInput.value === '1';
 
-            if (chargedInput && intAmount && !chargedInput.disabled) {
-                syncAmountFields(chargedInput.value, intAmount);
+            if (!applyAmountUpdate) {
+                if (grossHidden) {
+                    grossHidden.value = '';
+                }
+                return;
             }
+
             if (grossInput && grossHidden && !grossInput.disabled) {
                 syncAmountFields(grossInput.value, grossHidden);
             }
 
-            if (intAmount && (!chargedInput || chargedInput.disabled)) {
+            if (chargedInput && intAmount && !chargedInput.disabled) {
+                syncAmountFields(chargedInput.value, intAmount);
+            } else if (grossInput && intAmount && !grossInput.disabled) {
+                syncAmountFields(grossInput.value, intAmount);
+            } else if (intAmount) {
                 const stringInput = document.getElementById('string_amount');
                 if (stringInput) {
                     syncAmountFields(stringInput.value, intAmount);

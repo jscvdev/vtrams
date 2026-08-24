@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "tin_employee_no",
             "amount",
             "gross_amount",
+            "apply_amount_update",
             "voucher_type",
             "voucher_date",
             "office_from",
@@ -47,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'tin_employee_no' => 'tin_employee_no',
             'amount' => 'amount',
             'gross_amount' => 'gross_amount',
+            'apply_amount_update' => 'apply_amount_update',
             'voucher_type' => 'voucher_type',
             'voucher_date' => 'voucher_date',
             'office_from' => 'office_from',
@@ -203,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
                         }
 
-                        if ($canEditVoucherAmount) {
+                        if ($canEditVoucherAmount && ($apply_amount_update ?? '') === '1') {
                             $amountUpdate = update_voucher_amount($pdo, $processing_no, $amount, $gross_amount);
                             $logAmount = $amountUpdate['effective_amount'] ?? $amount;
                         }

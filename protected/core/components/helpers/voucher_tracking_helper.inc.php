@@ -3718,9 +3718,14 @@ function voucher_tracking_dashboard_fetch_columns_sql(): string
  * @return array{
  *   voucherType: array<string, int>,
  *   amountByType: array<string, float>,
+ *   amountByTypeGross: array<string, float>,
+ *   amountByTypeNet: array<string, float>,
  *   monthly: array<string, int>,
  *   totalEntries: int,
- *   totalAmount: float
+ *   totalAmount: float,
+ *   totalGross: float,
+ *   totalNet: float,
+ *   hasDistinctNet: bool
  * }
  */
 function voucher_tracking_dashboard_build_analytics_stats(array $rows): array
@@ -3730,9 +3735,14 @@ function voucher_tracking_dashboard_build_analytics_stats(array $rows): array
     $stats = [
         'voucherType' => [],
         'amountByType' => [],
+        'amountByTypeGross' => [],
+        'amountByTypeNet' => [],
         'monthly' => [],
         'totalEntries' => 0,
         'totalAmount' => 0.0,
+        'totalGross' => 0.0,
+        'totalNet' => 0.0,
+        'hasDistinctNet' => false,
     ];
 
     foreach ($rows as $row) {
@@ -3742,10 +3752,24 @@ function voucher_tracking_dashboard_build_analytics_stats(array $rows): array
         }
         $stats['voucherType'][$voucherType] = ($stats['voucherType'][$voucherType] ?? 0) + 1;
 
+        $grossRaw = amount_pdo_value_to_string($row['amount'] ?? '');
+        $grossNormalized = normalize_amount_string($grossRaw);
+        $grossAmount = $grossNormalized !== '' ? (float) $grossNormalized : 0.0;
+
         $effective = amount_resolve_charged_or_amount($row['charged_amount'] ?? '', $row['amount'] ?? '');
-        $normalized = normalize_amount_string($effective);
-        $amount = $normalized !== '' ? (float) $normalized : 0.0;
-        $stats['amountByType'][$voucherType] = ($stats['amountByType'][$voucherType] ?? 0.0) + $amount;
+        $netNormalized = normalize_amount_string($effective);
+        $netAmount = $netNormalized !== '' ? (float) $netNormalized : 0.0;
+
+        if (
+            amount_is_non_zero($row['charged_amount'] ?? null)
+            && !amounts_equal_string($grossRaw, amount_pdo_value_to_string($row['charged_amount'] ?? ''))
+        ) {
+            $stats['hasDistinctNet'] = true;
+        }
+
+        $stats['amountByTypeGross'][$voucherType] = ($stats['amountByTypeGross'][$voucherType] ?? 0.0) + $grossAmount;
+        $stats['amountByTypeNet'][$voucherType] = ($stats['amountByTypeNet'][$voucherType] ?? 0.0) + $netAmount;
+        $stats['amountByType'][$voucherType] = ($stats['amountByType'][$voucherType] ?? 0.0) + $netAmount;
 
         $voucherDate = trim((string) ($row['voucher_date'] ?? ''));
         if ($voucherDate !== '') {
@@ -3757,7 +3781,9 @@ function voucher_tracking_dashboard_build_analytics_stats(array $rows): array
         }
 
         $stats['totalEntries']++;
-        $stats['totalAmount'] += $amount;
+        $stats['totalGross'] += $grossAmount;
+        $stats['totalNet'] += $netAmount;
+        $stats['totalAmount'] += $netAmount;
     }
 
     return $stats;

@@ -486,6 +486,16 @@ if ($scriptName !== '') {
         font-variant-numeric: tabular-nums;
     }
 
+    .analytics-stat-card__value .voucher-amount-stack {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .analytics-stat-card__value .voucher-amount-row__value {
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
     .analytics-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -708,7 +718,7 @@ if ($scriptName !== '') {
                 <div class="analytics-chart-wrap"><canvas id="voucherTypeChart"></canvas></div>
             </article>
             <article class="analytics-card analytics-card--chart">
-                <h3 class="analytics-card__title">Amount by Voucher Type</h3>
+                <h3 class="analytics-card__title" id="amountChartTitle">Amount by Voucher Type</h3>
                 <div class="analytics-chart-wrap"><canvas id="amountChart"></canvas></div>
             </article>
         </section>
@@ -892,24 +902,37 @@ if ($scriptName !== '') {
                 const stats = {
                     voucherType: {},
                     amountByType: {},
+                    amountByTypeGross: {},
+                    amountByTypeNet: {},
                     monthly: {},
                     totalEntries: 0,
-                    totalAmount: 0
+                    totalAmount: 0,
+                    totalGross: 0,
+                    totalNet: 0,
+                    hasDistinctNet: false
                 };
 
                 data.forEach(row => {
-                    // Voucher type distribution
                     const voucherType = row.voucher_type || 'Unknown';
                     stats.voucherType[voucherType] = (stats.voucherType[voucherType] || 0) + 1;
 
-                    // Amount by voucher type (gross unless net differs)
-                    const amountSource = typeof resolveEffectiveAmount === 'function'
+                    const grossSource = normalizeAmountInput(row.amount || '');
+                    const netSource = typeof resolveEffectiveAmount === 'function'
                         ? resolveEffectiveAmount(row.amount || '', row.charged_amount || '')
                         : (isNonZeroAmount(row.charged_amount) ? row.charged_amount : (row.amount || ''));
-                    const amount = parseFloat(normalizeAmountInput(amountSource)) || 0;
-                    stats.amountByType[voucherType] = (stats.amountByType[voucherType] || 0) + amount;
+                    const grossAmount = parseFloat(grossSource) || 0;
+                    const netAmount = parseFloat(normalizeAmountInput(netSource)) || 0;
 
-                    // Monthly distribution
+                    if (typeof hasDistinctNetAmount === 'function'
+                        ? hasDistinctNetAmount(row.amount || '', row.charged_amount || '')
+                        : (isNonZeroAmount(row.charged_amount) && !amountsEqualString(row.amount || '', row.charged_amount || ''))) {
+                        stats.hasDistinctNet = true;
+                    }
+
+                    stats.amountByTypeGross[voucherType] = (stats.amountByTypeGross[voucherType] || 0) + grossAmount;
+                    stats.amountByTypeNet[voucherType] = (stats.amountByTypeNet[voucherType] || 0) + netAmount;
+                    stats.amountByType[voucherType] = (stats.amountByType[voucherType] || 0) + netAmount;
+
                     if (row.voucher_date) {
                         const date = new Date(row.voucher_date);
                         const monthYear = date.toLocaleDateString('en-US', {
@@ -920,7 +943,9 @@ if ($scriptName !== '') {
                     }
 
                     stats.totalEntries++;
-                    stats.totalAmount += amount;
+                    stats.totalGross += grossAmount;
+                    stats.totalNet += netAmount;
+                    stats.totalAmount += netAmount;
                 });
 
                 return stats;
@@ -930,9 +955,17 @@ if ($scriptName !== '') {
                 const normalizedStats = stats && typeof stats === 'object' ? stats : processData([]);
                 const voucherTypeMap = normalizedStats.voucherType || {};
                 const amountByTypeMap = normalizedStats.amountByType || {};
+                const amountByTypeGrossMap = normalizedStats.amountByTypeGross || amountByTypeMap;
+                const amountByTypeNetMap = normalizedStats.amountByTypeNet || amountByTypeMap;
                 const monthlyMap = normalizedStats.monthly || {};
                 const totalEntries = normalizedStats.totalEntries || 0;
-                const totalAmount = normalizedStats.totalAmount || 0;
+                const totalAmount = normalizedStats.totalAmount || normalizedStats.totalNet || 0;
+                const totalGross = normalizedStats.totalGross != null ? normalizedStats.totalGross : totalAmount;
+                const totalNet = normalizedStats.totalNet != null ? normalizedStats.totalNet : totalAmount;
+                const hasDistinctNet = !!normalizedStats.hasDistinctNet
+                    || (typeof hasDistinctNetAmount === 'function'
+                        ? hasDistinctNetAmount(String(totalGross), String(totalNet))
+                        : totalGross !== totalNet);
                 const voucherTypeCount = Object.keys(voucherTypeMap).length;
 
                 // Color palettes aligned with dashboard theme
@@ -981,25 +1014,59 @@ if ($scriptName !== '') {
 
                 // ==== AMOUNT BY VOUCHER TYPE BAR CHART ====
                 if (amountChart) amountChart.destroy();
-                const amountLabels = Object.keys(amountByTypeMap);
-                const amountData = Object.values(amountByTypeMap);
+                const amountChartTitle = document.getElementById('amountChartTitle');
+                if (amountChartTitle) {
+                    amountChartTitle.textContent = hasDistinctNet
+                        ? 'Amount by Voucher Type (Gross / Net)'
+                        : 'Amount by Voucher Type';
+                }
+                const amountLabelSet = new Set([
+                    ...Object.keys(amountByTypeGrossMap),
+                    ...Object.keys(amountByTypeNetMap)
+                ]);
+                const amountLabels = Array.from(amountLabelSet);
+                const amountDatasets = hasDistinctNet ? [{
+                        label: 'Gross',
+                        data: amountLabels.map(label => amountByTypeGrossMap[label] || 0),
+                        backgroundColor: 'rgba(5, 150, 105, 0.72)',
+                        borderRadius: 6,
+                        maxBarThickness: 28
+                    },
+                    {
+                        label: 'Net',
+                        data: amountLabels.map(label => amountByTypeNetMap[label] || 0),
+                        backgroundColor: 'rgba(37, 99, 235, 0.72)',
+                        borderRadius: 6,
+                        maxBarThickness: 28
+                    }
+                ] : [{
+                    label: 'Total Amount',
+                    data: amountLabels.map(label => amountByTypeNetMap[label] || amountByTypeGrossMap[label] || 0),
+                    backgroundColor: 'rgba(74, 118, 255, 0.72)',
+                    borderRadius: 6,
+                    maxBarThickness: 36
+                }];
                 amountChart = new Chart(ctxAmount, {
                     type: 'bar',
                     data: {
                         labels: amountLabels,
-                        datasets: [{
-                            label: 'Total Amount',
-                            data: amountData,
-                            backgroundColor: 'rgba(74, 118, 255, 0.72)',
-                            borderRadius: 6,
-                            maxBarThickness: 36
-                        }]
+                        datasets: amountDatasets
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         animation: { duration: 350 },
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: hasDistinctNet ? chartLegend : { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label(ctx) {
+                                        const value = ctx.parsed.y || 0;
+                                        return (ctx.dataset.label || 'Amount') + ': ₱' + formatPesoAmount(value);
+                                    }
+                                }
+                            }
+                        },
                         scales: {
                             x: {
                                 ticks: chartScaleTicks,
@@ -1007,7 +1074,12 @@ if ($scriptName !== '') {
                             },
                             y: {
                                 beginAtZero: true,
-                                ticks: chartScaleTicks,
+                                ticks: {
+                                    ...chartScaleTicks,
+                                    callback(value) {
+                                        return '₱' + formatPesoAmount(value);
+                                    }
+                                },
                                 grid: { color: '#f1f5f9', drawBorder: false }
                             }
                         }
@@ -1066,6 +1138,15 @@ if ($scriptName !== '') {
                 const overallTableDiv = document.getElementById('overallTable');
                 overallTableDiv.innerHTML = '';
 
+                const totalAmountDisplay = typeof buildAmountStackHtml === 'function'
+                    ? buildAmountStackHtml(
+                        typeof ensureAmountTwoDecimals === 'function' ? ensureAmountTwoDecimals(String(totalGross)) : String(totalGross),
+                        hasDistinctNet
+                            ? (typeof ensureAmountTwoDecimals === 'function' ? ensureAmountTwoDecimals(String(totalNet)) : String(totalNet))
+                            : ''
+                    )
+                    : ('₱' + formatPesoAmount(totalNet));
+
                 const statCards = [{
                         label: 'Total Vouchers',
                         value: totalEntries,
@@ -1074,7 +1155,8 @@ if ($scriptName !== '') {
                     },
                     {
                         label: 'Total Amount',
-                        value: '₱' + formatPesoAmount(totalAmount),
+                        value: totalAmountDisplay,
+                        isHtml: typeof buildAmountStackHtml === 'function',
                         icon: 'ri-money-dollar-circle-line',
                         tone: 'green'
                     },
@@ -1089,13 +1171,14 @@ if ($scriptName !== '') {
                 statCards.forEach(stat => {
                     const card = document.createElement('article');
                     card.className = 'analytics-stat-card';
+                    const valueMarkup = stat.isHtml ? stat.value : stat.value;
                     card.innerHTML = `
                         <div class="analytics-stat-card__icon analytics-stat-card__icon--${stat.tone}">
                             <i class="${stat.icon}" aria-hidden="true"></i>
                         </div>
                         <div class="analytics-stat-card__body">
                             <div class="analytics-stat-card__label">${stat.label}</div>
-                            <div class="analytics-stat-card__value">${stat.value}</div>
+                            <div class="analytics-stat-card__value">${valueMarkup}</div>
                         </div>`;
                     overallTableDiv.appendChild(card);
                 });

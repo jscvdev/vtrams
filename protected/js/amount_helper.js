@@ -20,10 +20,13 @@ function ensureAmountTwoDecimals(raw) {
 function formatAmountDisplay(raw) {
     var normalized = normalizeAmountInput(raw);
     if (normalized === '') return '';
+    if (normalized.indexOf('.') === -1) {
+        normalized += '.00';
+    }
     var parts = normalized.split('.');
     var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    var formatted = parts.length > 1 ? intPart + '.' + parts[1] : intPart;
-    return '₱' + formatted;
+    var frac = (parts[1] || '00').padEnd(2, '0').slice(0, 2);
+    return '₱' + intPart + '.' + frac;
 }
 
 function sanitizeAmountInputField(input) {
