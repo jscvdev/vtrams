@@ -72,8 +72,13 @@ $header_text = $pageTitleHelper->getHeaderText();
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
     <?php require_once '../../protected/core/components/notifications/notification.inc.php'; ?>
@@ -109,6 +114,7 @@ $header_text = $pageTitleHelper->getHeaderText();
     <section class="auth-section">
         <div class="auth-container">
             <div class="auth-box">
+                <img src="../assets/img/vtlogo.png">
                 <h2>Login</h2>
                 <form id="loginForm" method="POST">
                     <input type="hidden" name="action" value="login">
