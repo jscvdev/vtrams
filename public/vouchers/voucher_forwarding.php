@@ -2766,23 +2766,19 @@ if ($showCashierArchiveCol) {
                         "Edit Amount";
 
                     const editingDistinctNet = hasDistinctNetAmount(amountOriginal, charged_amount);
+                    const netDisplayAmount = editingDistinctNet ? charged_amount : amountOriginal;
                     setAmountSplitViewMode(true);
                     if (amountPrimaryBlock) amountPrimaryBlock.style.display = '';
                     if (stringAmountInput) stringAmountInput.removeAttribute('required');
                     if (originalContainer) originalContainer.style.display = 'flex';
-                    if (chargedContainer) chargedContainer.style.display = editingDistinctNet ? 'flex' : 'none';
+                    if (chargedContainer) chargedContainer.style.display = 'flex';
                     if (originalStringInput) {
                         originalStringInput.disabled = false;
                         setAmountDisplayValue(originalStringInput, amountOriginal);
                     }
                     if (chargedStringInput) {
-                        if (editingDistinctNet) {
-                            chargedStringInput.disabled = false;
-                            setAmountDisplayValue(chargedStringInput, charged_amount);
-                        } else {
-                            chargedStringInput.disabled = true;
-                            chargedStringInput.value = '';
-                        }
+                        chargedStringInput.disabled = false;
+                        setAmountDisplayValue(chargedStringInput, netDisplayAmount);
                     }
 
                     const mainAmountInput = document.getElementById('string_amount');
@@ -2794,16 +2790,14 @@ if ($showCashierArchiveCol) {
                     }
                     const intAmountInput = document.getElementById('int_amount');
                     if (intAmountInput) {
-                        intAmountInput.value = normalizeAmountInput(
-                            editingDistinctNet ? charged_amount : amountOriginal
-                        );
+                        intAmountInput.value = normalizeAmountInput(netDisplayAmount);
                     }
                     const applyAmountUpdateInput = document.getElementById('apply_amount_update');
                     if (applyAmountUpdateInput) {
                         applyAmountUpdateInput.value = '1';
                     }
 
-                    enableAmountEditing(editingDistinctNet);
+                    enableAmountEditing(true);
                 } else {
                     document.getElementById("form_title").textContent = "Edit Voucher";
 
@@ -2877,6 +2871,15 @@ if ($showCashierArchiveCol) {
                 const stringInput = document.getElementById('string_amount');
                 if (stringInput) {
                     syncAmountFields(stringInput.value, intAmount);
+                }
+            }
+
+            // When net equals gross, keep amount aligned with gross so charged_amount is not stored.
+            if (grossHidden && intAmount && chargedInput && !chargedInput.disabled) {
+                const grossNorm = normalizeAmountInput(grossHidden.value);
+                const netNorm = normalizeAmountInput(chargedInput.value);
+                if (grossNorm !== '' && netNorm !== '' && amountsEqualString(grossNorm, netNorm)) {
+                    intAmount.value = grossNorm;
                 }
             }
         });
