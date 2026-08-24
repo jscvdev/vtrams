@@ -48,7 +48,7 @@ $header_text = $pageTitleHelper->getHeaderText();
     <!-- Styles -->
     <link rel="stylesheet" href="../styles/css/base2.css">
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
-    <link rel="shortcut icon" href="../assets/icons/DENR3.ico">
+    <link rel="shortcut icon" href="../assets/icons/vtlogo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
     <style>
         /* Loader */
@@ -94,7 +94,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                 </div>
                 <div class="header-logo__container">
                     <a href="#" class="header__logo">
-                        <img src="../assets/img/DENR3.png" alt="DENR Logo">
+                        <img src="../assets/img/vtlogo2.png" alt="DENR Logo">
                     </a>
                     <p><?php echo htmlspecialchars($header_text, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>

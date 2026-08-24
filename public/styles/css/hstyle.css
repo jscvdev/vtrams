@@ -799,7 +799,7 @@ tr {
 }
 
 .header__logo {
-    width: 50px;
+    width: 100px;
     float: left;
 }
 
@@ -820,7 +820,7 @@ tr {
 }
 
 .header__logo img {
-    width: 40px;
+    width: 100px;
     height: 40px;
     float: left;
 }

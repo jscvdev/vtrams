@@ -114,7 +114,7 @@ $header_text = $pageTitleHelper->getHeaderText();
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <!--    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">-->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.1.0/remixicon.css" />
-    <link rel="shortcut icon" href="../assets/icons/DENR3.ico">
+    <link rel="shortcut icon" href="../assets/icons/vtlogo.ico">
     <style id="main-loader-critical">
         html.page-loading #main {
             position: relative;
@@ -209,7 +209,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                 </div>
                 <div class="header-logo__container">
                     <a href="#" class="header__logo">
-                        <img src="../assets/img/DENR3.png" alt="">
+                        <img src="../assets/img/vtlogo2.png" alt="">
                     </a>
                     <p><?php echo htmlspecialchars($header_text, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
