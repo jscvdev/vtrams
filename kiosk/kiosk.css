@@ -166,7 +166,7 @@ body {
 }
 
 .kiosk-body .header__logo img {
-    width: 40px;
+    width: 100px;
     height: 40px;
     float: left;
     object-fit: contain;

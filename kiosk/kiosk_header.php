@@ -78,7 +78,7 @@ $kioskStylesDir = __DIR__ . '/../public/styles/css';
                 </div>
                 <div class="header-logo__container">
                     <a href="#" class="header__logo">
-                        <img src="../public/assets/img/DENR3.png" alt="">
+                        <img src="../public/assets/img/vtlogo2.png" alt="">
                     </a>
                     <p><?php echo htmlspecialchars($header_text, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
