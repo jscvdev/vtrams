@@ -615,17 +615,24 @@ button {
   }
 
 /* Pill-style remarks badge (gradient background + rounded corners) */
+.return-remarks-cell {
+    max-width: 16rem;
+    width: 16rem;
+    vertical-align: middle;
+}
+
 .remarks-badge {
     display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     padding: 4px 12px;
-    border-radius: 999px;
+    border-radius: 12px;
     background: linear-gradient(135deg, #34d399, #059669);
     color: #ffffff;
     font-size: 12px;
     font-weight: 600;
-    white-space: nowrap;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .remarks-badge::before {
@@ -634,6 +641,20 @@ button {
     height: 8px;
     border-radius: 999px;
     background-color: #ef4444;
+    flex-shrink: 0;
+    margin-top: 0.25em;
+}
+
+.remarks-badge-text {
+    min-width: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
 }
 
 /* Voucher type pill — mirrors .remarks-badge (gradient + dot) */

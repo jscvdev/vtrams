@@ -740,7 +740,7 @@ $totalRows = $displayTotal;
                                         }
                                     }
                                     echo $sender_latest !== ''
-                                        ? '<span class="remarks-badge">' . htmlspecialchars($sender_latest) . '</span>'
+                                        ? '<span class="remarks-badge" title="' . htmlspecialchars($sender_latest, ENT_QUOTES, 'UTF-8') . '"><span class="remarks-badge-text">' . htmlspecialchars($sender_latest, ENT_QUOTES, 'UTF-8') . '</span></span>'
                                         : '';
                                 ?></td>
                                 <td class="voucher-table-actions-cell" data-label="actions">

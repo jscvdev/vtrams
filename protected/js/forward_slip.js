@@ -201,13 +201,13 @@ window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
 /* On-screen: keep it hidden */
 #forward-slip-print-root { display: none; }
 
-/* Print: show slip only */
+/* Print: show slip only (hide siblings instead of visibility:hidden, which can drop QR/images) */
 @media print {
-  body.forward-slip-printing * { visibility: hidden !important; }
+  body.forward-slip-printing > *:not(#forward-slip-print-root) { display: none !important; }
   body.forward-slip-printing #forward-slip-print-root,
   body.forward-slip-printing #forward-slip-print-root * { visibility: visible !important; }
   body.forward-slip-printing #forward-slip-print-root {
-    display: block !important;
+    display: flex !important;
     position: fixed;
     left: 0;
     top: 0;
@@ -216,8 +216,6 @@ window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
     background: #fff;
     z-index: 2147483647;
     overflow: visible;
-    /* center slip horizontally; align to top so fit scaling keeps bottom on-page */
-    display: flex !important;
     align-items: flex-start;
     justify-content: center;
     padding-top: 0.3in;
@@ -226,7 +224,7 @@ window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
 }
 
 /* Slip styling (matches reference) */
-#forward-slip-print-root * { box-sizing: border-box; }
+#forward-slip-print-root *:not(svg):not(svg *) { box-sizing: border-box; }
 .forward-slip-sheet {
   /* slightly smaller than A5 landscape */
   width: 198mm;
@@ -254,7 +252,8 @@ window.isEncodedVoucherForwardSubmit = isEncodedVoucherForwardSubmit;
 .forward-slip-sheet .row.space { justify-content: space-between; }
 .forward-slip-sheet .processing-row { align-items: center; gap: 4mm; justify-content: space-between; }
 .forward-slip-sheet .slip-qr { flex-shrink: 0; line-height: 0; margin-left: auto; }
-.forward-slip-sheet .slip-qr img {
+.forward-slip-sheet .slip-qr img,
+.forward-slip-sheet .slip-qr svg {
   width: 20mm;
   height: 20mm;
   display: block;

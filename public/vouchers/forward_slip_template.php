@@ -9,13 +9,14 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Output\QRMarkupSVG;
 
 function h($value)
 {
     return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-function processing_no_qr_data_uri($processingNo)
+function processing_no_qr_svg($processingNo)
 {
     $raw = trim((string)($processingNo ?? ''));
     if ($raw === '') {
@@ -24,13 +25,15 @@ function processing_no_qr_data_uri($processingNo)
 
     try {
         $options = new QROptions([
-            'outputType' => QRCode::OUTPUT_IMAGE_PNG,
+            'outputInterface' => QRMarkupSVG::class,
+            'outputBase64' => false,
+            'svgAddXmlHeader' => false,
             'scale' => 5,
-            'outputBase64' => true,
             'quietzoneSize' => 1,
         ]);
 
-        return (new QRCode($options))->render($raw);
+        $svg = (new QRCode($options))->render($raw);
+        return is_string($svg) ? $svg : '';
     } catch (Throwable $e) {
         return '';
     }
@@ -48,7 +51,7 @@ function formatAmount($val)
 $claimant = h($_POST['claimant'] ?? '');
 $processingNoRaw = trim((string)($_POST['processing_no'] ?? ''));
 $processingNo = h($processingNoRaw);
-$processingNoQr = processing_no_qr_data_uri($processingNoRaw);
+$processingNoQr = processing_no_qr_svg($processingNoRaw);
 $amount = formatAmount($_POST['amount'] ?? '');
 $nature = h($_POST['nature'] ?? '');
 $remarks = h($_POST['remarks'] ?? '');
@@ -109,8 +112,8 @@ function selected_match_label($base, $set)
             <div class="field text processing-no-field"><span><?= $processingNo ?></span></div>
         </div>
         <?php if ($processingNoQr !== ''): ?>
-        <div class="slip-qr">
-            <img src="<?= h($processingNoQr) ?>" alt="Processing No. QR Code" width="80" height="80">
+        <div class="slip-qr" aria-label="Processing No. QR Code">
+            <?= $processingNoQr ?>
         </div>
         <?php endif; ?>
     </div>

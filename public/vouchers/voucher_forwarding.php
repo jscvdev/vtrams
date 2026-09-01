@@ -1302,7 +1302,7 @@ if ($showCashierArchiveCol) {
 
                                 if ($fwd_latest !== '') :
                                 ?>
-                                    <span class="remarks-badge"><?php echo htmlspecialchars($fwd_latest); ?></span>
+                                    <span class="remarks-badge" title="<?php echo htmlspecialchars($fwd_latest, ENT_QUOTES, 'UTF-8'); ?>"><span class="remarks-badge-text"><?php echo htmlspecialchars($fwd_latest, ENT_QUOTES, 'UTF-8'); ?></span></span>
                                 <?php else : ?>
 
                                 <?php endif; ?>
