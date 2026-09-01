@@ -1,10 +1,18 @@
 <?php
+require_once __DIR__ . '/../vendor/autoload.php';
 
 require_once __DIR__ . '/core/components/helpers/handler_transaction_helper.inc.php';
 
-$dsn = 'mysql:host=localhost;dbname=dvsdb;charset=utf8';
-$dbusername = 'root';
-$dbpassword = '';
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+$dsn = 'mysql:host=' . $_ENV['DB_HOST']
+     . ';dbname=' . $_ENV['DB_NAME']
+     . ';charset=' . $_ENV['DB_CHARSET'];
+
+$dbusername = $_ENV['DB_USERNAME'];
+$dbpassword = $_ENV['DB_PASSWORD'];
 
 try {
     $pdo = new PDO($dsn, $dbusername, $dbpassword);
