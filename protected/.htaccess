@@ -1,5 +1,6 @@
 # Disable directory listing; show custom error pages instead of Apache defaults.
 # Paths are from the server document root (htdocs). Change /vtrams if the app base differs.
+
 Options -Indexes
 
 ErrorDocument 403 /vtrams/protected/routes/403.php

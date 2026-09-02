@@ -18,5 +18,4 @@ DirectoryIndex public/documents/index.php
 </FilesMatch>
 
 #avoid malicious scripts
-#Header set Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted.com; style-src 'self' https://trusted.com; img-src 'self' https://trusted.com; connect-src 'self' https://api.trusted.com"
-
+#Header set Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted.com; style-src 'self' 'unsafe-inline' https://trusted.com; img-src 'self' https://trusted.com; connect-src 'self' https://api.trusted.com"
