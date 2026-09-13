@@ -80,6 +80,7 @@ class AccessControl
         'checklist.php' => ['System Admin'],
         'routing.php' => ['System Admin'],
         'auditing.php' => ['System Admin'],
+        'voucher_retract_approvals.php' => ['System Admin'],
     ];
 
     /**
@@ -215,7 +216,16 @@ class AccessControl
             'voucher_archives.php' => 'canAccessVoucherArchives',
             'voucher_performance.php' => 'canAccessExtended',
             'voucher_returned_liaison.php' => 'canAccessLiaisonReturnedVouchers',
+            'voucher_retract_approvals.php' => 'canAccessRetractApprovals',
         ];
+    }
+
+    /**
+     * Retract approval queue for processed vouchers (System Admin only).
+     */
+    public static function canAccessRetractApprovals(): bool
+    {
+        return self::hasRole('System Admin');
     }
 
     /**

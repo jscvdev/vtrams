@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 require_once __DIR__ . '/core/components/helpers/handler_transaction_helper.inc.php';
+require_once __DIR__ . '/core/components/helpers/voucher_retract_schema_helper.inc.php';
 
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
@@ -17,6 +18,11 @@ $dbpassword = $_ENV['DB_PASSWORD'];
 try {
     $pdo = new PDO($dsn, $dbusername, $dbpassword);
     pdo_configure($pdo);
+    try {
+        voucher_retract_ensure_requests_schema($pdo);
+    } catch (Throwable $schemaError) {
+        error_log('voucher_retract_requests schema: ' . $schemaError->getMessage());
+    }
 } catch (PDOException $e) {
     echo "Connection failed: " . $e->getMessage();
     require_once __DIR__ . '/core/components/redirects/redirect_config.inc.php';

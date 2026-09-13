@@ -49,6 +49,7 @@ $GLOBALS['REDIRECT_MAP'] = [
     'voucher_incoming'                 => 'vouchers/voucher_incoming.php',
     'voucher_forwarding'               => 'vouchers/voucher_forwarding.php',
     'voucher_status_report'            => 'vouchers/voucher_status_report.php',
+    'voucher_retract_approvals'        => 'vouchers/voucher_retract_approvals.php',
     'designations'                     => 'vouchers/designations.php',
 
     // Documents (for app using documents/ as in sys or legacy paths)
@@ -155,6 +156,7 @@ $GLOBALS['REDIRECT_CODE_TO_KEY'] = [
     'voucher_incoming_return_err_redirect' => 'voucher_incoming',
     'voucher_forwarding_return_redirect' => 'voucher_forwarding',
     'voucher_forwarding_return_err_redirect' => 'voucher_forwarding',
+    'voucher_retract_approvals_redirect' => 'voucher_retract_approvals',
     'voucher_sent_err_redirect'  => 'voucher_sent',
     'ada_save_err'              => 'voucher_ada',
 

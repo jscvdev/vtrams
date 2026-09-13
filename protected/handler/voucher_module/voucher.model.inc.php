@@ -145,6 +145,8 @@ function vouchers_bootstrap_schema(object $pdo): void
     vouchers_amount_ensure_string_column($pdo);
     vouchers_ensure_id_auto_increment($pdo);
     vouchers_ensure_ors_no_column($pdo);
+    require_once __DIR__ . '/../../core/components/helpers/voucher_retract_schema_helper.inc.php';
+    voucher_retract_ensure_requests_schema($pdo);
 }
 
 /**

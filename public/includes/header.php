@@ -27,6 +27,7 @@ $header_voucher_pending_count = 0;
 $header_voucher_incoming_count = 0;
 $header_voucher_forwarding_count = 0;
 $header_voucher_sent_count = 0;
+$header_retract_approval_count = 0;
 
 if ($header_encoded_by !== '') {
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM vouchers WHERE encoded_by = :encoded_by');
@@ -60,6 +61,14 @@ if ($header_udc_param !== '%%') {
     $stmt->bindValue(':udc', $header_udc_param, PDO::PARAM_STR);
     $stmt->execute();
     $header_voucher_sent_count = (int) $stmt->fetchColumn();
+}
+if (class_exists('AccessControl') && AccessControl::hasRole('System Admin')) {
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM voucher_retract_requests WHERE status = 'pending'");
+        $header_retract_approval_count = (int) ($stmt ? $stmt->fetchColumn() : 0);
+    } catch (Throwable $e) {
+        $header_retract_approval_count = 0;
+    }
 }
 $target = explode(",", $_SESSION['logged_user_designation']);
 
@@ -276,6 +285,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_performance = AccessControl::canAccessExtended();
                         $can_view_processing = AccessControl::canAccessExtended();
                         $can_view_returned_liaison = AccessControl::canAccessLiaisonReturnedVouchers();
+                        $can_view_retract_approvals = AccessControl::canAccessRetractApprovals();
                         
 
                         $show_general_section = (
@@ -453,6 +463,15 @@ $header_text = $pageTitleHelper->getHeaderText();
                                                 <i class="ri-arrow-go-back-line"></i>
                                                 <span class="sidebar__link-name">Returned Vouchers</span>
                                                 <span class="sidebar__link-floating">Returned Vouchers</span>
+                                            </a>
+                                        </div>
+                                    <?php endif ?>
+                                    <?php if ($can_view_retract_approvals) : ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../vouchers/voucher_retract_approvals.php" class="sidebar__link">
+                                                <i class="ri-file-reduce-line sidebar__link_incoming" id="vouchers_retract_approvals"></i>
+                                                <span class="sidebar__link-name">Retract Approvals</span>
+                                                <span class="sidebar__link-floating">Retract Approvals</span>
                                             </a>
                                         </div>
                                     <?php endif ?>
@@ -663,6 +682,17 @@ $header_text = $pageTitleHelper->getHeaderText();
             var style = document.createElement('style');
             var count = <?php echo json_encode($rowCount9); ?>;
             var css = '#vouchers_sent:after { display: inline-block; content: "' + count + '"; }';
+            style.appendChild(document.createTextNode(css));
+            document.head.appendChild(style);
+        </script>
+    <?php } ?>
+
+    <?php $rowCountRetract = $header_retract_approval_count; ?>
+    <?php if (!empty($rowCountRetract)) { ?>
+        <script>
+            var style = document.createElement('style');
+            var count = <?php echo json_encode($rowCountRetract); ?>;
+            var css = '#vouchers_retract_approvals:after { display: inline-block; content: "' + count + '"; }';
             style.appendChild(document.createTextNode(css));
             document.head.appendChild(style);
         </script>
