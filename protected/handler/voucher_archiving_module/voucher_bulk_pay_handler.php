@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/handler_transaction_helper.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_coa_helper.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../action_module/voucher_action.model.inc.php';
 require_once __DIR__ . '/../action_module/voucher_action.ctrl.inc.php';
@@ -145,10 +146,10 @@ $loadStmt = $pdo->prepare(
 
 $archiveInsert = $pdo->prepare('INSERT INTO voucher_archives (
     processing_no, ors_no, ada_check_no, dv_no, payee, address, particulars, tin_employee_no, amount, charged_amount, voucher_type, certified_correct, approved_by, agency_authorized_signatory, voucher_date, ada_check_date,
-    office_to, office_from, encoded_by, datetime_encoded, remarks, datetime_action, action, action_by, process_history
+    office_to, office_from, encoded_by, datetime_encoded, remarks, datetime_action, action, action_by, process_history, coa_options, coa_category, coa_subsection
 ) VALUES (
     :processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :particulars, :tin_employee_no, :amount, :charged_amount, :voucher_type, :certified_correct, :approved_by, :agency_authorized_signatory, :voucher_date, :ada_check_date,
-    :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history
+    :office_to, :office_from, :encoded_by, :datetime_encoded, :remarks, :datetime_action, :action, :action_by, :process_history, :coa_options, :coa_category, :coa_subsection
 )');
 $tempDelete = $pdo->prepare('DELETE FROM voucher_temp WHERE processing_no = :processing_no');
 $trackingUpdate = $pdo->prepare(
@@ -233,6 +234,13 @@ $tx = db_transaction(
             $logAmount = amount_resolve_charged_or_amount($chargedAmount ?? '', $grossAmount);
             $processHistory = voucher_bulk_pay_normalize_process_history($row['process_history'] ?? '');
             $officeFrom = trim((string) ($row['office_from'] ?? ''));
+            $coaFields = voucher_coa_resolve(
+                $pdo,
+                $processingNo,
+                $row['coa_options'] ?? null,
+                $row['coa_category'] ?? null,
+                $row['coa_subsection'] ?? null
+            );
 
             $archiveInsert->execute([
                 ':processing_no' => $processingNo,
@@ -260,7 +268,17 @@ $tx = db_transaction(
                 ':action' => $action,
                 ':action_by' => $actionBy,
                 ':process_history' => $processHistory,
+                ':coa_options' => $coaFields['coa_options'],
+                ':coa_category' => $coaFields['coa_category'],
+                ':coa_subsection' => $coaFields['coa_subsection'],
             ]);
+            voucher_coa_sync_tracking(
+                $pdo,
+                $processingNo,
+                $coaFields['coa_options'],
+                $coaFields['coa_category'],
+                $coaFields['coa_subsection']
+            );
 
             $turnaroundTime = voucher_tracking_calculate_total_processing_time(
                 $pdo,
@@ -303,7 +321,10 @@ $tx = db_transaction(
                 $officeFrom,
                 (string) ($row['office_to'] ?? ''),
                 (string) ($row['encoded_by'] ?? ''),
-                (string) ($row['remarks'] ?? '')
+                (string) ($row['remarks'] ?? ''),
+                $coaFields['coa_options'],
+                $coaFields['coa_category'],
+                $coaFields['coa_subsection']
             );
 
             $tempDelete->execute([':processing_no' => $processingNo]);

@@ -7,6 +7,7 @@ require_once '../action_module/voucher_action.model.inc.php';
 require_once '../action_module/voucher_action.ctrl.inc.php';
 require_once '../../core/components/helpers/audit_helper.inc.php';
 require_once '../../core/components/helpers/amount_helper.inc.php';
+require_once '../../core/components/helpers/voucher_coa_helper.inc.php';
 require_once '../../core/components/helpers/handler_transaction_helper.inc.php';
 require '../../core/components/notifications/custom_process_alert.php';
 

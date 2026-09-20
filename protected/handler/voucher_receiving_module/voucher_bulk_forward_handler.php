@@ -169,6 +169,11 @@ $tx = db_transaction(
             if ($coa_subsection === '') {
                 $coa_subsection = null;
             }
+            $coaFields = voucher_coa_resolve($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
+            $coa_options = $coaFields['coa_options'];
+            $coa_category = $coaFields['coa_category'];
+            $coa_subsection = $coaFields['coa_subsection'];
+            voucher_coa_sync_tracking($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
 
             $required = [
                 'processing_no' => $processing_no,

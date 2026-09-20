@@ -286,6 +286,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $coa_subsection = isset($_POST['coa_subsection_forward']) && trim((string)$_POST['coa_subsection_forward']) !== ''
                             ? trim((string)$_POST['coa_subsection_forward'])
                             : $voucher_type;
+                        $coaFields = voucher_coa_resolve($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
+                        $coa_options = $coaFields['coa_options'];
+                        $coa_category = $coaFields['coa_category'];
+                        $coa_subsection = $coaFields['coa_subsection'];
+                        voucher_coa_sync_tracking($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
 
                         handler_execute_writes(
                             $pdo,

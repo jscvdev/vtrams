@@ -263,6 +263,28 @@ $header_text = $pageTitleHelper->getHeaderText();
             <div class="sidebar__content">
                 <?php if (!empty($_SESSION["change_type"]) and $_SESSION["change_type"] === "vouchers") : ?>
                     <div id="tab2">
+                        <?php
+                        $can_view_voucher_overview_pages = AccessControl::canAccessVoucherOverviewPages();
+                        $can_view_dashboard = AccessControl::canAccessOverviewReports();
+                        $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
+                        $can_view_designations = $can_view_system_utilities;
+                        $can_view_performance = AccessControl::canAccessExtended();
+                        $can_view_processing = AccessControl::canAccessExtended();
+                        $can_view_returned_liaison = AccessControl::canAccessLiaisonReturnedVouchers();
+                        $can_view_retract_approvals = AccessControl::canAccessRetractApprovals();
+
+                        $show_general_section = (
+                            $can_view_voucher_overview_pages
+                            || $can_view_dashboard
+                            || $can_view_system_utilities
+                            || $can_view_performance
+                        );
+                        $show_system_admin_section = (
+                            $can_view_system_utilities
+                            || $can_view_designations
+                            || $can_view_retract_approvals
+                        );
+                        ?>
 
                         <?php if ($_SESSION['acl'] >= 999) : ?>
                             <div class='sidebar__content cs2'>
@@ -280,25 +302,80 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <?php
-                        $can_view_voucher_overview_pages = AccessControl::canAccessVoucherOverviewPages();
-                        $can_view_dashboard = AccessControl::canAccessOverviewReports();
-                        $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
-                        $can_view_designations = $can_view_system_utilities;
-                        $can_view_performance = AccessControl::canAccessExtended();
-                        $can_view_processing = AccessControl::canAccessExtended();
-                        $can_view_returned_liaison = AccessControl::canAccessLiaisonReturnedVouchers();
-                        $can_view_retract_approvals = AccessControl::canAccessRetractApprovals();
-                        
 
-                        $show_general_section = (
-                            $can_view_voucher_overview_pages
-                            || $can_view_dashboard
-                            || $can_view_system_utilities
-                            || $can_view_designations
-                            || $can_view_performance
-                        );
-                        ?>
+                        <?php if ($show_system_admin_section): ?>
+                            <div class="sidebar__content">
+                                <h3 class="sidebar__title">
+                                    <span>System Admin</span>
+                                </h3>
+                                <div class="sidebar__list">
+                                    <?php if ($can_view_system_utilities): ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/utilities.php" class="sidebar__link">
+                                                <i class="ri-file-user-line"></i>
+                                                <span class="sidebar__link-name">Signatories</span>
+                                                <span class="sidebar__link-floating">Signatories</span>
+                                            </a>
+                                        </div>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/types.php" class="sidebar__link">
+                                                <i class="ri-stack-line"></i>
+                                                <span class="sidebar__link-name">Types</span>
+                                                <span class="sidebar__link-floating">Types</span>
+                                            </a>
+                                        </div>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/checklist.php" class="sidebar__link">
+                                                <i class="ri-checkbox-multiple-line"></i>
+                                                <span class="sidebar__link-name">Checklist</span>
+                                                <span class="sidebar__link-floating">Checklist</span>
+                                            </a>
+                                        </div>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/routing.php" class="sidebar__link">
+                                                <i class="ri-route-line"></i>
+                                                <span class="sidebar__link-name">Routing</span>
+                                                <span class="sidebar__link-floating">Routing</span>
+                                            </a>
+                                        </div>
+                                        <div class="sidebar-link-container">
+                                            <a href="../utilities/uacs.php" class="sidebar__link">
+                                                <i class="ri-book-2-line"></i>
+                                                <span class="sidebar__link-name">UACS Codes</span>
+                                                <span class="sidebar__link-floating">UACS Codes</span>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($can_view_designations): ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../vouchers/designations.php" class="sidebar__link">
+                                                <i class="ri-briefcase-line"></i>
+                                                <span class="sidebar__link-name">Designations</span>
+                                                <span class="sidebar__link-floating">Designations</span>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($can_view_system_utilities): ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../vouchers/settings.php" class="sidebar__link">
+                                                <i class="ri-settings-3-line"></i>
+                                                <span class="sidebar__link-name">Settings</span>
+                                                <span class="sidebar__link-floating">Settings</span>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($can_view_retract_approvals): ?>
+                                        <div class="sidebar-link-container">
+                                            <a href="../vouchers/voucher_retract_approvals.php" class="sidebar__link">
+                                                <i class="ri-file-reduce-line sidebar__link_incoming" id="vouchers_retract_approvals"></i>
+                                                <span class="sidebar__link-name">Retract Approvals</span>
+                                                <span class="sidebar__link-floating">Retract Approvals</span>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
 
                         <?php if ($show_general_section): ?>
                             <h3 class="sidebar__title">
@@ -320,43 +397,6 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             <i class="ri-calculator-line"></i>
                                             <span class="sidebar__link-name">Calculation Breakdown</span>
                                             <span class="sidebar__link-floating">Calculation Breakdown</span>
-                                        </a>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if ($can_view_system_utilities): ?>
-                                    <div class="sidebar-link-container">
-                                        <a href="../utilities/utilities.php" class="sidebar__link">
-                                            <i class="ri-file-user-line"></i>
-                                            <span class="sidebar__link-name">Signatories</span>
-                                            <span class="sidebar__link-floating">Signatories</span>
-                                        </a>
-                                    </div>
-                                    <div class="sidebar-link-container">
-                                        <a href="../utilities/types.php" class="sidebar__link">
-                                            <i class="ri-stack-line"></i>
-                                            <span class="sidebar__link-name">Types</span>
-                                            <span class="sidebar__link-floating">Types</span>
-                                        </a>
-                                    </div>
-                                    <div class="sidebar-link-container">
-                                        <a href="../utilities/checklist.php" class="sidebar__link">
-                                            <i class="ri-checkbox-multiple-line"></i>
-                                            <span class="sidebar__link-name">Checklist</span>
-                                            <span class="sidebar__link-floating">Checklist</span>
-                                        </a>
-                                    </div>
-                                    <div class="sidebar-link-container">
-                                        <a href="../utilities/routing.php" class="sidebar__link">
-                                            <i class="ri-route-line"></i>
-                                            <span class="sidebar__link-name">Routing</span>
-                                            <span class="sidebar__link-floating">Routing</span>
-                                        </a>
-                                    </div>
-                                    <div class="sidebar-link-container">
-                                        <a href="../utilities/uacs.php" class="sidebar__link">
-                                            <i class="ri-book-2-line"></i>
-                                            <span class="sidebar__link-name">UACS Codes</span>
-                                            <span class="sidebar__link-floating">UACS Codes</span>
                                         </a>
                                     </div>
                                 <?php endif; ?>
@@ -382,16 +422,6 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             <i class="ri-map-pin-time-line"></i>
                                             <span class="sidebar__link-name">Tracking</span>
                                             <span class="sidebar__link-floating">Tracking</span>
-                                        </a>
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if ($can_view_designations): ?>
-                                    <div class="sidebar-link-container">
-                                        <a href="../vouchers/designations.php" class="sidebar__link">
-                                            <i class="ri-briefcase-line"></i>
-                                            <span class="sidebar__link-name">Designations</span>
-                                            <span class="sidebar__link-floating">Designations</span>
                                         </a>
                                     </div>
                                 <?php endif; ?>
@@ -469,15 +499,6 @@ $header_text = $pageTitleHelper->getHeaderText();
                                             </a>
                                         </div>
                                     <?php endif ?>
-                                    <?php if ($can_view_retract_approvals) : ?>
-                                        <div class="sidebar-link-container">
-                                            <a href="../vouchers/voucher_retract_approvals.php" class="sidebar__link">
-                                                <i class="ri-file-reduce-line sidebar__link_incoming" id="vouchers_retract_approvals"></i>
-                                                <span class="sidebar__link-name">Retract Approvals</span>
-                                                <span class="sidebar__link-floating">Retract Approvals</span>
-                                            </a>
-                                        </div>
-                                    <?php endif ?>
                             </div>
                         <?php endif ?>
                         </div>
@@ -494,13 +515,6 @@ $header_text = $pageTitleHelper->getHeaderText();
                                 <i class='ri-file-shield-2-line'></i>
                                 <span class='sidebar__link-name'>Auditing</span>
                                 <span class='sidebar__link-floating'>Auditing</span>
-                            </a>
-                        </div>
-                        <div class="sidebar-link-container">
-                            <a href='../vouchers/settings.php' class='sidebar__link'>
-                                <i class='ri-settings-3-line'></i>
-                                <span class='sidebar__link-name'>Settings</span>
-                                <span class='sidebar__link-floating'>Settings</span>
                             </a>
                         </div>
                     <?php endif; ?>

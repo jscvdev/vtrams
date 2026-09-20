@@ -548,6 +548,11 @@ if ($showCashierArchiveCol) {
                                 <label for="">Processing No.</label>
                                 <input type="text" name="processing_no" class="processing_no form-custom-input" id="processing_no" value="" placeholder="Processing No." required readonly>
                             </div>
+                            <div class="label-input__container" id="selected-coa-options-container" style="display: none;">
+                                <label for="view_coa_requirements_btn">Selected COA Requirements</label>
+                                <button type="button" id="view_coa_requirements_btn" class="btn primary" style="width: 100%; padding: 10px; font-weight: bold;">View Selected Requirements</button>
+                                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">as per coa-circular-no.-2023-004-June-14-2023</p>
+                            </div>
                             <div class="label-input__container">
                                 <label for="">ORS No.</label>
                                 <input type="text" name="ors_no" class="ors_no form-custom-input" id="ors_no" value="" placeholder="ORS No." readonly>
@@ -761,6 +766,32 @@ if ($showCashierArchiveCol) {
         </div>
     </div>
     <div class="overlay voucher-premium-overlay" id="overlay"></div>
+    <div class="popup-form voucher-premium-modal popup-form--compact" id="coaOptionsModal" style="display: none;">
+        <div class="popupForm-box__container">
+            <div class="popupForm-header__container">
+                <p id="coa_modal_title">COA Requirements</p>
+                <i class="ri-close-fill close-icon" id="close_coa_modal"></i>
+            </div>
+            <div class="f-container">
+                <div class="box-body__container flex-row">
+                    <div class="popupForm-body__container" style="width: 100%;">
+                        <div class="form-container">
+                            <div class="label-input__container">
+                                <label for="coa_options_checklist">Selected COA Requirements</label>
+                                <div id="coa_options_list" style="background-color: white; border: 1px solid #ccc; border-radius: 8px; padding: 10px; max-height: 400px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="popupForm-footer__container">
+                    <div class="footer-button__container">
+                        <button class="btn secondary transparent" id="coa_modal_cancel" type="button">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay voucher-premium-overlay" id="coa_modal_overlay" style="display: none;"></div>
 
     <!-- Return Options Popup -->
     <div class="popup-form voucher-premium-modal popup-form--compact" id="returnOptionsPopup" style="display: none;">
@@ -1140,6 +1171,21 @@ if ($showCashierArchiveCol) {
                 color: #334155;
             }
 
+            #coa_options_list label.coa-requirement-view-only {
+                pointer-events: none;
+                user-select: none;
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                padding: 6px 0;
+            }
+            #coa_options_list label.coa-requirement-view-only input[type="checkbox"] {
+                pointer-events: none;
+                accent-color: #2563eb;
+                opacity: 1;
+                margin-top: 3px;
+            }
+
             .bulk-pay-ada-field input.form-custom-input {
                 width: 100%;
                 max-width: 100%;
@@ -1467,9 +1513,9 @@ if ($showCashierArchiveCol) {
                             <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
                             <td data-label="process_history" class="hidden"><?php echo htmlspecialchars($forwarding_process_history, ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="process_history_display" class="hidden"><?php echo htmlspecialchars($forwarding_process_history_display, ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars((string)$row['coa_options']) : ''; ?></td>
-                            <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category']) : ''; ?></td>
-                            <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection']) : ''; ?></td>
+                            <td data-label="coa_options" class="hidden"><?php echo isset($row['coa_options']) ? htmlspecialchars((string)$row['coa_options'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
+                            <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
+                            <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount']) : ''; ?></td>
                         </tr>
                     <?php
@@ -2496,6 +2542,26 @@ if ($showCashierArchiveCol) {
             var coaSubsectionForward = document.getElementById('coa_subsection_forward');
             if (coaSubsectionForward) {
                 coaSubsectionForward.value = coa_subsection || '';
+            }
+            var selectedCoaOptionsContainer = document.getElementById('selected-coa-options-container');
+            var viewCoaBtn = document.getElementById('view_coa_requirements_btn');
+            var coaRaw = (coa_options || '').trim();
+            if (coaRaw !== '') {
+                if (viewCoaBtn) {
+                    viewCoaBtn.dataset.coaOptions = coaRaw;
+                    viewCoaBtn.dataset.coaCategory = coa_category || '';
+                    viewCoaBtn.dataset.coaSubsection = coa_subsection || '';
+                }
+                if (selectedCoaOptionsContainer) {
+                    selectedCoaOptionsContainer.style.display = 'block';
+                }
+            } else if (selectedCoaOptionsContainer) {
+                selectedCoaOptionsContainer.style.display = 'none';
+                if (viewCoaBtn) {
+                    viewCoaBtn.dataset.coaOptions = '';
+                    viewCoaBtn.dataset.coaCategory = '';
+                    viewCoaBtn.dataset.coaSubsection = '';
+                }
             }
 
             resetVoucherDetailEditing();
@@ -4401,6 +4467,102 @@ if ($showCashierArchiveCol) {
                     }
                 }
                 hidePopup();
+            });
+        }
+    })();
+</script>
+<script>
+    (function() {
+        var viewBtn = document.getElementById('view_coa_requirements_btn');
+        var modal = document.getElementById('coaOptionsModal');
+        var overlay = document.getElementById('coa_modal_overlay');
+        var modalTitle = document.getElementById('coa_modal_title');
+        var optionsList = document.getElementById('coa_options_list');
+        var closeX = document.getElementById('close_coa_modal');
+        var cancelBtn = document.getElementById('coa_modal_cancel');
+
+        function closeModal() {
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        if (closeX) closeX.addEventListener('click', closeModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+        if (overlay) overlay.addEventListener('click', closeModal);
+
+        function normalizeCoaSelections(parsed) {
+            if (parsed == null) return [];
+            if (typeof parsed === 'string') {
+                var t = parsed.trim();
+                if (!t) return [];
+                try {
+                    return normalizeCoaSelections(JSON.parse(t));
+                } catch (e) {
+                    return [{ label: t }];
+                }
+            }
+            if (Array.isArray(parsed)) return parsed;
+            if (typeof parsed === 'object') {
+                if (Array.isArray(parsed.items)) return parsed.items;
+                return Object.keys(parsed).filter(function(k) { return /^\d+$/.test(k); })
+                    .sort(function(a, b) { return Number(a) - Number(b); })
+                    .map(function(k) { return parsed[k]; });
+            }
+            return [];
+        }
+
+        function coaItemLabel(opt) {
+            if (opt == null) return '';
+            if (typeof opt === 'string' || typeof opt === 'number') return String(opt).trim();
+            if (typeof opt === 'object') return String(opt.label || opt.value || opt.text || '').trim();
+            return '';
+        }
+
+        if (viewBtn) {
+            viewBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var raw = this.dataset.coaOptions || document.getElementById('selected_coa_options_forward')?.value || '';
+                var voucherType = document.getElementById('voucher_type')?.value || '';
+                if (!raw || String(raw).trim() === '') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('No checklist requirements found for this voucher.', 'warning', 3000);
+                    }
+                    return;
+                }
+
+                var selected = [];
+                try {
+                    selected = normalizeCoaSelections(JSON.parse(String(raw).trim()));
+                } catch (err) {
+                    selected = [{ label: String(raw) }];
+                }
+
+                if (modalTitle) modalTitle.textContent = 'Selected Requirements' + (voucherType ? ' - ' + voucherType : '');
+                if (optionsList) {
+                    optionsList.innerHTML = '';
+                    selected.forEach(function(opt) {
+                        var labelText = coaItemLabel(opt);
+                        if (!labelText) return;
+                        var isChecked = (opt && typeof opt === 'object' && Object.prototype.hasOwnProperty.call(opt, 'checked'))
+                            ? (opt.checked !== false && opt.checked !== 0 && opt.checked !== '0')
+                            : true;
+                        var label = document.createElement('label');
+                        label.className = 'coa-requirement-view-only';
+                        var checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = !!isChecked;
+                        checkbox.disabled = true;
+                        checkbox.value = labelText;
+                        var span = document.createElement('span');
+                        span.textContent = labelText;
+                        label.appendChild(checkbox);
+                        label.appendChild(span);
+                        optionsList.appendChild(label);
+                    });
+                }
+
+                if (modal) modal.style.display = 'block';
+                if (overlay) overlay.style.display = 'block';
             });
         }
     })();

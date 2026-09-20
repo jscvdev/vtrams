@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_coa_helper.inc.php';
 require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
 
 function voucher_document_user_action(
@@ -33,6 +34,11 @@ function voucher_document_user_action(
 ) {
     vouchers_amount_ensure_string_column($pdo);
     $amount = ensure_amount_two_decimals($amount);
+
+    $coaFields = voucher_coa_resolve($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
+    $coa_options = $coaFields['coa_options'];
+    $coa_category = $coaFields['coa_category'];
+    $coa_subsection = $coaFields['coa_subsection'];
 
     $query = "INSERT INTO voucher_action_logs (
                     processing_no,
@@ -104,13 +110,14 @@ function voucher_document_user_action(
     $statement->bindParam(":office_to", $office_to);
     $statement->bindParam(":encoded_by", $encoded_by);
     $statement->bindParam(":remarks", $remarks);
-    $statement->bindParam(":coa_options", $coa_options);
-    $statement->bindParam(":coa_category", $coa_category);
-    $statement->bindParam(":coa_subsection", $coa_subsection);
+    $statement->bindValue(':coa_options', $coa_options, $coa_options === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_category', $coa_category, $coa_category === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_subsection', $coa_subsection, $coa_subsection === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
 
     $statement->execute();
 
     $inserted = $statement->rowCount() > 0;
+    voucher_coa_sync_tracking($pdo, $processing_no, $coa_options, $coa_category, $coa_subsection);
 
     // When an action is logged, append
     // "FULL EMPLOYEE NAME | action | section/unit/division | office"

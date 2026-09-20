@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_coa_helper.inc.php';
 require_once __DIR__ . '/../voucher_module/voucher.model.inc.php';
 
 /**
@@ -49,11 +50,12 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
     $amounts = voucher_archive_amounts_for_insert($pdo, $processing_no, $amount);
     $amount = $amounts['gross'];
     $charged_amount = $amounts['charged'];
+    $coaFields = voucher_coa_load_for_processing_no($pdo, $processing_no);
 
     $query = "INSERT INTO voucher_archives (processing_no, ors_no, ada_check_no, dv_no, payee, address, tin_employee_no, particulars, amount, charged_amount, voucher_date,
-        priority, action, action_by, datetime_action, office_from, office_to, encoded_by, receiver_udc) 
+        priority, action, action_by, datetime_action, office_from, office_to, encoded_by, receiver_udc, coa_options, coa_category, coa_subsection) 
                         VALUES (:processing_no, :ors_no, :ada_check_no, :dv_no, :payee, :address, :tin_employee_no, :particulars, :amount, :charged_amount, :voucher_date,
-        :priority, :action, :action_by, :datetime_action, :office_from, :office_to, :encoded_by, :receiver_udc)";
+        :priority, :action, :action_by, :datetime_action, :office_from, :office_to, :encoded_by, :receiver_udc, :coa_options, :coa_category, :coa_subsection)";
 
     $statement = $pdo->prepare($query);
 
@@ -80,6 +82,9 @@ function insert_to_voucher_archive(object $pdo, string $processing_no, string $o
     $statement->bindParam(":office_to",$office_to);
     $statement->bindParam(":encoded_by",$encoded_by);
     $statement->bindParam(":receiver_udc",$receiver_udc);
+    $statement->bindValue(':coa_options', $coaFields['coa_options'], $coaFields['coa_options'] === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_category', $coaFields['coa_category'], $coaFields['coa_category'] === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $statement->bindValue(':coa_subsection', $coaFields['coa_subsection'], $coaFields['coa_subsection'] === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
 
     $statement->execute();
 
