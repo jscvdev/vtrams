@@ -80,7 +80,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action_from = (string) ($_SESSION['logged_user_section'] ?? '');
             $logged_user_office = voucher_logged_user_office();
             $isSystemAdmin = AccessControl::hasRole('System Admin');
-            $needsApproval = !$isSystemAdmin && voucher_retract_requires_admin_approval($pdo, $processing_no);
+            $needsApproval = !$isSystemAdmin && voucher_retract_requires_admin_approval(
+                $pdo,
+                $processing_no,
+                $retract_source,
+                $action_from,
+                (string) ($_SESSION['logged_user_designation'] ?? ''),
+                $logged_user_office
+            );
 
             if ($needsApproval) {
                 $existing = voucher_retract_find_pending_request($pdo, $processing_no);

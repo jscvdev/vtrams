@@ -99,6 +99,9 @@ $header_text = $pageTitleHelper->getHeaderText();
         content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title><?php echo htmlspecialchars($browser_title, ENT_QUOTES, 'UTF-8'); ?></title>
+    <?php if (function_exists('vtrams_csrf_token')): ?>
+    <meta name="csrf-token" content="<?php echo htmlspecialchars(vtrams_csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+    <?php endif; ?>
     <?php
     $file_name = basename(htmlspecialchars($_SERVER['PHP_SELF']));
     $file_path = htmlspecialchars($_SERVER['PHP_SELF']);

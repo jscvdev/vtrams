@@ -422,13 +422,20 @@ if ($scriptName !== '') {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
+        width: 100%;
+        align-items: stretch;
     }
 
     .analytics-stat-card {
         display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 12px 13px;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        width: 100%;
+        height: 100%;
+        min-height: 96px;
+        padding: 18px 20px;
+        box-sizing: border-box;
         background: #fff;
         border: 1px solid #eef2f7;
         border-radius: 12px;
@@ -438,17 +445,21 @@ if ($scriptName !== '') {
 
     .analytics-stat-card__body {
         min-width: 0;
-        flex: 1;
+        flex: 0 1 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: calc(100% - 54px);
     }
 
     .analytics-stat-card__icon {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 9px;
-        font-size: 16px;
+        width: 42px;
+        height: 42px;
+        border-radius: 11px;
+        font-size: 20px;
         flex-shrink: 0;
     }
 
@@ -477,9 +488,9 @@ if ($scriptName !== '') {
     }
 
     .analytics-stat-card__value {
-        margin-top: 2px;
-        font-size: 1.125rem;
-        font-weight: 600;
+        margin-top: 4px;
+        font-size: 1.375rem;
+        font-weight: 650;
         color: #0f172a;
         line-height: 1.15;
         letter-spacing: -0.02em;
@@ -489,11 +500,16 @@ if ($scriptName !== '') {
     .analytics-stat-card__value .voucher-amount-stack {
         min-width: 0;
         width: 100%;
+        display: flex;
+    }
+
+    .analytics-stat-card__value .voucher-amount-row {
+        gap: 16px;
     }
 
     .analytics-stat-card__value .voucher-amount-row__value {
         font-size: 1.125rem;
-        font-weight: 600;
+        font-weight: 650;
     }
 
     .analytics-grid {

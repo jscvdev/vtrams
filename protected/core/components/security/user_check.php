@@ -1,4 +1,8 @@
 <?php
+if (!empty($GLOBALS['vtrams_session_integrity_ok'])) {
+    return;
+}
+
 // Router already redirects if not logged in; only validate when session says logged in
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== 'true') {
     return;
@@ -75,6 +79,8 @@ if (!user_login_session_is_current(
     header('Location: ' . redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php');
     exit;
 }
+
+$GLOBALS['vtrams_session_integrity_ok'] = true;
 ?>
 
 

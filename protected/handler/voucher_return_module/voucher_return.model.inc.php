@@ -1066,7 +1066,7 @@ function voucher_retract_has_processing_office_action(object $pdo, string $proce
 
     foreach ($rows as $row) {
         $kind = voucher_tracking_action_kind((string) ($row['action'] ?? ''));
-        if (!in_array($kind, ['receive', 'process', 'forward', 'return', 'archive'], true)) {
+        if ($kind === 'encode') {
             continue;
         }
 
@@ -1074,16 +1074,19 @@ function voucher_retract_has_processing_office_action(object $pdo, string $proce
         if ($section === '') {
             $section = trim((string) ($row['action_from'] ?? ''));
         }
-        if (!voucher_retract_is_processing_office_unit_section($section)) {
-            continue;
-        }
+        $actionFrom = trim((string) ($row['action_from'] ?? ''));
+        $isProcessingUnit = voucher_retract_is_processing_office_unit_section($section)
+            || voucher_retract_is_processing_office_unit_section($actionFrom);
 
         $officeFrom = trim((string) ($row['office_from'] ?? ''));
         $officeTo = trim((string) ($row['office_to'] ?? ''));
-        if (
-            voucher_retract_office_is_processing_office($pdo, $officeFrom)
-            || voucher_retract_office_is_processing_office($pdo, $officeTo)
-        ) {
+        $isProcessingOffice = voucher_retract_office_is_processing_office($pdo, $officeFrom)
+            || voucher_retract_office_is_processing_office($pdo, $officeTo);
+
+        if ($isProcessingUnit) {
+            return true;
+        }
+        if ($isProcessingOffice && in_array($kind, ['receive', 'process', 'forward', 'return', 'archive'], true)) {
             return true;
         }
     }
@@ -1107,11 +1110,73 @@ function voucher_retract_has_processing_office_action(object $pdo, string $proce
         // voucher_receiving may be absent on older installs.
     }
 
+    foreach (['voucher_incoming', 'voucher_forwarding', 'voucher_tracking'] as $table) {
+        try {
+            $histStmt = $pdo->prepare(
+                "SELECT process_history FROM {$table} WHERE processing_no = :processing_no LIMIT 1"
+            );
+            $histStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+            $histStmt->execute();
+            $history = trim((string) $histStmt->fetchColumn());
+            if ($history === '') {
+                continue;
+            }
+            foreach (voucher_tracking_parse_process_history_lines($history) as $line) {
+                $lineSection = trim((string) ($line['section'] ?? ''));
+                $lineOffice = trim((string) ($line['office'] ?? ''));
+                if (voucher_retract_is_processing_office_unit_section($lineSection)) {
+                    return true;
+                }
+                if ($lineOffice !== '' && voucher_retract_office_is_processing_office($pdo, $lineOffice)) {
+                    $lineAction = strtolower(trim((string) ($line['action'] ?? '')));
+                    if ($lineAction !== '' && !str_contains($lineAction, 'encod')) {
+                        return true;
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            // Table may be absent on older installs.
+        }
+    }
+
     return false;
 }
 
-function voucher_retract_requires_admin_approval(object $pdo, string $processing_no): bool
+function voucher_retract_actor_is_processing_unit(string $section, string $designation = ''): bool
 {
+    if (voucher_retract_is_processing_office_unit_section($section)) {
+        return true;
+    }
+
+    foreach (array_map('trim', explode(',', $designation)) as $token) {
+        if ($token !== '' && voucher_retract_is_processing_office_unit_section($token)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function voucher_retract_requires_admin_approval(
+    object $pdo,
+    string $processing_no,
+    string $retract_source = '',
+    string $actor_section = '',
+    string $actor_designation = '',
+    string $actor_office = ''
+): bool {
+    if (voucher_retract_actor_is_processing_unit($actor_section, $actor_designation)) {
+        return true;
+    }
+
+    $source = strtolower(trim($retract_source));
+    if (in_array($source, ['incoming', 'forwarding'], true)) {
+        $office = trim($actor_office) !== '' ? trim($actor_office) : voucher_logged_user_office();
+        if ($office !== '' && voucher_retract_office_is_processing_office($pdo, $office)) {
+            return true;
+        }
+    }
+
     return voucher_retract_has_processing_office_action($pdo, $processing_no);
 }
 

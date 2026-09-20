@@ -1,37 +1,12 @@
 <?php
 
-// Ensure session is initialized using the app's session config (unique name, secure params).
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    require_once __DIR__ . '/config_session.inc.php';
-}
+/**
+ * Protected-route bootstrap.
+ *
+ * Kept as the historical include path. Security work now lives in the
+ * middleware pipeline (middleware.inc.php). Do not add new gates here;
+ * add a layer under middleware/ instead.
+ */
+require_once __DIR__ . '/middleware.inc.php';
 
-// Load AccessControl class
-require_once __DIR__ . '/access_control.inc.php';
-
-// If not logged in, route to 404.
-AccessControl::requireLogin();
-
-if (!empty($_SESSION['logged_user_emp_id'])) {
-    if (!isset($pdo) || !($pdo instanceof PDO)) {
-        require_once __DIR__ . '/../../../dbconnection.inc.php';
-    }
-    require_once __DIR__ . '/../helpers/user_login_security_helper.inc.php';
-    if (!user_login_session_is_current(
-        $pdo,
-        (string) $_SESSION['logged_user_emp_id'],
-        (string) ($_SESSION['login_session_token'] ?? '')
-    )) {
-        header('Location: ' . redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php');
-        exit;
-    }
-}
-
-// Safely derive current file name.
-$file_name = basename(htmlspecialchars($_SERVER['PHP_SELF'] ?? ''));
-
-// Use AccessControl class for file-based access control
-// This handles both ACL-based and designation-based protections
-if (!AccessControl::checkFileAccess($file_name)) {
-    require_once __DIR__ . '/../redirects/redirect_config.inc.php';
-    redirect_to_internal('route_404');
-}
+vtrams_middleware_run();

@@ -670,7 +670,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                     </label>
                                     <label class="return-option-label" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
                                         <input type="radio" name="return_destination_popup" value="retract" style="margin-top: 3px;">
-                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Return to encoder and reset all data as if newly encoded (ORS/DV/ADA, COA, remarks, and process history cleared).</span></span>
+                                        <span>Retract voucher <span style="display:block; font-size: 12px; color: rgb(75 85 99 / 0.75); font-weight: normal;">Submit for System Admin approval first, then return to encoder and reset all data as if newly encoded (ORS/DV/ADA, COA, remarks, and process history cleared).</span></span>
                                     </label>
                                 </div>
                             </div>

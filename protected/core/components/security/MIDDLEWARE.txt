@@ -1,0 +1,154 @@
+VTRAMS request middleware
+=========================
+
+What this is
+------------
+Middleware is code that runs after a request arrives and before the page or
+handler does its real work (load vouchers, save a forward, edit a user, etc.).
+
+In this PHP app there is no Laravel-style HTTP kernel. The same idea is a
+shared pipeline that every protected script must pass. If a gate fails, the
+script stops (redirect, logout, or 403). The voucher page never runs.
+
+Why it exists
+-------------
+Login, session, and file ACL used to be assembled with separate requires:
+
+  config_session.inc.php
+  router.inc.php
+  user_check.php
+
+Some handlers included router.inc.php only. Some pages included header.php
+(which loaded all three). A missed require on one POST endpoint could skip
+login or skip "does this session still match the database".
+
+The pipeline puts those gates in one place so protected routes share the same
+rules.
+
+Where the files live
+--------------------
+  protected/core/components/security/middleware.inc.php
+      Kernel: vtrams_middleware_run()
+
+  protected/core/components/security/middleware/
+      session_layer.inc.php            Session cookie + regeneration
+      auth_layer.inc.php               Must be logged in; single-login token
+      session_integrity_layer.inc.php  Session vs user_group (user_check.php)
+      file_acl_layer.inc.php           AccessControl file / designation rules
+      csrf_layer.inc.php               Issue CSRF token; optional validation
+
+  protected/core/components/security/router.inc.php
+      Compatibility entry. Existing "require router.inc.php" still works.
+      It only calls vtrams_middleware_run().
+
+  protected/core/components/security/MIDDLEWARE.txt
+      This document.
+
+Request flow (protected page or handler)
+----------------------------------------
+  Browser
+    -> session_layer          unique cookie name, httponly, regeneration
+    -> auth_layer             logged_in === "true"; active_login_token match
+    -> session_integrity      name, password hash, ACL, office, designation
+    -> file_acl               basename(PHP_SELF) vs AccessControl rules
+    -> csrf_layer             ensure $_SESSION['token'] exists
+    -> page / handler         voucher UI, encode, forward, etc.
+
+A failed gate never reaches the handler.
+
+How to use it
+-------------
+Preferred (new code):
+
+  require_once __DIR__ . '/../../core/components/security/middleware.inc.php';
+  vtrams_middleware_run();
+
+Still valid (existing code):
+
+  require_once __DIR__ . '/../../core/components/security/router.inc.php';
+
+Do not call the kernel on public login / register / kiosk scripts. Those
+should keep using config_session.inc.php only.
+
+Options
+-------
+vtrams_middleware_run() accepts an options array. Defaults:
+
+  require_login         true    Redirect if not logged in
+  verify_login_token    true    Logout if active_login_token is stale
+  session_integrity     true    Re-check user_group vs session
+  file_acl              true    File-name ACL / designation rules
+  issue_csrf            true    Create $_SESSION['token'] if missing
+  require_csrf          false   Validate token on POST/PUT/PATCH/DELETE
+
+Example: AJAX handler that must reject forged POSTs:
+
+  require_once __DIR__ . '/../../core/components/security/middleware.inc.php';
+  vtrams_middleware_run(['require_csrf' => true]);
+
+Or after a normal run:
+
+  vtrams_middleware_require_csrf();
+
+Idempotency: the pipeline runs once per request. header.php can still require
+router.inc.php and user_check.php; the second pass is skipped (user_check.php
+also skips if integrity already passed).
+
+CSRF (first rollout)
+--------------------
+Voucher forms already post a hidden field named "token" that must match
+$_SESSION['token']. The CSRF layer reuses that same session key. It does not
+introduce a second token.
+
+Helpers (available after the pipeline, including via header.php):
+
+  vtrams_csrf_token()     string for JSON / fetch headers
+  vtrams_csrf_field()     hidden input name="token"
+  vtrams_middleware_require_csrf()
+
+HTML pages that include public/includes/header.php get:
+
+  <meta name="csrf-token" content="...">
+
+JavaScript can send it as header X-CSRF-Token on fetch/XHR.
+
+Global require_csrf is OFF by default. Turning it on for every POST would
+reject handlers and forms that do not send token yet. Enable per handler
+after that handler's form or fetch includes the token.
+
+Login, auth.php, and logout_handler.inc.php are exempt when validation is on.
+
+What middleware does not replace
+--------------------------------
+- Prepared SQL statements
+- Password hashing
+- AccessControl methods used inside a page (canAccessVoucherArchives, etc.)
+- Input filtering for search boxes (filter_input.inc.php)
+
+Those stay in models, helpers, and page-level checks.
+
+What is now always on for router.inc.php includes
+-------------------------------------------------
+Previously router.inc.php checked login, login token, and file ACL.
+It did not always run user_check.php (session vs database).
+
+All router.inc.php includes now also run session integrity. If an account is
+deleted, password changed, ACL changed, or office/designation changed, the
+user is logged out instead of continuing with a stale session.
+
+Next steps (not done in this first pass)
+----------------------------------------
+1. Add vtrams_csrf_field() (or existing hidden token input) to remaining POST
+   forms that still omit token.
+2. Send X-CSRF-Token from fetch() calls that POST JSON.
+3. Flip require_csrf => true on those handlers, then consider a later default.
+4. Audit scripts that never include router.inc.php or header.php (kiosk,
+   login, one-off fetch endpoints) and decide public vs protected.
+5. New protected files must include middleware.inc.php or router.inc.php as
+   the first security require. Do not copy login checks into each handler.
+
+Do not
+------
+- Add new security ifs into router.inc.php; add a layer under middleware/.
+- Skip the pipeline on a "quick" handler because it is "only JSON".
+- Treat this as a substitute for query parameterization.
