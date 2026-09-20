@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION["last_regeneration"] = time();
 
             $_SESSION['logged_in'] = "true"; //LOGIN FLAG
+            $_SESSION['login_session_token'] = user_login_bind_active_session($pdo, $result['emp_id']);
 
             $_SESSION['acl'] = $result['access_level'];
             $_SESSION['logged_user_designation'] = $result['designation'];

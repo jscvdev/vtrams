@@ -16,6 +16,7 @@ function login_session_required_keys(): array
         'logged_user_office',
         'logged_user_section',
         'logged_user_division',
+        'login_session_token',
     ];
 }
 
@@ -84,7 +85,13 @@ function login_session_matches_database(PDO $pdo): bool
         return false;
     }
 
-    return true;
+    require_once __DIR__ . '/../helpers/user_login_security_helper.inc.php';
+
+    return user_login_session_is_current(
+        $pdo,
+        (string) $_SESSION['logged_user_emp_id'],
+        (string) ($_SESSION['login_session_token'] ?? '')
+    );
 }
 
 /**

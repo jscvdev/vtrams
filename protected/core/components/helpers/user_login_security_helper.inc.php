@@ -29,6 +29,10 @@ function user_login_ensure_schema(PDO $pdo): void
         $pdo,
         'ALTER TABLE `user_group` ADD COLUMN `failed_login_attempts` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `is_blocked`'
     );
+    user_login_try_exec(
+        $pdo,
+        'ALTER TABLE `user_group` ADD COLUMN `active_login_token` VARCHAR(64) NULL DEFAULT NULL AFTER `failed_login_attempts`'
+    );
 }
 
 function user_login_is_blocked(array|false|null $user): bool
@@ -128,4 +132,63 @@ function user_login_failed_password_message(int $attempts): string
     $remaining = USER_LOGIN_MAX_FAILED_ATTEMPTS - $attempts;
 
     return 'Incorrect login Info/Password (' . $remaining . ' attempt(s) remaining)';
+}
+
+/**
+ * Replace any previous login with this session. Older browsers/devices
+ * keep their PHP session until the next request, then fail the token check.
+ */
+function user_login_bind_active_session(PDO $pdo, string $emp_id): string
+{
+    user_login_ensure_schema($pdo);
+
+    $token = bin2hex(random_bytes(32));
+    $stmt = $pdo->prepare(
+        'UPDATE user_group SET active_login_token = :token WHERE emp_id = :emp_id'
+    );
+    $stmt->bindValue(':token', $token, PDO::PARAM_STR);
+    $stmt->bindValue(':emp_id', $emp_id, PDO::PARAM_STR);
+    $stmt->execute();
+
+    return $token;
+}
+
+function user_login_session_is_current(PDO $pdo, string $emp_id, string $token): bool
+{
+    if ($emp_id === '' || $token === '' || strlen($token) !== 64) {
+        return false;
+    }
+
+    user_login_ensure_schema($pdo);
+
+    $stmt = $pdo->prepare(
+        'SELECT active_login_token FROM user_group WHERE emp_id = :emp_id LIMIT 1'
+    );
+    $stmt->bindValue(':emp_id', $emp_id, PDO::PARAM_STR);
+    $stmt->execute();
+    $stored = $stmt->fetchColumn();
+
+    if (!is_string($stored) || $stored === '') {
+        return false;
+    }
+
+    return hash_equals($stored, $token);
+}
+
+function user_login_clear_active_session_if_current(PDO $pdo, string $emp_id, string $token): void
+{
+    if ($emp_id === '' || $token === '') {
+        return;
+    }
+
+    user_login_ensure_schema($pdo);
+
+    $stmt = $pdo->prepare(
+        'UPDATE user_group
+         SET active_login_token = NULL
+         WHERE emp_id = :emp_id AND active_login_token = :token'
+    );
+    $stmt->bindValue(':emp_id', $emp_id, PDO::PARAM_STR);
+    $stmt->bindValue(':token', $token, PDO::PARAM_STR);
+    $stmt->execute();
 }

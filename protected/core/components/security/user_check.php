@@ -64,6 +64,17 @@ if ($result['office'] != ($_SESSION['logged_user_office'] ?? '')) {
     header('Location: ' . redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php');
     exit;
 }
+
+require_once __DIR__ . '/../helpers/user_login_security_helper.inc.php';
+if (!user_login_session_is_current(
+    $pdo,
+    (string) $_SESSION['logged_user_emp_id'],
+    (string) ($_SESSION['login_session_token'] ?? '')
+)) {
+    require_once __DIR__ . '/../redirects/redirect_config.inc.php';
+    header('Location: ' . redirect_base_url() . '/protected/core/components/security/logout_handler.inc.php');
+    exit;
+}
 ?>
 
 

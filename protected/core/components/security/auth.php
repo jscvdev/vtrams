@@ -80,6 +80,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // Regenerate session ID for security; avoid resetting when session is already active
         session_regenerate_id(true);
 
+        // One active login per account: this token replaces any previous session
+        $_SESSION['login_session_token'] = user_login_bind_active_session($pdo, $result['emp_id']);
+
         $formattedResultName = explode(" ", $result['emp_fn'] . " " . $result['emp_mi'] . " " . $result['emp_ln']);
         $formattedResultName2  = implode(" ", $formattedResultName);
         $full_name = $formattedResultName2;
