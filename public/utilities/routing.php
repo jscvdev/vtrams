@@ -3,6 +3,7 @@ include('../includes/header.php');
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_special_access_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_processing_office_route_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
@@ -17,6 +18,7 @@ if (!AccessControl::canAccessSystemUtilities()) {
 
 utilities_special_access_ensure_schema($pdo);
 utilities_return_previous_ensure_schema($pdo);
+utilities_processing_office_route_ensure_schema($pdo);
 utilities_office_ensure_schema($pdo);
 
 $voucher_types = checklist_types_with_labels();
@@ -219,6 +221,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     utilities_return_previous_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Return-to-previous unit removed.'];
                 }
+            } elseif ($action === 'processing_office_route_add') {
+                $designation = utilities_processing_office_route_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                if ($designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Designation is required.'];
+                } elseif (!utilities_processing_office_route_destination_is_allowed($pdo, $designation)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        INSERT INTO voucher_processing_office_route (designation, sort_order, is_active)
+                        VALUES (:designation, 0, 1)
+                    ");
+                    $stmt->execute([':designation' => $designation]);
+                    sort_order_place_at_position($pdo, 'voucher_processing_office_route', (int) $pdo->lastInsertId(), $sort);
+                    $pdo->commit();
+                    utilities_processing_office_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Processing-office flow step added.'];
+                }
+            } elseif ($action === 'processing_office_route_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $designation = utilities_processing_office_route_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id <= 0 || $designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                } elseif (!utilities_processing_office_route_destination_is_allowed($pdo, $designation)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    sort_order_handle_update($pdo, 'voucher_processing_office_route', $id, $sort);
+                    $stmt = $pdo->prepare("
+                        UPDATE voucher_processing_office_route
+                        SET designation = :designation,
+                            sort_order = :sort,
+                            is_active = :active
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':designation' => $designation,
+                        ':sort' => $sort,
+                        ':active' => $active,
+                        ':id' => $id,
+                    ]);
+                    $pdo->commit();
+                    utilities_processing_office_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Processing-office flow step updated.'];
+                }
+            } elseif ($action === 'processing_office_route_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id <= 0) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                } else {
+                    $stmt = $pdo->prepare('DELETE FROM voucher_processing_office_route WHERE id = :id');
+                    $stmt->execute([':id' => $id]);
+                    utilities_processing_office_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Processing-office flow step removed.'];
+                }
             } elseif ($action === 'office_add') {
                 $officeName = utilities_office_normalize_name((string) ($_POST['office_name'] ?? ''));
                 $parentId = (int) ($_POST['parent_office_id'] ?? 0);
@@ -377,6 +437,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash = ['type' => 'warning', 'msg' => 'That voucher type already has a routing rule for the selected destination.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'uniq_designation')) {
                     $flash = ['type' => 'warning', 'msg' => 'That forward destination is already configured.'];
+                } elseif (str_contains(strtolower($e->getMessage()), 'voucher_processing_office_route')) {
+                    $flash = ['type' => 'warning', 'msg' => 'That processing-office flow step could not be saved.'];
                 } else {
                     $flash = ['type' => 'warning', 'msg' => 'That entry already exists.'];
                 }
@@ -417,6 +479,17 @@ foreach ($return_previous_units as $returnPreviousUnit) {
         $return_previous_active_count++;
     }
 }
+
+$processing_office_route_units = utilities_processing_office_route_fetch_all($pdo);
+$processing_office_route_destinations = utilities_processing_office_route_configurable_destinations($pdo);
+$processing_office_route_count = count($processing_office_route_units);
+$processing_office_route_active_count = 0;
+foreach ($processing_office_route_units as $processingOfficeRouteUnit) {
+    if ((int) ($processingOfficeRouteUnit['is_active'] ?? 1) === 1) {
+        $processing_office_route_active_count++;
+    }
+}
+$processing_office_route_flow_label = utilities_processing_office_route_flow_label($pdo);
 
 $offices = utilities_office_fetch_all($pdo);
 $office_tree = utilities_office_build_tree($offices);
@@ -480,6 +553,15 @@ $filtered_return_previous_units = utilities_list_filter_rows(
 );
 $return_previous_units = $filtered_return_previous_units;
 
+$all_processing_office_route_units = $processing_office_route_units;
+$filtered_processing_office_route_units = utilities_list_filter_rows(
+    $all_processing_office_route_units,
+    $list_filter['q'],
+    'all',
+    ['designation']
+);
+$processing_office_route_units = $filtered_processing_office_route_units;
+
 $all_liaison_routing = $liaison_routing;
 $filtered_liaison_routing = utilities_list_filter_rows(
     $all_liaison_routing,
@@ -502,11 +584,13 @@ $office_tree_display = utilities_office_build_tree($offices_display);
 $routing_list_total = count($all_forward_destination_units)
     + count($all_rules)
     + count($all_return_previous_units)
+    + count($all_processing_office_route_units)
     + count($all_liaison_routing)
     + count($all_offices);
 $routing_list_visible = count($forward_destination_units)
     + count($rules)
     + count($return_previous_units)
+    + count($processing_office_route_units)
     + count($liaison_routing)
     + count($offices_display);
 
@@ -607,11 +691,13 @@ function routing_forward_destinations_for_select(array $destinations, string $st
     return $destinations;
 }
 
-$routing_tab_ids = ['forward', 'return', 'liaison', 'hierarchy'];
+$routing_tab_ids = ['forward', 'flow', 'return', 'liaison', 'hierarchy'];
 $active_routing_tab = 'forward';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $routing_post_action = (string) ($_POST['action'] ?? '');
-    if (str_starts_with($routing_post_action, 'return_previous_')) {
+    if (str_starts_with($routing_post_action, 'processing_office_route_')) {
+        $active_routing_tab = 'flow';
+    } elseif (str_starts_with($routing_post_action, 'return_previous_')) {
         $active_routing_tab = 'return';
     } elseif (str_starts_with($routing_post_action, 'liaison_routing_')) {
         $active_routing_tab = 'liaison';
@@ -1061,6 +1147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="util-subtabs-toolbar">
                 <div class="util-subtabs-bar" role="tablist" aria-label="Routing sections">
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'forward' ? ' is-active' : '' ?>" role="tab" data-util-tab="forward" aria-selected="<?= $active_routing_tab === 'forward' ? 'true' : 'false' ?>">Direct forward</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'flow' ? ' is-active' : '' ?>" role="tab" data-util-tab="flow" aria-selected="<?= $active_routing_tab === 'flow' ? 'true' : 'false' ?>">Processing office flow</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'return' ? ' is-active' : '' ?>" role="tab" data-util-tab="return" aria-selected="<?= $active_routing_tab === 'return' ? 'true' : 'false' ?>">Return to previous</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'liaison' ? ' is-active' : '' ?>" role="tab" data-util-tab="liaison" aria-selected="<?= $active_routing_tab === 'liaison' ? 'true' : 'false' ?>">Liaison offices</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'hierarchy' ? ' is-active' : '' ?>" role="tab" data-util-tab="hierarchy" aria-selected="<?= $active_routing_tab === 'hierarchy' ? 'true' : 'false' ?>">Office hierarchy</button>
@@ -1241,6 +1328,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="rule_delete">
                                         <input type="hidden" name="id" value="<?= $ruleId ?>">
+                                        <button class="btn danger" type="submit">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            </section>
+                    </div>
+                </div>
+
+                <div class="util-subtab-panel<?= $active_routing_tab === 'flow' ? ' is-active' : '' ?>" data-util-panel="flow">
+                    <div class="util-subtab-panel__body">
+            <section class="util-routing-section">
+            <p class="util-section-title">Processing office flow</p>
+            <p class="util-dv-desc">
+                Ordered hops for vouchers encoded at the <strong>processing office</strong> (after Encoder).
+                The same unit may appear more than once (for example Office of the PENRO before Budget and again after Accounting).
+                Inactive steps are skipped. Encoder always forwards to the first active step.
+            </p>
+
+            <div class="util-office-flow">
+                <strong>Current flow:</strong>
+                <?= htmlspecialchars($processing_office_route_flow_label, ENT_QUOTES, 'UTF-8') ?>
+            </div>
+
+            <div class="util-stats">
+                <div class="util-stat"><strong><?= (int) $processing_office_route_count ?></strong> step<?= $processing_office_route_count === 1 ? '' : 's' ?></div>
+                <div class="util-stat"><strong><?= (int) $processing_office_route_active_count ?></strong> active</div>
+            </div>
+
+            <div class="util-card">
+                <div class="util-card__head">
+                    <h3>Add flow step</h3>
+                </div>
+                <div class="util-card__body">
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="processing_office_route_add">
+                        <div class="field">
+                            <label for="add_processing_office_route_designation">Designation / unit</label>
+                            <select class="form-custom-input" name="designation" id="add_processing_office_route_designation" required>
+                                <option value="" disabled selected>Select unit</option>
+                                <?php foreach ($processing_office_route_destinations as $destination): ?>
+                                    <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width:110px;">
+                            <label for="add_processing_office_route_sort_order">Sort</label>
+                            <input class="form-custom-input" type="number" name="sort_order" id="add_processing_office_route_sort_order" value="<?= (int) $processing_office_route_count ?>">
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Add processing-office flow step" aria-label="Add processing-office flow step">+</button>
+                        </div>
+                    </form>
+
+                    <?php if (!$processing_office_route_units): ?>
+                        <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No processing-office flow steps match your search.' : 'No processing-office flow steps configured yet. Add one above.' ?></p>
+                    <?php endif; ?>
+
+                    <?php foreach ($processing_office_route_units as $stepIndex => $processingOfficeRouteUnit):
+                        $processingOfficeRouteId = (int) ($processingOfficeRouteUnit['id'] ?? 0);
+                        $storedDesignation = (string) ($processingOfficeRouteUnit['designation'] ?? '');
+                        $stepDestinations = routing_forward_destinations_for_select($processing_office_route_destinations, $storedDesignation);
+                    ?>
+                        <div class="util-routing-block">
+                            <div class="util-routing-block__main">
+                                <div class="util-inline util-inline--edit-row">
+                                    <form method="post" class="util-inline util-inline--edit-row" style="flex:1; min-width:0;">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="processing_office_route_update">
+                                        <input type="hidden" name="id" value="<?= $processingOfficeRouteId ?>">
+                                        <span class="util-stat" style="min-width:2.25rem;"><?= (int) $stepIndex + 1 ?></span>
+                                        <select class="form-custom-input" name="designation" required>
+                                            <?php foreach ($stepDestinations as $destination): ?>
+                                                <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= $storedDesignation === $destination ? ' selected' : '' ?>>
+                                                    <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input class="form-custom-input" type="number" name="sort_order" value="<?= (int) ($processingOfficeRouteUnit['sort_order'] ?? 0) ?>">
+                                        <label class="chk">
+                                            <input type="checkbox" name="is_active" <?= ((int) ($processingOfficeRouteUnit['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                            <span>Active</span>
+                                        </label>
+                                        <button class="btn success" type="submit">Save</button>
+                                    </form>
+                                    <form method="post" onsubmit="return confirm('Remove this processing-office flow step?');" class="util-row-actions">
+                                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="processing_office_route_delete">
+                                        <input type="hidden" name="id" value="<?= $processingOfficeRouteId ?>">
                                         <button class="btn danger" type="submit">Delete</button>
                                     </form>
                                 </div>
@@ -1456,7 +1639,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </p>
 
             <div class="util-office-flow">
-                <strong>Forwarding flow:</strong>
+                <strong>Processing office vouchers:</strong>
+                <?= htmlspecialchars($processing_office_route_flow_label, ENT_QUOTES, 'UTF-8') ?>.
+                Edit this sequence on the <strong>Processing office flow</strong> tab.
+            </div>
+            <div class="util-office-flow">
+                <strong>Sub-office forwarding:</strong>
                 Processing office (e.g. <?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'Main PENRO', ENT_QUOTES, 'UTF-8') ?>)
                 &rarr; sub-offices with Liaison Officers (e.g. CENRO BORONGAN) &rarr; nested sub-offices
                 (e.g. PAMO-GMRPLS) send vouchers to the parent sub-office Liaison Officer first,

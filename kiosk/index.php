@@ -1,4 +1,9 @@
-<?php include 'kiosk_header.php'; ?>
+<?php
+include 'kiosk_header.php';
+require_once __DIR__ . '/../protected/core/components/helpers/utilities_processing_office_route_helper.inc.php';
+$kiosk_flow_steps = utilities_processing_office_route_kiosk_steps($pdo);
+$kiosk_ordinal = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+?>
 <!--=============== MAIN ===============!-->
 <div class="main main--dashboard" id="main">
     <header class="voucher-dashboard-header">
@@ -31,55 +36,17 @@
         </div>
 
         <ul class="kiosk-stepper-list">
-            <li>
-                <i class="icon ri-shield-check-line" aria-hidden="true"></i>
-                <div class="progress one p1">
-                    <p>1</p><i class="ri-check-line" aria-hidden="true"></i>
+            <?php foreach ($kiosk_flow_steps as $stepIndex => $kioskStep):
+                $ordinalClass = $kiosk_ordinal[$stepIndex] ?? ('step-' . ($stepIndex + 1));
+            ?>
+            <li data-step="<?= htmlspecialchars((string) ($kioskStep['designation'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <i class="icon <?= htmlspecialchars((string) ($kioskStep['icon'] ?? 'ri-building-line'), ENT_QUOTES, 'UTF-8') ?>" aria-hidden="true"></i>
+                <div class="progress <?= htmlspecialchars($ordinalClass, ENT_QUOTES, 'UTF-8') ?> p<?= (int) $stepIndex + 1 ?>">
+                    <p><?= (int) $stepIndex + 1 ?></p><i class="ri-check-line" aria-hidden="true"></i>
                 </div>
-                <p class="text">Internal Control Unit</p>
+                <p class="text"><?= htmlspecialchars((string) ($kioskStep['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
             </li>
-            <li>
-                <i class="icon ri-map-pin-line" aria-hidden="true"></i>
-                <div class="progress two p2">
-                    <p>2</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Planning Section</p>
-            </li>
-            <li>
-                <i class="icon ri-funds-line" aria-hidden="true"></i>
-                <div class="progress three p3">
-                    <p>3</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Budget Unit</p>
-            </li>
-            <li>
-                <i class="icon ri-file-chart-line" aria-hidden="true"></i>
-                <div class="progress four p4">
-                    <p>4</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Accounting Unit</p>
-            </li>
-            <li>
-                <i class="icon ri-briefcase-4-line" aria-hidden="true"></i>
-                <div class="progress five p5">
-                    <p>5</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Office of the PENRO</p>
-            </li>
-            <li>
-                <i class="icon ri-safe-line" aria-hidden="true"></i>
-                <div class="progress six p6">
-                    <p>6</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Cashiers Unit</p>
-            </li>
-            <li>
-                <i class="icon ri-money-dollar-circle-line" aria-hidden="true"></i>
-                <div class="progress seven p7">
-                    <p>7</p><i class="ri-check-line" aria-hidden="true"></i>
-                </div>
-                <p class="text">Paid</p>
-            </li>
+            <?php endforeach; ?>
         </ul>
     </section>
 
@@ -195,48 +162,55 @@
         }
 
         function setProgress(status) {
-            const steps = [
-                document.querySelector('.p1'),
-                document.querySelector('.p2'),
-                document.querySelector('.p3'),
-                document.querySelector('.p4'),
-                document.querySelector('.p5'),
-                document.querySelector('.p6'),
-                document.querySelector('.p7')
-            ];
+            const items = Array.from(document.querySelectorAll('.kiosk-stepper-list li'));
+            const steps = items.map(function(li) {
+                return li.querySelector('.progress');
+            });
+            const designations = items.map(function(li) {
+                return String(li.getAttribute('data-step') || '');
+            });
+
             steps.forEach(function(step) {
                 if (step) step.classList.remove('active');
             });
-            document.querySelectorAll('.kiosk-stepper-list li').forEach(function(li) {
+            items.forEach(function(li) {
                 li.classList.remove('completed');
             });
+
+            function firstIndex(name) {
+                return designations.indexOf(name);
+            }
+
+            function lastIndex(name) {
+                return designations.lastIndexOf(name);
+            }
 
             const lowerStatus = String(status).toLowerCase();
             let activeIndex = -1;
 
-            if (lowerStatus.includes('checking of requirements')) {
-                activeIndex = 0;
-            } else if (lowerStatus.includes('icu') || lowerStatus.includes('internal control')) {
-                activeIndex = 0;
+            if (lowerStatus.includes('paid')) {
+                activeIndex = firstIndex('Paid');
+            } else if (lowerStatus.includes('checking of requirements') || lowerStatus.includes('icu') || lowerStatus.includes('internal control')) {
+                activeIndex = firstIndex('ICU');
             } else if (lowerStatus.includes('charging')) {
-                activeIndex = 1;
+                activeIndex = firstIndex('Planning Section');
+            } else if (lowerStatus.includes('endorsement')) {
+                activeIndex = firstIndex('Office of the PENRO');
             } else if (lowerStatus.includes('verifying')) {
-                activeIndex = 2;
+                activeIndex = firstIndex('Budget Unit');
             } else if (lowerStatus.includes('processing the disbursement') || lowerStatus.includes('processing')) {
-                activeIndex = 3;
+                activeIndex = firstIndex('Accounting Unit');
             } else if (lowerStatus.includes('approval')) {
-                activeIndex = 4;
+                var penroLast = lastIndex('Office of the PENRO');
+                activeIndex = penroLast >= 0 ? penroLast : firstIndex('Office of the PENRO');
             } else if (lowerStatus.includes('preparation')) {
-                activeIndex = 5;
-            } else if (lowerStatus.includes('paid')) {
-                activeIndex = 6;
+                activeIndex = firstIndex('Cashiers Unit');
             }
 
             if (activeIndex >= 0) {
                 for (let i = 0; i <= activeIndex; i++) {
                     if (steps[i]) steps[i].classList.add('active');
-                    const stepItem = steps[i] ? steps[i].closest('li') : null;
-                    if (stepItem) stepItem.classList.add('completed');
+                    if (items[i]) items[i].classList.add('completed');
                 }
             }
         }

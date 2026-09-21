@@ -294,6 +294,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $temp_dump['self_send'] = 'Cannot forward this document to yourself';
                     }
 
+                    if (!voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
+                        $postedHistory = voucher_tracking_normalize_process_history(
+                            (string) ($_POST['process_history'] ?? '')
+                        );
+                        $routeHistory = voucher_incoming_load_process_history($pdo, $processing_no, $postedHistory);
+                        if ($routeHistory === '') {
+                            $routeHistory = (string) (voucher_tracking_fetch_process_history($pdo, $processing_no) ?? '');
+                        }
+                        if (
+                            voucher_processing_office_standard_route_applies(
+                                $pdo,
+                                $voucher_type,
+                                $routeHistory,
+                                $encoded_from
+                            )
+                            && !voucher_processing_office_forward_target_is_allowed(
+                                $pdo,
+                                voucher_logged_user_designations(),
+                                $routeHistory,
+                                $document_to
+                            )
+                        ) {
+                            require_once __DIR__ . '/../../core/components/helpers/utilities_processing_office_route_helper.inc.php';
+                            $temp_dump['invalid_route'] = 'Processing-office vouchers must follow '
+                                . utilities_processing_office_route_flow_label($pdo)
+                                . '.';
+                        }
+                    }
+
                     $variables_to_check = [
                         'processing_no' => $processing_no,
                         'payee' => $payee,

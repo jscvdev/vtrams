@@ -1285,8 +1285,21 @@ if ($showCashierArchiveCol) {
                         $rowBulkPayable = $isCashierBulkPay
                             && (in_array('Cashiers Unit', $target, true) || in_array('Cashier', $target, true))
                             && ($rowTransmitEmpty || $rowTransmitYes);
+                        $processingOfficeRoute = voucher_processing_office_standard_route_applies(
+                            $pdo,
+                            (string) ($row['voucher_type'] ?? ''),
+                            $forwarding_process_history,
+                            (string) ($row['encoded_from'] ?? '')
+                        );
+                        $processingOfficeNext = $processingOfficeRoute
+                            ? (voucher_processing_office_allowed_forward_targets(
+                                $pdo,
+                                $target,
+                                $forwarding_process_history
+                            ) ?? [])
+                            : [];
                     ?>
-                        <tr>
+                        <tr data-processing-office-route="<?= $processingOfficeRoute ? '1' : '0' ?>" data-processing-office-next="<?= htmlspecialchars(json_encode($processingOfficeNext, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
                                 <td class="voucher-bulk-select-cell" data-label="">
                                     <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -2126,8 +2139,115 @@ if ($showCashierArchiveCol) {
         hideOwnDesignationOptions(docToSelect);
     }
 
-    function applyForwardingDestinationOptions(voucherType, processHistory) {
+    function normalizeForwardingHistorySection(section) {
+        var value = String(section || '').trim();
+        if (!value) {
+            return '';
+        }
+        var map = {
+            'BUDGET': 'Budget Unit',
+            'BUDGET UNIT': 'Budget Unit',
+            'ACCOUNTING': 'Accounting Unit',
+            'ACCOUNTING UNIT': 'Accounting Unit',
+            'ACCOUNTANT III': 'Accountant III',
+            'PROCESSOR': 'Processor',
+            'PLANNING': 'Planning Section',
+            'PLANNING SECTION': 'Planning Section',
+            'ICU': 'ICU'
+        };
+        return map[value.toUpperCase()] || value;
+    }
+
+    function forwardingHistoryHasPostBudgetAccountingReceive(processHistory) {
+        var lines = parseForwardingProcessHistoryLines(processHistory);
+        var seenBudget = false;
+        for (var i = 0; i < lines.length; i++) {
+            if (!/received by/i.test(lines[i].action)) {
+                continue;
+            }
+            var section = normalizeForwardingHistorySection(lines[i].section);
+            if (section === 'Budget Unit') {
+                seenBudget = true;
+                continue;
+            }
+            if (seenBudget && (section === 'Accounting Unit' || section === 'Processor' || section === 'Accountant III')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function forwardingProcessorOptionsHtml() {
+        return `
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
+            <option value="4HyLy">1. Marife C. Briton</option>
+        <?php endif; ?>
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
+            <option value="YS9M3">2. Diana E. Costuna </option>
+        <?php endif; ?>
+        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
+            <option value="s1JxV">3. Gracile B. Palce</option>
+        <?php endif; ?>
+        `;
+    }
+
+    function processingOfficeOptionLabel(value) {
+        var labels = {
+            'Accountant III': 'Chief Accountant',
+            '4HyLy': '1. Marife C. Briton',
+            'YS9M3': '2. Diana E. Costuna',
+            's1JxV': '3. Gracile B. Palce'
+        };
+        return labels[value] || value;
+    }
+
+    function processingOfficeOptionClass(value) {
+        if (value === 'Accountant III') {
+            return 'processed';
+        }
+        if (value === 'Planning Section Chief') {
+            return 'Planning_Officer';
+        }
+        if (value === 'Budget Officer') {
+            return 'Budget_Officer';
+        }
+        if (value === 'Cashier') {
+            return 'Cashier_Officer';
+        }
+        return '';
+    }
+
+    function applyProcessingOfficeForwardOptions(nextTargets) {
+        if (!docToSelect) {
+            return false;
+        }
+        if (!Array.isArray(nextTargets) || nextTargets.length === 0) {
+            restoreForwardDestinationOptions();
+            return true;
+        }
+
+        var html = '<option value="" disabled selected>Please Select</option>';
+        nextTargets.forEach(function(value) {
+            value = String(value || '').trim();
+            if (!value) {
+                return;
+            }
+            var optionClass = processingOfficeOptionClass(value);
+            html += '<option value="' + value.replace(/"/g, '&quot;') + '"' +
+                (optionClass ? ' class="' + optionClass + '"' : '') + '>' +
+                processingOfficeOptionLabel(value) + '</option>';
+        });
+        docToSelect.innerHTML = html;
+        hideOwnDesignationOptions(docToSelect);
+        return true;
+    }
+
+    function applyForwardingDestinationOptions(voucherType, processHistory, useProcessingOfficeRoute, nextTargets) {
         if (!docToSelect || isLiaisonOfficer) {
+            return;
+        }
+
+        if (useProcessingOfficeRoute && applyProcessingOfficeForwardOptions(nextTargets)) {
             return;
         }
 
@@ -2477,6 +2597,13 @@ if ($showCashierArchiveCol) {
             var voucher_type = row.querySelector('[data-label="voucher_type"]').textContent;
             var process_history_cell = row.querySelector('[data-label="process_history"]');
             var process_history_val = process_history_cell ? process_history_cell.textContent.trim() : '';
+            var useProcessingOfficeRoute = row.getAttribute('data-processing-office-route') === '1';
+            var processingOfficeNext = [];
+            try {
+                processingOfficeNext = JSON.parse(row.getAttribute('data-processing-office-next') || '[]');
+            } catch (e) {
+                processingOfficeNext = [];
+            }
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
             var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
             var coa_options_cell = row.querySelector('[data-label="coa_options"]');
@@ -2676,7 +2803,7 @@ if ($showCashierArchiveCol) {
                     if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {
-                        applyForwardingDestinationOptions(voucher_type, process_history_val);
+                        applyForwardingDestinationOptions(voucher_type, process_history_val, useProcessingOfficeRoute, processingOfficeNext);
                     }
                 }
                 document.querySelector(".btn-dynamic").setAttribute("name", "forward_voucher");

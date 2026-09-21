@@ -1977,6 +1977,16 @@ function voucher_incoming_resolve_receive_status(
         return 'Verifying Availability of Fund and Allotment';
     }
     if (voucher_user_has_designation($target, 'Office of the PENRO')) {
+        $next = voucher_processing_office_next_route_step($pdo, 'Office of the PENRO', $process_history);
+        if ($next === 'Cashiers Unit' || voucher_tracking_history_has_post_budget_accounting_receive(
+            voucher_tracking_parse_process_history_lines($process_history)
+        )) {
+            return 'For Approval of the PENRO';
+        }
+        if (voucher_processing_office_standard_route_applies($pdo, $voucher_type, $process_history)) {
+            return 'For Endorsement of the PENRO';
+        }
+
         return 'For Approval of the PENRO';
     }
     if (voucher_user_has_designation($target, 'Cashiers Unit')) {
@@ -2201,6 +2211,283 @@ function voucher_forwarding_treat_as_same_office_workflow(
     return voucher_history_origin_matches_logged_office($process_history, $logged_user_office);
 }
 
+/** Origin office from process history, falling back to encoded_from. */
+function voucher_processing_office_origin_office(string $process_history, string $encoded_from = ''): string
+{
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    $origin = voucher_tracking_history_origin_office($lines);
+    if ($origin !== '') {
+        return $origin;
+    }
+
+    return trim($encoded_from);
+}
+
+/**
+ * True when the voucher originated at the configured processing office
+ * and is not using a special-access skip path.
+ */
+function voucher_processing_office_standard_route_applies(
+    object $pdo,
+    string $voucher_type,
+    string $process_history,
+    string $encoded_from = ''
+): bool {
+    if (voucher_type_has_special_access($pdo, $voucher_type)) {
+        return false;
+    }
+
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    $origin = voucher_processing_office_origin_office($process_history, $encoded_from);
+
+    return $origin !== '' && utilities_office_is_processing_encoder_office($pdo, $origin);
+}
+
+/**
+ * Accounting receive after Budget (ICU history lines are also stored as Accounting Unit).
+ *
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_tracking_history_has_post_budget_accounting_receive(array $lines): bool
+{
+    $seenBudget = false;
+    foreach ($lines as $line) {
+        if (stripos((string) ($line['action'] ?? ''), 'Received by') === false) {
+            continue;
+        }
+
+        $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
+        $raw = strtoupper(trim((string) ($line['section'] ?? '')));
+        if ($section === 'Budget Unit' || in_array($raw, ['BUDGET', 'BUDGET UNIT'], true)) {
+            $seenBudget = true;
+            continue;
+        }
+
+        if (
+            $seenBudget
+            && (
+                $section === 'Accounting Unit'
+                || in_array($raw, ['ACCOUNTING', 'ACCOUNTING UNIT', 'PROCESSOR', 'ACCOUNTANT III'], true)
+            )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** @return array<string, string> */
+function voucher_processing_office_route_role_aliases(): array
+{
+    return [
+        'Planning Section Chief' => 'Planning Section',
+        'Budget Officer' => 'Budget Unit',
+        'Processor' => 'Accounting Unit',
+        'Accountant III' => 'Accounting Unit',
+        'Cashier' => 'Cashiers Unit',
+        'PENR Officer' => 'Office of the PENRO',
+    ];
+}
+
+/**
+ * @param list<string> $user_designations
+ * @param list<string> $steps
+ */
+function voucher_processing_office_current_route_step(array $user_designations, array $steps): string
+{
+    if ($steps === []) {
+        return '';
+    }
+
+    $has = static function (string $role) use ($user_designations): bool {
+        return voucher_user_has_designation($user_designations, $role);
+    };
+
+    if (
+        $has('ICU')
+        && !$has('Accounting Unit')
+        && !$has('Processor')
+        && !$has('Accountant III')
+        && in_array('ICU', $steps, true)
+    ) {
+        return 'ICU';
+    }
+
+    $aliases = voucher_processing_office_route_role_aliases();
+    $matched = [];
+    foreach ($user_designations as $designation) {
+        $designation = trim((string) $designation);
+        if ($designation === '') {
+            continue;
+        }
+        $mapped = $aliases[$designation] ?? $designation;
+        if (in_array($mapped, $steps, true)) {
+            $matched[$mapped] = true;
+        }
+    }
+
+    foreach ($steps as $step) {
+        if (isset($matched[$step])) {
+            return $step;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_processing_office_step_has_receive(object $pdo, array $lines, string $step): bool
+{
+    $step = trim($step);
+    if ($step === '') {
+        return false;
+    }
+
+    $roles = [$step];
+    if ($step === 'Accounting Unit') {
+        $roles = ['Accounting Unit', 'Processor', 'Accountant III'];
+    } elseif ($step === 'Planning Section') {
+        $roles = ['Planning Section', 'Planning Section Chief'];
+    } elseif ($step === 'Budget Unit') {
+        $roles = ['Budget Unit', 'Budget Officer'];
+    } elseif ($step === 'Cashiers Unit') {
+        $roles = ['Cashiers Unit', 'Cashier'];
+    } elseif ($step === 'Office of the PENRO') {
+        $roles = ['Office of the PENRO', 'PENR Officer'];
+    }
+
+    foreach ($roles as $role) {
+        if (voucher_tracking_history_has_designation_action($pdo, $lines, 'Received by', $role)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Next hop from Routing utilities (processing office flow). Null when unconstrained.
+ */
+function voucher_processing_office_next_route_step(
+    object $pdo,
+    string $current_step,
+    string $process_history
+): ?string {
+    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+    $steps = utilities_processing_office_route_active_steps($pdo);
+    $current_step = trim($current_step);
+    if ($current_step === '' || $steps === []) {
+        return null;
+    }
+
+    $indices = [];
+    foreach ($steps as $index => $step) {
+        if ($step === $current_step) {
+            $indices[] = $index;
+        }
+    }
+    if ($indices === []) {
+        return null;
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    foreach ($indices as $occurrence => $idx) {
+        $nextOccurrence = $indices[$occurrence + 1] ?? count($steps);
+        $between = [];
+        for ($i = $idx + 1; $i < $nextOccurrence; $i++) {
+            $between[] = $steps[$i];
+        }
+        $between = array_values(array_unique($between));
+        $allReceived = true;
+        foreach ($between as $unit) {
+            if (!voucher_processing_office_step_has_receive($pdo, $lines, $unit)) {
+                $allReceived = false;
+                break;
+            }
+        }
+        if (!$allReceived || $between === []) {
+            return $steps[$idx + 1] ?? null;
+        }
+    }
+
+    $last = (int) end($indices);
+
+    return $steps[$last + 1] ?? null;
+}
+
+/**
+ * Allowed Forward To values for processing-office origin, or null when the role is not constrained.
+ *
+ * @param list<string> $user_designations
+ * @return list<string>|null
+ */
+function voucher_processing_office_allowed_forward_targets(
+    object $pdo,
+    array $user_designations,
+    string $process_history
+): ?array {
+    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+    $steps = utilities_processing_office_route_active_steps($pdo);
+    $current = voucher_processing_office_current_route_step($user_designations, $steps);
+    if ($current === '') {
+        return null;
+    }
+
+    $next = voucher_processing_office_next_route_step($pdo, $current, $process_history);
+    if ($next === null || $next === '') {
+        return null;
+    }
+
+    $targets = [$next];
+    $has = static function (string $role) use ($user_designations): bool {
+        return voucher_user_has_designation($user_designations, $role);
+    };
+
+    if ($current === 'Planning Section' && !$has('Planning Section Chief')) {
+        $targets[] = 'Planning Section Chief';
+    }
+    if ($current === 'Budget Unit') {
+        if (!$has('Budget Officer')) {
+            $targets[] = 'Budget Officer';
+        }
+        if (!$has('Accountant III')) {
+            $targets[] = 'Accountant III';
+        }
+    }
+    if ($current === 'Accounting Unit') {
+        if (!$has('Accountant III')) {
+            $targets[] = 'Accountant III';
+        }
+        foreach (['4HyLy', 'YS9M3', 's1JxV'] as $udc) {
+            $targets[] = $udc;
+        }
+    }
+
+    return array_values(array_unique($targets));
+}
+
+function voucher_processing_office_forward_target_is_allowed(
+    object $pdo,
+    array $user_designations,
+    string $process_history,
+    string $document_to
+): bool {
+    $document_to = trim($document_to);
+    if ($document_to === '') {
+        return false;
+    }
+
+    $allowed = voucher_processing_office_allowed_forward_targets($pdo, $user_designations, $process_history);
+    if ($allowed === null) {
+        return true;
+    }
+
+    return in_array($document_to, $allowed, true);
+}
+
 /** Whether encoder forward should use the return/re-forward routing path. */
 function voucher_tracking_needs_return_forward(
     ?array $tracking_row,
@@ -2282,7 +2569,7 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
  * Default forward target for encoders based on Routing utilities (system_offices).
  * Sub-offices with liaison routing are handled by voucher_encoder_forwards_to_liaison_first().
  * e-NGP encoder routing is handled by voucher_forward_resolve_encoder_route() (TSD-ENGP).
- * Processing office encoders → ICU at the processing office.
+ * Processing office encoders → first step in Routing utilities (Processing office flow).
  */
 function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office): string
 {
@@ -2298,7 +2585,9 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
     require_once __DIR__ . '/utilities_office_helper.inc.php';
     utilities_office_ensure_schema($pdo);
     if (utilities_office_is_processing_encoder_office($pdo, $logged_user_office)) {
-        return 'ICU';
+        require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+
+        return utilities_processing_office_route_encoder_target($pdo);
     }
 
     return '';
@@ -2788,9 +3077,9 @@ function voucher_tracking_dashboard_sections(): array
         'Planning Section',
         'Conservation & Development Section',
         'TSD-ENGP',
+        'Office of the PENRO',
         'Budget Unit',
         'Accounting Unit',
-        'Office of the PENRO',
         'Cashiers Unit',
     ];
 }
@@ -2828,9 +3117,9 @@ function voucher_tracking_dashboard_breakdown_voucher_column_sections(): array
     $preferred = [
         'Planning Section',
         'TSD-ENGP',
+        'Office of the PENRO',
         'Budget Unit',
         'Accounting Unit',
-        'Office of the PENRO',
         'Cashiers Unit',
     ];
     $available = array_flip(voucher_tracking_dashboard_breakdown_sections());

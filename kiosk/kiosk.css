@@ -295,6 +295,7 @@ h2 {
     max-width: none;
     margin-left: auto;
     margin-right: auto;
+    isolation: isolate;
 }
 
 .kiosk-stepper-list li {
@@ -302,6 +303,25 @@ h2 {
     display: flex;
     flex-direction: column;
     align-items: center;
+    position: relative;
+    flex: 1 0 7.25rem;
+}
+
+.kiosk-stepper-list li:not(:first-child)::after {
+    content: "";
+    position: absolute;
+    height: 5px;
+    left: calc(-50% + 15px);
+    width: calc(100% - 30px);
+    top: calc(44px + 14px + 15px);
+    transform: translateY(-50%);
+    background-color: rgba(68, 68, 68, 0.781);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.kiosk-stepper-list li.completed:not(:first-child)::after {
+    background-color: #1B4D3E;
 }
 
 .kiosk-stepper-list li .icon {
@@ -333,14 +353,8 @@ h2 {
     font-size: 14px;
     font-weight: 600;
     color: #333;
-    /* background: linear-gradient(90deg,
-            hsla(30, 1%, 34%, 0.9),
-            hsla(162, 48%, 20%, 90%),
-            hsla(162, 48%, 20%, 90%),
-            hsla(30, 1%, 34%, 0.9));
-        -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent; */
+    text-align: center;
+    padding: 0 0.35rem;
 }
 
 /* Progress Div Css  */
@@ -355,21 +369,9 @@ h2 {
     place-items: center;
     color: #fff;
     position: relative;
+    z-index: 1;
+    isolation: isolate;
     cursor: pointer;
-}
-
-.progress::after {
-    content: " ";
-    position: absolute;
-    width: 135px;
-    height: 5px;
-    background-color: rgba(68, 68, 68, 0.781);
-    right: 30px;
-}
-
-.one::after {
-    width: 0;
-    height: 0;
 }
 
 .kiosk-stepper-list li .progress i {
@@ -386,10 +388,6 @@ h2 {
     background-color: #1B4D3E;
     display: grid;
     place-items: center;
-}
-
-.kiosk-stepper-list li .active::after {
-    background-color: #1B4D3E;
 }
 
 .kiosk-stepper-list li .active p {
@@ -478,6 +476,8 @@ h2 {
     }
 
     .kiosk-stepper-list li {
+        display: flex;
+        flex: none;
         flex-direction: row;
         width: 100%;
         align-items: center;
@@ -507,22 +507,16 @@ h2 {
     .kiosk-stepper-list li .text {
         flex: 1;
         text-align: left;
+        padding: 0;
         font-size: 0.82rem;
         line-height: 1.3;
     }
 
-    .kiosk-stepper-list .progress::after {
-        width: 3px;
-        height: 2.25rem;
-        right: auto;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: -1;
-    }
-
-    .kiosk-stepper-list .one::after {
-        height: 0;
+    .kiosk-stepper-list li::after,
+    .kiosk-stepper-list li:not(:first-child)::after,
+    .kiosk-stepper-list li:first-child::after {
+        content: none;
+        display: none;
     }
 }
 
