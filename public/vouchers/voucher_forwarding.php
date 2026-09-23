@@ -588,7 +588,7 @@ if ($showCashierArchiveCol) {
                                         <option value='ICU' selected>ICU</option>
                                     <?php else : ?>
                                         <option value="" disabled selected>Please Select</option>
-                                        <?php if (in_array("ICU", $target, true)) : ?>
+                                        <?php if (in_array("ICU", $target, true) && !in_array("Accounting Unit", $target, true) && !in_array("Processor", $target, true)) : ?>
                                             <option value='Budget Unit'>Budget Unit</option>
                                             <option value='Accounting Unit'>Accounting Unit</option>
                                             <option value='Planning Section'>Planning Section</option>
@@ -1269,9 +1269,19 @@ if ($showCashierArchiveCol) {
                 <tbody>
                     <?php
                     foreach ($forwardingRows as $row) {
+                        $rawForwardingHistory = (string) ($row['process_history'] ?? '');
+                        if (stripos($rawForwardingHistory, 'Encoded By') === false) {
+                            $trackedHistory = voucher_tracking_fetch_process_history(
+                                $pdo,
+                                (string) ($row['processing_no'] ?? '')
+                            );
+                            if (is_string($trackedHistory) && trim($trackedHistory) !== '') {
+                                $rawForwardingHistory = $trackedHistory;
+                            }
+                        }
                         $forwarding_process_history = voucher_tracking_enrich_process_history_for_return(
                             $pdo,
-                            (string) ($row['process_history'] ?? ''),
+                            $rawForwardingHistory,
                             (string) ($row['voucher_type'] ?? '')
                         );
                         $forwarding_process_history_display = voucher_tracking_process_history_for_display(
@@ -1292,14 +1302,21 @@ if ($showCashierArchiveCol) {
                             $forwarding_process_history,
                             (string) ($row['encoded_from'] ?? '')
                         );
-                        $processingOfficeNext = $processingOfficeRoute
-                            ? (voucher_processing_office_allowed_forward_targets(
-                                $pdo,
-                                $target,
-                                $forwarding_process_history,
-                                (string) ($row['voucher_type'] ?? '')
-                            ) ?? [])
-                            : [];
+                        $processingOfficeNext = voucher_processing_office_allowed_forward_targets(
+                            $pdo,
+                            $target,
+                            $forwarding_process_history,
+                            (string) ($row['voucher_type'] ?? '')
+                        ) ?? [];
+                        if (
+                            !$processingOfficeRoute
+                            && in_array('Accountant III', $processingOfficeNext, true)
+                        ) {
+                            $processingOfficeRoute = true;
+                        }
+                        if (!$processingOfficeRoute) {
+                            $processingOfficeNext = [];
+                        }
                     ?>
                         <tr data-processing-office-route="<?= $processingOfficeRoute ? '1' : '0' ?>" data-processing-office-next="<?= htmlspecialchars(json_encode($processingOfficeNext, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -2089,10 +2106,17 @@ if ($showCashierArchiveCol) {
         return left.toUpperCase() === right.toUpperCase();
     }
 
+    function isIcuOnlyForwardingRole() {
+        return targetArray2.includes('ICU') &&
+            !targetArray2.includes('Processor') &&
+            !targetArray2.includes('Accounting Unit') &&
+            !targetArray2.includes('Accountant III');
+    }
+
     function isAlternateForwardingRole() {
         return targetArray2.includes('Accounting Unit') ||
             targetArray2.includes('Processor') ||
-            targetArray2.includes('ICU');
+            isIcuOnlyForwardingRole();
     }
 
     function isEngpVoucherType(voucherType) {
@@ -2253,7 +2277,7 @@ if ($showCashierArchiveCol) {
             return;
         }
 
-        if (targetArray2.includes('ICU')) {
+        if (isIcuOnlyForwardingRole()) {
             docToSelect.innerHTML = `
         <option value="" disabled selected>Please Select</option>
         <option value="Budget Unit">Budget Unit</option>

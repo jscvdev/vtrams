@@ -2212,12 +2212,22 @@ function voucher_forwarding_treat_as_same_office_workflow(
 function voucher_processing_office_origin_office(string $process_history, string $encoded_from = ''): string
 {
     $lines = voucher_tracking_parse_process_history_lines($process_history);
-    $origin = voucher_tracking_history_origin_office($lines);
-    if ($origin !== '') {
-        return $origin;
+    foreach ($lines as $line) {
+        if (stripos((string) ($line['action'] ?? ''), 'Encoded By') === false) {
+            continue;
+        }
+        $office = trim((string) ($line['office'] ?? ''));
+        if ($office !== '') {
+            return $office;
+        }
     }
 
-    return trim($encoded_from);
+    $encoded_from = trim($encoded_from);
+    if ($encoded_from !== '') {
+        return $encoded_from;
+    }
+
+    return voucher_tracking_history_origin_office($lines);
 }
 
 /**
@@ -2376,6 +2386,13 @@ function voucher_processing_office_current_route_step(
     }
 
     $lines = voucher_tracking_parse_process_history_lines($process_history);
+    for ($m = count($matchedSteps) - 1; $m >= 0; $m--) {
+        $step = $matchedSteps[$m];
+        if (voucher_processing_office_step_has_actor_progress($pdo, $lines, $step)) {
+            return $step;
+        }
+    }
+
     $current = $matchedSteps[0];
     foreach ($matchedSteps as $step) {
         $firstIndex = array_search($step, $steps, true);
@@ -2444,6 +2461,56 @@ function voucher_processing_office_later_route_step_completed(
     }
 
     return false;
+}
+
+/**
+ * Whether this route unit has Received/Processed/Forwarded in history.
+ * Accounting progress does not require a prior Budget hop (returns and truncated histories).
+ *
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ */
+function voucher_processing_office_step_has_actor_progress(object $pdo, array $lines, string $step): bool
+{
+    $step = trim($step);
+    if ($step === '' || $lines === []) {
+        return false;
+    }
+
+    foreach ($lines as $line) {
+        if (!voucher_tracking_history_line_is_progress_action((string) ($line['action'] ?? ''))) {
+            continue;
+        }
+
+        if ($step === 'Accounting Unit') {
+            if (voucher_tracking_history_line_is_accounting_unit($pdo, $line)) {
+                return true;
+            }
+            continue;
+        }
+
+        if ($step === 'Budget Unit') {
+            if (voucher_tracking_history_line_is_budget_unit($pdo, $line)) {
+                return true;
+            }
+            continue;
+        }
+
+        if ($step === 'ICU') {
+            $rawSection = trim((string) ($line['section'] ?? ''));
+            $section = voucher_tracking_normalize_section_label($rawSection);
+            if ($section === 'ICU' || strcasecmp($rawSection, 'ICU') === 0) {
+                return true;
+            }
+            continue;
+        }
+
+        $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
+        if ($section === $step) {
+            return true;
+        }
+    }
+
+    return voucher_processing_office_step_has_receive($pdo, $lines, $step);
 }
 
 /**
