@@ -2054,19 +2054,15 @@ function voucher_tracking_designation_limit_includes_udc(object $pdo, string $ud
 
     $stmt = $pdo->prepare(
         'SELECT designated_udc FROM designation_limit
-         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))
-         LIMIT 1'
+         WHERE LOWER(TRIM(designation)) = LOWER(TRIM(:designation))'
     );
     $stmt->bindValue(':designation', $designation, PDO::PARAM_STR);
     $stmt->execute();
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($row)) {
-        return false;
-    }
-
-    foreach (array_map('trim', explode(',', (string) ($row['designated_udc'] ?? ''))) as $candidate) {
-        if ($candidate !== '' && strcasecmp($candidate, $udc) === 0) {
-            return true;
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        foreach (array_map('trim', explode(',', (string) ($row['designated_udc'] ?? ''))) as $candidate) {
+            if ($candidate !== '' && strcasecmp($candidate, $udc) === 0) {
+                return true;
+            }
         }
     }
 
@@ -2247,41 +2243,77 @@ function voucher_processing_office_standard_route_applies(
 }
 
 /**
- * Accounting receive after Budget (ICU history lines are also stored as Accounting Unit).
+ * Accounting progress after Budget (ICU history lines are also stored as Accounting Unit).
  *
- * Budget Officer receives are often labeled ACCOUNTING, so actor designation is required.
- *
- * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ * Budget Officer actions are often labeled ACCOUNTING, so actor designation is required.
+ * Processed/forwarded after Budget also counts — not only Received by.
  */
+function voucher_tracking_history_line_is_progress_action(string $action): bool
+{
+    return stripos($action, 'Received by') !== false
+        || stripos($action, 'Processed by') !== false
+        || stripos($action, 'Forwarded by') !== false;
+}
+
+/**
+ * @param array{name?: string, action?: string, section?: string, office?: string} $line
+ */
+function voucher_tracking_history_line_is_budget_unit(object $pdo, array $line): bool
+{
+    $name = (string) ($line['name'] ?? '');
+    if (
+        voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Unit')
+        || voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Officer')
+    ) {
+        return true;
+    }
+
+    $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
+    $raw = strtoupper(trim((string) ($line['section'] ?? '')));
+
+    return $section === 'Budget Unit' || in_array($raw, ['BUDGET', 'BUDGET UNIT'], true);
+}
+
+/**
+ * @param array{name?: string, action?: string, section?: string, office?: string} $line
+ */
+function voucher_tracking_history_line_is_accounting_unit(object $pdo, array $line): bool
+{
+    $name = (string) ($line['name'] ?? '');
+    if (voucher_tracking_history_line_is_budget_unit($pdo, $line)) {
+        return false;
+    }
+
+    if (
+        voucher_tracking_history_actor_has_designation($pdo, $name, 'Accounting Unit')
+        || voucher_tracking_history_actor_has_designation($pdo, $name, 'Processor')
+        || voucher_tracking_history_actor_has_designation($pdo, $name, 'Accountant III')
+    ) {
+        return true;
+    }
+
+    $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
+    $raw = strtoupper(trim((string) ($line['section'] ?? '')));
+
+    return $section === 'Accounting Unit'
+        || in_array($raw, ['ACCOUNTING', 'ACCOUNTING UNIT', 'PROCESSOR', 'ACCOUNTANT III'], true);
+}
+
 function voucher_tracking_history_has_post_budget_accounting_receive(object $pdo, array $lines): bool
 {
     $seenBudget = false;
     foreach ($lines as $line) {
-        if (stripos((string) ($line['action'] ?? ''), 'Received by') === false) {
+        $action = (string) ($line['action'] ?? '');
+        if (!voucher_tracking_history_line_is_progress_action($action)) {
             continue;
         }
 
-        $name = (string) ($line['name'] ?? '');
-        $isBudgetActor = voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Unit')
-            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Officer');
-        $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
-        $raw = strtoupper(trim((string) ($line['section'] ?? '')));
-        $isBudgetSection = $section === 'Budget Unit' || in_array($raw, ['BUDGET', 'BUDGET UNIT'], true);
-        if ($isBudgetActor || $isBudgetSection) {
+        if (voucher_tracking_history_line_is_budget_unit($pdo, $line)) {
             $seenBudget = true;
             continue;
         }
 
-        if (!$seenBudget) {
-            continue;
-        }
-
-        $isAccountingActor = voucher_tracking_history_actor_has_designation($pdo, $name, 'Accounting Unit')
-            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Processor')
-            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Accountant III');
-        $isAccountingSection = $section === 'Accounting Unit'
-            || in_array($raw, ['ACCOUNTING', 'ACCOUNTING UNIT', 'PROCESSOR', 'ACCOUNTANT III'], true);
-        if ($isAccountingActor || $isAccountingSection) {
+        if ($seenBudget && voucher_tracking_history_line_is_accounting_unit($pdo, $line)) {
             return true;
         }
     }
@@ -2468,13 +2500,17 @@ function voucher_processing_office_next_route_step(
         for ($i = $idx + 1; $i < $nextOccurrence; $i++) {
             $between[] = $steps[$i];
         }
-        $between = array_values(array_unique($between));
         $allReceived = true;
-        foreach ($between as $unit) {
-            if (!voucher_processing_office_step_has_receive($pdo, $lines, $unit)) {
-                $allReceived = false;
-                break;
+        for ($i = $idx + 1; $i < $nextOccurrence; $i++) {
+            $unit = $steps[$i];
+            if (voucher_processing_office_step_has_receive($pdo, $lines, $unit)) {
+                continue;
             }
+            if (voucher_processing_office_later_route_step_completed($pdo, $lines, $steps, $i)) {
+                continue;
+            }
+            $allReceived = false;
+            break;
         }
         if (!$allReceived || $between === []) {
             return $steps[$idx + 1] ?? null;
