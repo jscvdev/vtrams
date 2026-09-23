@@ -1295,7 +1295,8 @@ if ($showCashierArchiveCol) {
                             ? (voucher_processing_office_allowed_forward_targets(
                                 $pdo,
                                 $target,
-                                $forwarding_process_history
+                                $forwarding_process_history,
+                                (string) ($row['voucher_type'] ?? '')
                             ) ?? [])
                             : [];
                     ?>

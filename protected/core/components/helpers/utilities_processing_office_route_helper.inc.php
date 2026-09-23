@@ -120,12 +120,39 @@ function utilities_processing_office_route_encoder_target(PDO $pdo): string
     return $steps[0] ?? 'ICU';
 }
 
+/**
+ * Processing-office hops after Encoder, using a voucher-type sequence when one is configured.
+ *
+ * @return list<string>
+ */
+function utilities_processing_office_route_steps_for(PDO $pdo, string $voucher_type = ''): array
+{
+    require_once __DIR__ . '/utilities_voucher_type_route_helper.inc.php';
+    $custom = utilities_voucher_type_route_active_steps($pdo, $voucher_type);
+    if ($custom !== []) {
+        return $custom;
+    }
+
+    return utilities_processing_office_route_active_steps($pdo);
+}
+
 function utilities_processing_office_route_flow_label(PDO $pdo): string
 {
     $steps = utilities_processing_office_route_active_steps($pdo);
     $parts = array_merge(['Encoder'], $steps);
 
     return implode(' → ', $parts);
+}
+
+function utilities_processing_office_route_flow_label_for(PDO $pdo, string $voucher_type = ''): string
+{
+    require_once __DIR__ . '/utilities_voucher_type_route_helper.inc.php';
+    $custom = utilities_voucher_type_route_flow_label($pdo, $voucher_type);
+    if ($custom !== '') {
+        return $custom;
+    }
+
+    return utilities_processing_office_route_flow_label($pdo);
 }
 
 /**

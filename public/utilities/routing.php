@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.in
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_special_access_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_processing_office_route_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_voucher_type_route_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
@@ -19,6 +20,7 @@ if (!AccessControl::canAccessSystemUtilities()) {
 utilities_special_access_ensure_schema($pdo);
 utilities_return_previous_ensure_schema($pdo);
 utilities_processing_office_route_ensure_schema($pdo);
+utilities_voucher_type_route_ensure_schema($pdo);
 utilities_office_ensure_schema($pdo);
 
 $voucher_types = checklist_types_with_labels();
@@ -279,6 +281,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     utilities_processing_office_route_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Processing-office flow step removed.'];
                 }
+            } elseif ($action === 'voucher_type_route_add') {
+                $voucherType = utilities_voucher_type_route_normalize_value((string) ($_POST['voucher_type'] ?? ''));
+                $designation = utilities_voucher_type_route_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                if ($voucherType === '' || !isset($voucher_types[$voucherType])) {
+                    $flash = ['type' => 'error', 'msg' => 'Unknown voucher type. Add it under Checklist first.'];
+                } elseif ($designation === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Designation is required.'];
+                } elseif (!utilities_voucher_type_route_destination_is_allowed($pdo, $designation)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        INSERT INTO voucher_type_route (voucher_type, designation, sort_order, is_active)
+                        VALUES (:voucher_type, :designation, 0, 1)
+                    ");
+                    $stmt->execute([
+                        ':voucher_type' => $voucherType,
+                        ':designation' => $designation,
+                    ]);
+                    sort_order_place_at_position(
+                        $pdo,
+                        'voucher_type_route',
+                        (int) $pdo->lastInsertId(),
+                        $sort,
+                        ['voucher_type' => $voucherType]
+                    );
+                    $pdo->commit();
+                    utilities_voucher_type_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Voucher-type flow step added.'];
+                }
+            } elseif ($action === 'voucher_type_route_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $voucherType = utilities_voucher_type_route_normalize_value((string) ($_POST['voucher_type'] ?? ''));
+                $designation = utilities_voucher_type_route_normalize_value((string) ($_POST['designation'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id <= 0 || $voucherType === '' || !isset($voucher_types[$voucherType])) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                } elseif ($designation === '' || !utilities_voucher_type_route_destination_is_allowed($pdo, $designation)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid designation.'];
+                } else {
+                    $oldStmt = $pdo->prepare('SELECT voucher_type FROM voucher_type_route WHERE id = :id LIMIT 1');
+                    $oldStmt->execute([':id' => $id]);
+                    $oldType = utilities_voucher_type_route_normalize_value((string) ($oldStmt->fetchColumn() ?: ''));
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        UPDATE voucher_type_route
+                        SET voucher_type = :voucher_type,
+                            designation = :designation,
+                            sort_order = :sort,
+                            is_active = :active
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':voucher_type' => $voucherType,
+                        ':designation' => $designation,
+                        ':sort' => $sort,
+                        ':active' => $active,
+                        ':id' => $id,
+                    ]);
+                    sort_order_place_at_position(
+                        $pdo,
+                        'voucher_type_route',
+                        $id,
+                        $sort,
+                        ['voucher_type' => $voucherType]
+                    );
+                    if ($oldType !== '' && $oldType !== $voucherType) {
+                        sort_order_reindex_sequential($pdo, 'voucher_type_route', ['voucher_type' => $oldType]);
+                    }
+                    $pdo->commit();
+                    utilities_voucher_type_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Voucher-type flow step updated.'];
+                }
+            } elseif ($action === 'voucher_type_route_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id <= 0) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                } else {
+                    $oldStmt = $pdo->prepare('SELECT voucher_type FROM voucher_type_route WHERE id = :id LIMIT 1');
+                    $oldStmt->execute([':id' => $id]);
+                    $oldType = utilities_voucher_type_route_normalize_value((string) ($oldStmt->fetchColumn() ?: ''));
+                    $stmt = $pdo->prepare('DELETE FROM voucher_type_route WHERE id = :id');
+                    $stmt->execute([':id' => $id]);
+                    if ($oldType !== '') {
+                        sort_order_reindex_sequential($pdo, 'voucher_type_route', ['voucher_type' => $oldType]);
+                    }
+                    utilities_voucher_type_route_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Voucher-type flow step removed.'];
+                }
             } elseif ($action === 'office_add') {
                 $officeName = utilities_office_normalize_name((string) ($_POST['office_name'] ?? ''));
                 $parentId = (int) ($_POST['parent_office_id'] ?? 0);
@@ -437,6 +530,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash = ['type' => 'warning', 'msg' => 'That voucher type already has a routing rule for the selected destination.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'uniq_designation')) {
                     $flash = ['type' => 'warning', 'msg' => 'That forward destination is already configured.'];
+                } elseif (str_contains(strtolower($e->getMessage()), 'voucher_type_route')) {
+                    $flash = ['type' => 'warning', 'msg' => 'That voucher-type flow step could not be saved.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'voucher_processing_office_route')) {
                     $flash = ['type' => 'warning', 'msg' => 'That processing-office flow step could not be saved.'];
                 } else {
@@ -491,6 +586,16 @@ foreach ($processing_office_route_units as $processingOfficeRouteUnit) {
 }
 $processing_office_route_flow_label = utilities_processing_office_route_flow_label($pdo);
 
+$voucher_type_route_units = utilities_voucher_type_route_fetch_all($pdo);
+$voucher_type_route_destinations = utilities_voucher_type_route_configurable_destinations($pdo);
+$voucher_type_route_count = count($voucher_type_route_units);
+$voucher_type_route_active_count = 0;
+foreach ($voucher_type_route_units as $voucherTypeRouteUnit) {
+    if ((int) ($voucherTypeRouteUnit['is_active'] ?? 1) === 1) {
+        $voucher_type_route_active_count++;
+    }
+}
+
 $offices = utilities_office_fetch_all($pdo);
 $office_tree = utilities_office_build_tree($offices);
 $office_count = count($offices);
@@ -519,6 +624,12 @@ $liaison_candidate_offices = array_values(array_filter(
 $list_type_options = [];
 foreach ($rules as $rule) {
     $ruleType = trim((string) ($rule['voucher_type'] ?? ''));
+    if ($ruleType !== '' && isset($voucher_types[$ruleType])) {
+        $list_type_options[$ruleType] = $voucher_types[$ruleType];
+    }
+}
+foreach ($voucher_type_route_units as $typeRouteRow) {
+    $ruleType = trim((string) ($typeRouteRow['voucher_type'] ?? ''));
     if ($ruleType !== '' && isset($voucher_types[$ruleType])) {
         $list_type_options[$ruleType] = $voucher_types[$ruleType];
     }
@@ -562,6 +673,21 @@ $filtered_processing_office_route_units = utilities_list_filter_rows(
 );
 $processing_office_route_units = $filtered_processing_office_route_units;
 
+$all_voucher_type_route_units = $voucher_type_route_units;
+$voucher_type_route_for_filter = utilities_list_filter_by_field_value(
+    $all_voucher_type_route_units,
+    'voucher_type',
+    $list_filter['voucher_type']
+);
+$filtered_voucher_type_route_units = utilities_list_filter_rows(
+    $voucher_type_route_for_filter,
+    $list_filter['q'],
+    'all',
+    ['voucher_type', 'designation']
+);
+$voucher_type_route_units = $filtered_voucher_type_route_units;
+$voucher_type_route_grouped = utilities_voucher_type_route_group_by_type($voucher_type_route_units);
+
 $all_liaison_routing = $liaison_routing;
 $filtered_liaison_routing = utilities_list_filter_rows(
     $all_liaison_routing,
@@ -585,12 +711,14 @@ $routing_list_total = count($all_forward_destination_units)
     + count($all_rules)
     + count($all_return_previous_units)
     + count($all_processing_office_route_units)
+    + count($all_voucher_type_route_units)
     + count($all_liaison_routing)
     + count($all_offices);
 $routing_list_visible = count($forward_destination_units)
     + count($rules)
     + count($return_previous_units)
     + count($processing_office_route_units)
+    + count($voucher_type_route_units)
     + count($liaison_routing)
     + count($offices_display);
 
@@ -691,12 +819,14 @@ function routing_forward_destinations_for_select(array $destinations, string $st
     return $destinations;
 }
 
-$routing_tab_ids = ['forward', 'flow', 'return', 'liaison', 'hierarchy'];
+$routing_tab_ids = ['forward', 'flow', 'typeflow', 'return', 'liaison', 'hierarchy'];
 $active_routing_tab = 'forward';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $routing_post_action = (string) ($_POST['action'] ?? '');
     if (str_starts_with($routing_post_action, 'processing_office_route_')) {
         $active_routing_tab = 'flow';
+    } elseif (str_starts_with($routing_post_action, 'voucher_type_route_')) {
+        $active_routing_tab = 'typeflow';
     } elseif (str_starts_with($routing_post_action, 'return_previous_')) {
         $active_routing_tab = 'return';
     } elseif (str_starts_with($routing_post_action, 'liaison_routing_')) {
@@ -1148,6 +1278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="util-subtabs-bar" role="tablist" aria-label="Routing sections">
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'forward' ? ' is-active' : '' ?>" role="tab" data-util-tab="forward" aria-selected="<?= $active_routing_tab === 'forward' ? 'true' : 'false' ?>">Direct forward</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'flow' ? ' is-active' : '' ?>" role="tab" data-util-tab="flow" aria-selected="<?= $active_routing_tab === 'flow' ? 'true' : 'false' ?>">Processing office flow</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'typeflow' ? ' is-active' : '' ?>" role="tab" data-util-tab="typeflow" aria-selected="<?= $active_routing_tab === 'typeflow' ? 'true' : 'false' ?>">Voucher type flow</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'return' ? ' is-active' : '' ?>" role="tab" data-util-tab="return" aria-selected="<?= $active_routing_tab === 'return' ? 'true' : 'false' ?>">Return to previous</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'liaison' ? ' is-active' : '' ?>" role="tab" data-util-tab="liaison" aria-selected="<?= $active_routing_tab === 'liaison' ? 'true' : 'false' ?>">Liaison offices</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'hierarchy' ? ' is-active' : '' ?>" role="tab" data-util-tab="hierarchy" aria-selected="<?= $active_routing_tab === 'hierarchy' ? 'true' : 'false' ?>">Office hierarchy</button>
@@ -1432,6 +1563,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endforeach; ?>
                 </div>
             </div>
+            </section>
+                    </div>
+                </div>
+
+                <div class="util-subtab-panel<?= $active_routing_tab === 'typeflow' ? ' is-active' : '' ?>" data-util-panel="typeflow">
+                    <div class="util-subtab-panel__body">
+            <section class="util-routing-section">
+            <p class="util-section-title">Voucher type flow</p>
+            <p class="util-dv-desc">
+                Optional hop sequence for a specific voucher type encoded at the <strong>processing office</strong>
+                (after Encoder). Example: Bonus as Encoder → ICU → Budget Unit.
+                Types without a sequence here use the default Processing office flow.
+                Do not also add a Direct forward rule for the same type if you want this sequence to start at Encoder.
+                Inactive steps are skipped. The same unit may appear more than once.
+            </p>
+
+            <div class="util-stats">
+                <div class="util-stat"><strong><?= (int) $voucher_type_route_count ?></strong> step<?= $voucher_type_route_count === 1 ? '' : 's' ?></div>
+                <div class="util-stat"><strong><?= (int) $voucher_type_route_active_count ?></strong> active</div>
+                <div class="util-stat"><strong><?= (int) count($voucher_type_route_grouped) ?></strong> type<?= count($voucher_type_route_grouped) === 1 ? '' : 's' ?></div>
+            </div>
+
+            <div class="util-card" style="margin-bottom:1rem;">
+                <div class="util-card__head">
+                    <h3>Add type flow step</h3>
+                </div>
+                <div class="util-card__body">
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="voucher_type_route_add">
+                        <div class="field">
+                            <label for="add_voucher_type_route_type">Voucher type</label>
+                            <select class="form-custom-input" name="voucher_type" id="add_voucher_type_route_type" required>
+                                <option value="" disabled selected>Select type</option>
+                                <?php foreach ($voucher_types as $type_value => $type_label): ?>
+                                    <option value="<?= htmlspecialchars((string) $type_value, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string) $type_label, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="add_voucher_type_route_designation">Designation / unit</label>
+                            <select class="form-custom-input" name="designation" id="add_voucher_type_route_designation" required>
+                                <option value="" disabled selected>Select unit</option>
+                                <?php foreach ($voucher_type_route_destinations as $destination): ?>
+                                    <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field" style="max-width:110px;">
+                            <label for="add_voucher_type_route_sort_order">Sort</label>
+                            <input class="form-custom-input" type="number" name="sort_order" id="add_voucher_type_route_sort_order" value="0">
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Add voucher-type flow step" aria-label="Add voucher-type flow step">+</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <?php if (!$voucher_type_route_units): ?>
+                <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No voucher-type flow steps match your search.' : 'No voucher-type flows configured yet. Add steps above (for example Bonus → ICU, then Bonus → Budget Unit).' ?></p>
+            <?php endif; ?>
+
+            <?php foreach ($voucher_type_route_grouped as $groupedType => $groupedSteps):
+                $typeLabel = $voucher_types[$groupedType] ?? $groupedType;
+                $activeSteps = [];
+                foreach ($groupedSteps as $groupedStep) {
+                    if ((int) ($groupedStep['is_active'] ?? 1) === 1) {
+                        $name = trim((string) ($groupedStep['designation'] ?? ''));
+                        if ($name !== '') {
+                            $activeSteps[] = $name;
+                        }
+                    }
+                }
+                $groupedFlow = $activeSteps === [] ? '' : implode(' → ', array_merge(['Encoder'], $activeSteps));
+            ?>
+                <div class="util-card" style="margin-bottom:1rem;">
+                    <div class="util-card__head">
+                        <h3><?= htmlspecialchars((string) $typeLabel, ENT_QUOTES, 'UTF-8') ?></h3>
+                    </div>
+                    <div class="util-card__body">
+                        <?php if ($groupedFlow !== ''): ?>
+                            <div class="util-office-flow">
+                                <strong>Current flow:</strong>
+                                <?= htmlspecialchars($groupedFlow, ENT_QUOTES, 'UTF-8') ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php foreach ($groupedSteps as $stepIndex => $typeRouteUnit):
+                            $typeRouteId = (int) ($typeRouteUnit['id'] ?? 0);
+                            $storedType = (string) ($typeRouteUnit['voucher_type'] ?? '');
+                            $storedDesignation = (string) ($typeRouteUnit['designation'] ?? '');
+                            $stepDestinations = routing_forward_destinations_for_select($voucher_type_route_destinations, $storedDesignation);
+                        ?>
+                            <div class="util-routing-block">
+                                <div class="util-routing-block__main">
+                                    <div class="util-inline util-inline--edit-row">
+                                        <form method="post" class="util-inline util-inline--edit-row" style="flex:1; min-width:0;">
+                                            <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="action" value="voucher_type_route_update">
+                                            <input type="hidden" name="id" value="<?= $typeRouteId ?>">
+                                            <span class="util-stat" style="min-width:2.25rem;"><?= (int) $stepIndex + 1 ?></span>
+                                            <select class="form-custom-input" name="voucher_type" required>
+                                                <?php foreach ($voucher_types as $type_value => $type_label): ?>
+                                                    <option value="<?= htmlspecialchars((string) $type_value, ENT_QUOTES, 'UTF-8') ?>"<?= $storedType === (string) $type_value ? ' selected' : '' ?>>
+                                                        <?= htmlspecialchars((string) $type_label, ENT_QUOTES, 'UTF-8') ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <select class="form-custom-input" name="designation" required>
+                                                <?php foreach ($stepDestinations as $destination): ?>
+                                                    <option value="<?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>"<?= $storedDesignation === $destination ? ' selected' : '' ?>>
+                                                        <?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <input class="form-custom-input" type="number" name="sort_order" value="<?= (int) ($typeRouteUnit['sort_order'] ?? 0) ?>">
+                                            <label class="chk">
+                                                <input type="checkbox" name="is_active" <?= ((int) ($typeRouteUnit['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                                <span>Active</span>
+                                            </label>
+                                            <button class="btn success" type="submit">Save</button>
+                                        </form>
+                                        <form method="post" onsubmit="return confirm('Remove this voucher-type flow step?');" class="util-row-actions">
+                                            <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="action" value="voucher_type_route_delete">
+                                            <input type="hidden" name="id" value="<?= $typeRouteId ?>">
+                                            <button class="btn danger" type="submit">Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
             </section>
                     </div>
                 </div>

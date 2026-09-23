@@ -313,12 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $pdo,
                                 voucher_logged_user_designations(),
                                 $routeHistory,
-                                $document_to
+                                $document_to,
+                                $voucher_type
                             )
                         ) {
                             require_once __DIR__ . '/../../core/components/helpers/utilities_processing_office_route_helper.inc.php';
                             $temp_dump['invalid_route'] = 'Processing-office vouchers must follow '
-                                . utilities_processing_office_route_flow_label($pdo)
+                                . utilities_processing_office_route_flow_label_for($pdo, $voucher_type)
                                 . '.';
                         }
                     }

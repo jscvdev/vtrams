@@ -1507,7 +1507,7 @@ function voucher_forward_resolve_special_access_target(
  * 2. Liaison Officer user → ICU at the processing office
  * 3. Sub-office encoder → Liaison Officer (liaison forwards to ICU on the next hop)
  * 4. e-NGP (not direct-to-accounting special access) → TSD-ENGP at the processing office
- * 5. Processing office encoder → ICU
+ * 5. Processing office encoder → first hop of voucher-type flow (if configured) or Processing office flow
  *
  * @param list<string> $user_designations
  * @return array{receiver_udc: string, forwarded_to: string, office_to: string, target_to: string, temp_errors: array<string, string>}
@@ -1597,7 +1597,7 @@ function voucher_forward_resolve_encoder_route(
         ];
     }
 
-    $encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $encoder_office);
+    $encoderForwardTarget = voucher_forward_encoder_default_target($pdo, $encoder_office, $voucher_type);
     if ($encoderForwardTarget !== '') {
         $target_to = $encoderForwardTarget;
         $office_to = voucher_resolve_office_for_designation_route($pdo, $target_to, $encoder_office);
@@ -1977,7 +1977,7 @@ function voucher_incoming_resolve_receive_status(
         return 'Verifying Availability of Fund and Allotment';
     }
     if (voucher_user_has_designation($target, 'Office of the PENRO')) {
-        $next = voucher_processing_office_next_route_step($pdo, 'Office of the PENRO', $process_history);
+        $next = voucher_processing_office_next_route_step($pdo, 'Office of the PENRO', $process_history, $voucher_type);
         if ($next === 'Cashiers Unit' || voucher_tracking_history_has_post_budget_accounting_receive(
             $pdo,
             voucher_tracking_parse_process_history_lines($process_history)
@@ -2234,7 +2234,9 @@ function voucher_processing_office_standard_route_applies(
     string $process_history,
     string $encoded_from = ''
 ): bool {
-    if (voucher_type_has_special_access($pdo, $voucher_type)) {
+    require_once __DIR__ . '/utilities_voucher_type_route_helper.inc.php';
+    $hasTypeRoute = utilities_voucher_type_route_has_steps($pdo, $voucher_type);
+    if (!$hasTypeRoute && voucher_type_has_special_access($pdo, $voucher_type)) {
         return false;
     }
 
@@ -2439,10 +2441,11 @@ function voucher_processing_office_step_has_receive(object $pdo, array $lines, s
 function voucher_processing_office_next_route_step(
     object $pdo,
     string $current_step,
-    string $process_history
+    string $process_history,
+    string $voucher_type = ''
 ): ?string {
     require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
-    $steps = utilities_processing_office_route_active_steps($pdo);
+    $steps = utilities_processing_office_route_steps_for($pdo, $voucher_type);
     $current_step = trim($current_step);
     if ($current_step === '' || $steps === []) {
         return null;
@@ -2492,10 +2495,11 @@ function voucher_processing_office_next_route_step(
 function voucher_processing_office_allowed_forward_targets(
     object $pdo,
     array $user_designations,
-    string $process_history
+    string $process_history,
+    string $voucher_type = ''
 ): ?array {
     require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
-    $steps = utilities_processing_office_route_active_steps($pdo);
+    $steps = utilities_processing_office_route_steps_for($pdo, $voucher_type);
     $current = voucher_processing_office_current_route_step(
         $pdo,
         $user_designations,
@@ -2506,7 +2510,7 @@ function voucher_processing_office_allowed_forward_targets(
         return null;
     }
 
-    $next = voucher_processing_office_next_route_step($pdo, $current, $process_history);
+    $next = voucher_processing_office_next_route_step($pdo, $current, $process_history, $voucher_type);
     if ($next === null || $next === '') {
         return null;
     }
@@ -2543,14 +2547,20 @@ function voucher_processing_office_forward_target_is_allowed(
     object $pdo,
     array $user_designations,
     string $process_history,
-    string $document_to
+    string $document_to,
+    string $voucher_type = ''
 ): bool {
     $document_to = trim($document_to);
     if ($document_to === '') {
         return false;
     }
 
-    $allowed = voucher_processing_office_allowed_forward_targets($pdo, $user_designations, $process_history);
+    $allowed = voucher_processing_office_allowed_forward_targets(
+        $pdo,
+        $user_designations,
+        $process_history,
+        $voucher_type
+    );
     if ($allowed === null) {
         return true;
     }
@@ -2641,8 +2651,11 @@ function voucher_resolve_forward_voucher_type(object $pdo, string $processing_no
  * e-NGP encoder routing is handled by voucher_forward_resolve_encoder_route() (TSD-ENGP).
  * Processing office encoders → first step in Routing utilities (Processing office flow).
  */
-function voucher_forward_encoder_default_target(object $pdo, string $logged_user_office): string
-{
+function voucher_forward_encoder_default_target(
+    object $pdo,
+    string $logged_user_office,
+    string $voucher_type = ''
+): string {
     $logged_user_office = trim($logged_user_office);
     if ($logged_user_office === '') {
         return '';
@@ -2656,6 +2669,11 @@ function voucher_forward_encoder_default_target(object $pdo, string $logged_user
     utilities_office_ensure_schema($pdo);
     if (utilities_office_is_processing_encoder_office($pdo, $logged_user_office)) {
         require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+        require_once __DIR__ . '/utilities_voucher_type_route_helper.inc.php';
+        $typeTarget = utilities_voucher_type_route_encoder_target($pdo, $voucher_type);
+        if ($typeTarget !== '') {
+            return $typeTarget;
+        }
 
         return utilities_processing_office_route_encoder_target($pdo);
     }
