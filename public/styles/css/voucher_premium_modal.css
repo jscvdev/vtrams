@@ -596,6 +596,41 @@
     font-weight: 700;
 }
 
+.popup-form.status-breakdown-modal .status-section-breakdown-table th.is-current,
+.popup-form.status-breakdown-modal .status-section-breakdown-table td.is-current {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.popup-form.status-breakdown-modal .status-section-breakdown-table th.is-forwarded,
+.popup-form.status-breakdown-modal .status-section-breakdown-table td.is-forwarded {
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.popup-form.status-breakdown-modal .status-section-breakdown-table th.is-current.is-forwarded,
+.popup-form.status-breakdown-modal .status-section-breakdown-table td.is-current.is-forwarded {
+    background: #ecfeff;
+    color: #155e75;
+}
+
+.popup-form.status-breakdown-modal .status-section-marker {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.popup-form.status-breakdown-modal .status-section-marker--current {
+    color: #047857;
+}
+
+.popup-form.status-breakdown-modal .status-section-marker--forwarded {
+    color: #b45309;
+}
+
 .popup-form.status-breakdown-modal .status-section-breakdown-note {
     margin: 10px 0 0;
     font-size: 11px;

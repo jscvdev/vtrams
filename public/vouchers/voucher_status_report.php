@@ -77,6 +77,10 @@ if ($isDefaultPreview) {
                 (string) ($entry['origin_office'] ?? ''),
                 (string) ($entry['status_label'] ?? ''),
                 (string) ($entry['category_label'] ?? ''),
+                (string) ($entry['current_location'] ?? ''),
+                (string) ($entry['current_section'] ?? ''),
+                (string) ($entry['forwarded_to_label'] ?? ''),
+                (string) ($entry['forwarded_to'] ?? ''),
             ]));
 
             return str_contains($haystack, $searchTerm);
@@ -893,6 +897,14 @@ $statusReportRowMetaLabel = $isDefaultPreview
                         <p class="status-breakdown-title"><i class="ri-file-text-line" aria-hidden="true"></i>DV No.</p>
                         <div class="status-breakdown-content" id="sr_dv_no"></div>
                     </div>
+                    <div class="status-breakdown-card">
+                        <p class="status-breakdown-title"><i class="ri-map-pin-line" aria-hidden="true"></i>Currently In</p>
+                        <div class="status-breakdown-content" id="sr_current_location"></div>
+                    </div>
+                    <div class="status-breakdown-card" id="sr_forwarded_to_card" style="display:none;">
+                        <p class="status-breakdown-title"><i class="ri-share-forward-line" aria-hidden="true"></i>Forwarded To</p>
+                        <div class="status-breakdown-content" id="sr_forwarded_to"></div>
+                    </div>
                     <div class="status-breakdown-card status-breakdown-card--full">
                         <p class="status-breakdown-title"><i class="ri-time-line" aria-hidden="true"></i>Latest Action</p>
                         <div class="status-breakdown-content" id="sr_latest"></div>
@@ -909,7 +921,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                                 <tbody id="sr_section_breakdown"></tbody>
                             </table>
                         </div>
-                        <p class="status-section-breakdown-note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
+                        <p class="status-section-breakdown-note" id="sr_section_breakdown_note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
                     </div>
                 </div>
                 <div class="status-breakdown-card status-breakdown-card--full status-breakdown-card--history">
@@ -1116,10 +1128,21 @@ $statusReportRowMetaLabel = $isDefaultPreview
             return voucherTypeLabels[key] || key;
         }
 
+        function normalizeLocationKey(value) {
+            return String(value || '').trim().toLowerCase();
+        }
+
+        function locationKeysMatch(left, right) {
+            const a = normalizeLocationKey(left);
+            const b = normalizeLocationKey(right);
+            return a !== '' && b !== '' && (a === b || a.includes(b) || b.includes(a));
+        }
+
         function renderSectionBreakdown(entry) {
             const card = document.getElementById('sr_section_breakdown_card');
             const head = document.getElementById('sr_section_breakdown_head');
             const body = document.getElementById('sr_section_breakdown');
+            const note = document.getElementById('sr_section_breakdown_note');
             if (!card || !head || !body) return;
 
             const rows = entry && Array.isArray(entry.section_breakdown) ? entry.section_breakdown : [];
@@ -1127,16 +1150,36 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 card.style.display = 'none';
                 head.innerHTML = '';
                 body.innerHTML = '';
+                if (note) {
+                    note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).';
+                }
                 return;
             }
 
+            const currentSection = String(entry.current_section || '').trim();
+            const forwardedTo = String(entry.forwarded_to || '').trim();
             let headerCells = '';
             let dataCells = '';
             rows.forEach(function(row) {
                 const label = row.section_label || row.section || '—';
                 const time = String(row.processing_time || '').trim();
-                headerCells += '<th>' + escapeHtml(label) + '</th>';
-                dataCells += '<td>' + (time !== '' ? escapeHtml(time) : '—') + '</td>';
+                const classes = [];
+                if (locationKeysMatch(label, currentSection) || locationKeysMatch(row.section, currentSection)) {
+                    classes.push('is-current');
+                }
+                if (forwardedTo !== '' && (locationKeysMatch(label, forwardedTo) || locationKeysMatch(row.section, forwardedTo))) {
+                    classes.push('is-forwarded');
+                }
+                const classAttr = classes.length ? ' class="' + classes.join(' ') + '"' : '';
+                let marker = '';
+                if (classes.indexOf('is-current') !== -1) {
+                    marker += '<span class="status-section-marker status-section-marker--current">Current</span>';
+                }
+                if (classes.indexOf('is-forwarded') !== -1) {
+                    marker += '<span class="status-section-marker status-section-marker--forwarded">Forwarded</span>';
+                }
+                headerCells += '<th' + classAttr + '>' + escapeHtml(label) + marker + '</th>';
+                dataCells += '<td' + classAttr + '>' + (time !== '' ? escapeHtml(time) : '—') + '</td>';
             });
 
             const tpt = String(entry.section_breakdown_tpt || '').trim();
@@ -1145,6 +1188,16 @@ $statusReportRowMetaLabel = $isDefaultPreview
 
             head.innerHTML = '<tr>' + headerCells + '</tr>';
             body.innerHTML = '<tr>' + dataCells + '</tr>';
+            if (note) {
+                let extra = '';
+                if (currentSection !== '') {
+                    extra += ' Currently in ' + currentSection + '.';
+                }
+                if (forwardedTo !== '') {
+                    extra += ' Forwarded to ' + forwardedTo + ' (not yet received).';
+                }
+                note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).' + extra;
+            }
             card.style.display = '';
         }
 
@@ -1213,6 +1266,19 @@ $statusReportRowMetaLabel = $isDefaultPreview
             document.getElementById('sr_route_type').textContent = entry.category_label || '—';
             document.getElementById('sr_ors_no').textContent = formatBreakdownIdentifier(entry.ors_no);
             document.getElementById('sr_dv_no').textContent = formatBreakdownIdentifier(entry.dv_no);
+            document.getElementById('sr_current_location').textContent = String(entry.current_location || entry.current_section || '').trim() || '—';
+            const forwardedCard = document.getElementById('sr_forwarded_to_card');
+            const forwardedEl = document.getElementById('sr_forwarded_to');
+            const forwardedLabel = String(entry.forwarded_to_label || entry.forwarded_to || '').trim();
+            if (forwardedCard && forwardedEl) {
+                if (forwardedLabel !== '') {
+                    forwardedEl.textContent = forwardedLabel;
+                    forwardedCard.style.display = '';
+                } else {
+                    forwardedEl.textContent = '';
+                    forwardedCard.style.display = 'none';
+                }
+            }
             document.getElementById('sr_latest').textContent = (entry.voucher_status || '—') + (entry.datetime_status ? (' · ' + entry.datetime_status) : '');
             const remarksCard = document.getElementById('sr_latest_remarks_card');
             const remarksEl = document.getElementById('sr_latest_remarks');

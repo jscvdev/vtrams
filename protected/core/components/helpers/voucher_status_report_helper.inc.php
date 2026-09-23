@@ -365,6 +365,12 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'is_paid' => $isPaid,
         'is_returned' => $isReturned,
         'active_status' => trim((string) ($row['active_status'] ?? '')),
+        'current_section' => '',
+        'current_office' => '',
+        'current_location' => '',
+        'forwarded_to' => '',
+        'forwarded_to_office' => '',
+        'forwarded_to_label' => '',
     ];
 }
 
@@ -467,6 +473,10 @@ function voucher_status_report_attach_section_breakdowns(PDO $pdo, array $entrie
         $entries
     )));
     $logsByPn = voucher_tracking_fetch_action_logs_grouped($pdo, $processingNos);
+    $incomingByPn = voucher_status_report_fetch_queue_map($pdo, $processingNos, 'voucher_incoming');
+    $receivingByPn = voucher_status_report_fetch_queue_map($pdo, $processingNos, 'voucher_receiving');
+    $sentByPn = voucher_status_report_fetch_queue_map($pdo, $processingNos, 'voucher_sent');
+    $userCache = [];
 
     foreach ($entries as $index => $entry) {
         $pn = trim((string) ($entry['processing_no'] ?? ''));
@@ -487,9 +497,273 @@ function voucher_status_report_attach_section_breakdowns(PDO $pdo, array $entrie
             $trackingRowsByPn[$pn] ?? [],
             $logs
         );
+        $location = voucher_status_report_resolve_location(
+            $pdo,
+            $entries[$index],
+            $incomingByPn[$pn] ?? [],
+            $receivingByPn[$pn] ?? [],
+            $sentByPn[$pn] ?? [],
+            $userCache
+        );
+        $entries[$index] = array_merge($entries[$index], $location);
     }
 
     return $entries;
+}
+
+/**
+ * @param list<string> $processingNos
+ * @param 'voucher_incoming'|'voucher_receiving'|'voucher_sent' $table
+ * @return array<string, array<string, mixed>>
+ */
+function voucher_status_report_fetch_queue_map(PDO $pdo, array $processingNos, string $table): array
+{
+    $allowed = ['voucher_incoming', 'voucher_receiving', 'voucher_sent'];
+    if (!in_array($table, $allowed, true) || $processingNos === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
+    $sql = "SELECT processing_no, receiver_udc, office_to, office_from
+            FROM {$table}
+            WHERE processing_no IN ({$placeholders})";
+    $stmt = $pdo->prepare($sql);
+    foreach ($processingNos as $i => $pn) {
+        $stmt->bindValue($i + 1, $pn, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $map = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pn = trim((string) ($row['processing_no'] ?? ''));
+        if ($pn === '') {
+            continue;
+        }
+        $map[$pn] = $row;
+    }
+
+    return $map;
+}
+
+/**
+ * @return array{udc: string, designation: string, section: string, office: string, display_name: string}|null
+ */
+function voucher_status_report_user_from_udc_list(PDO $pdo, string $udcList): ?array
+{
+    $udcs = array_values(array_filter(
+        array_map('trim', explode(',', $udcList)),
+        static fn(string $udc): bool => $udc !== ''
+    ));
+    if ($udcs === []) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT udc, designation, section, office,
+            TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) AS display_name
+         FROM user_group
+         WHERE udc = :udc
+         LIMIT 1'
+    );
+    foreach ($udcs as $udc) {
+        $stmt->bindValue(':udc', $udc, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            continue;
+        }
+
+        return [
+            'udc' => trim((string) ($row['udc'] ?? '')),
+            'designation' => trim((string) ($row['designation'] ?? '')),
+            'section' => trim((string) ($row['section'] ?? '')),
+            'office' => trim((string) ($row['office'] ?? '')),
+            'display_name' => trim((string) ($row['display_name'] ?? '')),
+        ];
+    }
+
+    return null;
+}
+
+/**
+ * @param array{designation?: string, section?: string}|null $user
+ */
+function voucher_status_report_unit_label_from_user(?array $user): string
+{
+    if ($user === null) {
+        return '';
+    }
+
+    $section = voucher_tracking_dashboard_section_from_user_role($user);
+    if ($section !== '') {
+        return voucher_tracking_dashboard_section_label($section);
+    }
+
+    $primary = voucher_tracking_primary_designation($user['designation'] ?? '');
+    if ($primary !== '') {
+        return $primary;
+    }
+
+    $userSection = trim((string) ($user['section'] ?? ''));
+    if ($userSection !== '') {
+        $normalized = voucher_tracking_normalize_section_label($userSection);
+
+        return $normalized !== '' ? voucher_tracking_dashboard_section_label($normalized) : $userSection;
+    }
+
+    return '';
+}
+
+/**
+ * @param array{name?: string, action?: string, section?: string, office?: string} $line
+ * @param array<string, array<string, mixed>|null> $userCache
+ */
+function voucher_status_report_unit_from_history_line(PDO $pdo, array $line, array &$userCache): string
+{
+    $section = voucher_tracking_dashboard_section_from_action_row(
+        [
+            'action_from' => (string) ($line['section'] ?? ''),
+            'action_by' => (string) ($line['name'] ?? ''),
+        ],
+        $pdo,
+        $userCache
+    );
+    if ($section !== '') {
+        return voucher_tracking_dashboard_section_label($section);
+    }
+
+    $raw = trim((string) ($line['section'] ?? ''));
+
+    return $raw !== '' ? voucher_tracking_dashboard_section_label(voucher_tracking_normalize_section_label($raw)) : '';
+}
+
+/**
+ * Last section/unit that held the voucher (encode/receive/process; skip in-transit forwards).
+ *
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ * @param array<string, array<string, mixed>|null> $userCache
+ * @return array{section: string, office: string}
+ */
+function voucher_status_report_last_held_location(PDO $pdo, array $lines, array &$userCache): array
+{
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = $lines[$i];
+        $kind = voucher_tracking_action_kind((string) ($line['action'] ?? ''));
+        if (!in_array($kind, ['receive', 'process', 'encode', 'return', 'archive'], true)) {
+            continue;
+        }
+
+        $section = voucher_status_report_unit_from_history_line($pdo, $line, $userCache);
+        $office = trim((string) ($line['office'] ?? ''));
+        if ($section === '' && $office === '') {
+            continue;
+        }
+
+        return ['section' => $section, 'office' => $office];
+    }
+
+    return ['section' => '', 'office' => ''];
+}
+
+function voucher_status_report_format_location_label(string $section, string $office): string
+{
+    $section = trim($section);
+    $office = trim($office);
+    if ($section === '' && $office === '') {
+        return '';
+    }
+    if ($section === '') {
+        return $office;
+    }
+    if ($office === '' || strcasecmp($section, $office) === 0) {
+        return $section;
+    }
+
+    return $section . ' · ' . $office;
+}
+
+/**
+ * @param array<string, mixed> $entry
+ * @param array<string, mixed> $incomingRow
+ * @param array<string, mixed> $receivingRow
+ * @param array<string, mixed> $sentRow
+ * @param array<string, array<string, mixed>|null> $userCache
+ * @return array{
+ *   current_section: string,
+ *   current_office: string,
+ *   current_location: string,
+ *   forwarded_to: string,
+ *   forwarded_to_office: string,
+ *   forwarded_to_label: string
+ * }
+ */
+function voucher_status_report_resolve_location(
+    PDO $pdo,
+    array $entry,
+    array $incomingRow,
+    array $receivingRow,
+    array $sentRow,
+    array &$userCache
+): array {
+    $lines = voucher_tracking_parse_process_history_lines((string) ($entry['process_history'] ?? ''));
+    $lastHeld = voucher_status_report_last_held_location($pdo, $lines, $userCache);
+    $currentSection = $lastHeld['section'];
+    $currentOffice = $lastHeld['office'];
+    $forwardedTo = '';
+    $forwardedOffice = '';
+
+    $pendingRow = $incomingRow !== [] ? $incomingRow : (($receivingRow === [] && $sentRow !== []) ? $sentRow : []);
+    $lastKind = '';
+    if ($lines !== []) {
+        $lastKind = voucher_tracking_action_kind((string) ($lines[count($lines) - 1]['action'] ?? ''));
+    }
+
+    if (!empty($entry['is_paid'])) {
+        if ($currentSection === '') {
+            $currentSection = 'Paid';
+        }
+    } elseif ($incomingRow !== [] || ($lastKind === 'forward' && $pendingRow !== [])) {
+        $queue = $incomingRow !== [] ? $incomingRow : $pendingRow;
+        $destUser = voucher_status_report_user_from_udc_list($pdo, (string) ($queue['receiver_udc'] ?? ''));
+        $forwardedTo = voucher_status_report_unit_label_from_user($destUser);
+        $forwardedOffice = trim((string) ($queue['office_to'] ?? ''));
+        if ($forwardedOffice === '' && $destUser !== null) {
+            $forwardedOffice = trim((string) ($destUser['office'] ?? ''));
+        }
+        if ($forwardedTo === '' && $forwardedOffice !== '') {
+            $forwardedTo = $forwardedOffice;
+            $forwardedOffice = '';
+        }
+        if ($currentSection === '' && $currentOffice === '') {
+            $currentSection = 'In transit';
+        }
+    } elseif ($receivingRow !== []) {
+        $holder = voucher_status_report_user_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
+        $heldSection = voucher_status_report_unit_label_from_user($holder);
+        if ($heldSection !== '') {
+            $currentSection = $heldSection;
+        }
+        $heldOffice = trim((string) ($receivingRow['office_to'] ?? ''));
+        if ($heldOffice === '' && $holder !== null) {
+            $heldOffice = trim((string) ($holder['office'] ?? ''));
+        }
+        if ($heldOffice !== '') {
+            $currentOffice = $heldOffice;
+        }
+    } elseif (!empty($entry['is_returned'])) {
+        if ($currentSection === '') {
+            $currentSection = 'Returned';
+        }
+    }
+
+    return [
+        'current_section' => $currentSection,
+        'current_office' => $currentOffice,
+        'current_location' => voucher_status_report_format_location_label($currentSection, $currentOffice),
+        'forwarded_to' => $forwardedTo,
+        'forwarded_to_office' => $forwardedOffice,
+        'forwarded_to_label' => voucher_status_report_format_location_label($forwardedTo, $forwardedOffice),
+    ];
 }
 
 /**

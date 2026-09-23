@@ -631,6 +631,7 @@ if ($showCashierArchiveCol) {
                                                 <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
                                             <?php endif ?>
                                         <?php elseif (in_array("Office of the PENRO", $target)) : ?>
+                                            <option value='Budget Unit'>Budget Unit</option>
                                             <option value='Cashiers Unit'>Cashiers Unit</option>
                                         <?php elseif (in_array("Cashiers Unit", $target)) : ?>
                                             <option value='Accountant III'>Chief Accountant</option>

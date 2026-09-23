@@ -2409,6 +2409,8 @@ function voucher_processing_office_current_route_step(
 
 /**
  * True when a later distinct hop already happened (old vouchers skipped a hop such as first PENRO).
+ * Units that already appear at or before $fromIndex are ignored — a receive there belongs to the
+ * earlier occurrence (e.g. first Office of the PENRO must not mark Budget as skipped).
  *
  * @param list<array{name: string, action: string, section: string, office: string}> $lines
  * @param list<string> $steps
@@ -2419,11 +2421,20 @@ function voucher_processing_office_later_route_step_completed(
     array $steps,
     int $fromIndex
 ): bool {
-    $seen = [];
+    $prior = [];
     $count = count($steps);
+    if ($fromIndex < 0 || $fromIndex >= $count) {
+        return false;
+    }
+
+    for ($i = 0; $i <= $fromIndex; $i++) {
+        $prior[$steps[$i]] = true;
+    }
+
+    $seen = [];
     for ($i = $fromIndex + 1; $i < $count; $i++) {
         $step = $steps[$i];
-        if (isset($seen[$step])) {
+        if (isset($seen[$step]) || isset($prior[$step])) {
             continue;
         }
         $seen[$step] = true;
