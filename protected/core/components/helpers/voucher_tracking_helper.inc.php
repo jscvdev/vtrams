@@ -1979,6 +1979,7 @@ function voucher_incoming_resolve_receive_status(
     if (voucher_user_has_designation($target, 'Office of the PENRO')) {
         $next = voucher_processing_office_next_route_step($pdo, 'Office of the PENRO', $process_history);
         if ($next === 'Cashiers Unit' || voucher_tracking_history_has_post_budget_accounting_receive(
+            $pdo,
             voucher_tracking_parse_process_history_lines($process_history)
         )) {
             return 'For Approval of the PENRO';
@@ -2246,9 +2247,11 @@ function voucher_processing_office_standard_route_applies(
 /**
  * Accounting receive after Budget (ICU history lines are also stored as Accounting Unit).
  *
+ * Budget Officer receives are often labeled ACCOUNTING, so actor designation is required.
+ *
  * @param list<array{name: string, action: string, section: string, office: string}> $lines
  */
-function voucher_tracking_history_has_post_budget_accounting_receive(array $lines): bool
+function voucher_tracking_history_has_post_budget_accounting_receive(object $pdo, array $lines): bool
 {
     $seenBudget = false;
     foreach ($lines as $line) {
@@ -2256,20 +2259,27 @@ function voucher_tracking_history_has_post_budget_accounting_receive(array $line
             continue;
         }
 
+        $name = (string) ($line['name'] ?? '');
+        $isBudgetActor = voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Unit')
+            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Budget Officer');
         $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
         $raw = strtoupper(trim((string) ($line['section'] ?? '')));
-        if ($section === 'Budget Unit' || in_array($raw, ['BUDGET', 'BUDGET UNIT'], true)) {
+        $isBudgetSection = $section === 'Budget Unit' || in_array($raw, ['BUDGET', 'BUDGET UNIT'], true);
+        if ($isBudgetActor || $isBudgetSection) {
             $seenBudget = true;
             continue;
         }
 
-        if (
-            $seenBudget
-            && (
-                $section === 'Accounting Unit'
-                || in_array($raw, ['ACCOUNTING', 'ACCOUNTING UNIT', 'PROCESSOR', 'ACCOUNTANT III'], true)
-            )
-        ) {
+        if (!$seenBudget) {
+            continue;
+        }
+
+        $isAccountingActor = voucher_tracking_history_actor_has_designation($pdo, $name, 'Accounting Unit')
+            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Processor')
+            || voucher_tracking_history_actor_has_designation($pdo, $name, 'Accountant III');
+        $isAccountingSection = $section === 'Accounting Unit'
+            || in_array($raw, ['ACCOUNTING', 'ACCOUNTING UNIT', 'PROCESSOR', 'ACCOUNTANT III'], true);
+        if ($isAccountingActor || $isAccountingSection) {
             return true;
         }
     }
@@ -2294,24 +2304,14 @@ function voucher_processing_office_route_role_aliases(): array
  * @param list<string> $user_designations
  * @param list<string> $steps
  */
-function voucher_processing_office_current_route_step(array $user_designations, array $steps): string
-{
+function voucher_processing_office_current_route_step(
+    object $pdo,
+    array $user_designations,
+    array $steps,
+    string $process_history = ''
+): string {
     if ($steps === []) {
         return '';
-    }
-
-    $has = static function (string $role) use ($user_designations): bool {
-        return voucher_user_has_designation($user_designations, $role);
-    };
-
-    if (
-        $has('ICU')
-        && !$has('Accounting Unit')
-        && !$has('Processor')
-        && !$has('Accountant III')
-        && in_array('ICU', $steps, true)
-    ) {
-        return 'ICU';
     }
 
     $aliases = voucher_processing_office_route_role_aliases();
@@ -2327,13 +2327,78 @@ function voucher_processing_office_current_route_step(array $user_designations, 
         }
     }
 
+    $matchedSteps = [];
     foreach ($steps as $step) {
-        if (isset($matched[$step])) {
-            return $step;
+        if (isset($matched[$step]) && !in_array($step, $matchedSteps, true)) {
+            $matchedSteps[] = $step;
         }
     }
 
-    return '';
+    if ($matchedSteps === []) {
+        return '';
+    }
+    if (count($matchedSteps) === 1) {
+        return $matchedSteps[0];
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    $current = $matchedSteps[0];
+    foreach ($matchedSteps as $step) {
+        $firstIndex = array_search($step, $steps, true);
+        if ($firstIndex === false) {
+            continue;
+        }
+        $allPriorsReceived = true;
+        $checkedPriors = [];
+        for ($i = 0; $i < $firstIndex; $i++) {
+            $unit = $steps[$i];
+            if (isset($checkedPriors[$unit])) {
+                continue;
+            }
+            $checkedPriors[$unit] = true;
+            if (voucher_processing_office_step_has_receive($pdo, $lines, $unit)) {
+                continue;
+            }
+            if (voucher_processing_office_later_route_step_completed($pdo, $lines, $steps, $i)) {
+                continue;
+            }
+            $allPriorsReceived = false;
+            break;
+        }
+        if ($allPriorsReceived) {
+            $current = $step;
+        }
+    }
+
+    return $current;
+}
+
+/**
+ * True when a later distinct hop already happened (old vouchers skipped a hop such as first PENRO).
+ *
+ * @param list<array{name: string, action: string, section: string, office: string}> $lines
+ * @param list<string> $steps
+ */
+function voucher_processing_office_later_route_step_completed(
+    object $pdo,
+    array $lines,
+    array $steps,
+    int $fromIndex
+): bool {
+    $seen = [];
+    $count = count($steps);
+    for ($i = $fromIndex + 1; $i < $count; $i++) {
+        $step = $steps[$i];
+        if (isset($seen[$step])) {
+            continue;
+        }
+        $seen[$step] = true;
+        if (voucher_processing_office_step_has_receive($pdo, $lines, $step)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -2348,7 +2413,7 @@ function voucher_processing_office_step_has_receive(object $pdo, array $lines, s
 
     $roles = [$step];
     if ($step === 'Accounting Unit') {
-        $roles = ['Accounting Unit', 'Processor', 'Accountant III'];
+        return voucher_tracking_history_has_post_budget_accounting_receive($pdo, $lines);
     } elseif ($step === 'Planning Section') {
         $roles = ['Planning Section', 'Planning Section Chief'];
     } elseif ($step === 'Budget Unit') {
@@ -2431,7 +2496,12 @@ function voucher_processing_office_allowed_forward_targets(
 ): ?array {
     require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
     $steps = utilities_processing_office_route_active_steps($pdo);
-    $current = voucher_processing_office_current_route_step($user_designations, $steps);
+    $current = voucher_processing_office_current_route_step(
+        $pdo,
+        $user_designations,
+        $steps,
+        $process_history
+    );
     if ($current === '') {
         return null;
     }
