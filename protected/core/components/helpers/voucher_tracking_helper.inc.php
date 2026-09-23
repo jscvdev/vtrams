@@ -2465,7 +2465,8 @@ function voucher_processing_office_later_route_step_completed(
 
 /**
  * Whether this route unit has Received/Processed/Forwarded in history.
- * Accounting progress does not require a prior Budget hop (returns and truncated histories).
+ * Accounting "Processed by" counts even without a prior Budget hop (returns).
+ * A plain ICU/Accounting *receive* does not — that is still the ICU checking hop.
  *
  * @param list<array{name: string, action: string, section: string, office: string}> $lines
  */
@@ -2482,7 +2483,10 @@ function voucher_processing_office_step_has_actor_progress(object $pdo, array $l
         }
 
         if ($step === 'Accounting Unit') {
-            if (voucher_tracking_history_line_is_accounting_unit($pdo, $line)) {
+            if (
+                voucher_tracking_history_line_is_accounting_unit($pdo, $line)
+                && voucher_tracking_action_kind((string) ($line['action'] ?? '')) === 'process'
+            ) {
                 return true;
             }
             continue;
