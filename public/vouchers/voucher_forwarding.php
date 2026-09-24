@@ -1306,7 +1306,8 @@ if ($showCashierArchiveCol) {
                             $pdo,
                             $target,
                             $forwarding_process_history,
-                            (string) ($row['voucher_type'] ?? '')
+                            (string) ($row['voucher_type'] ?? ''),
+                            (string) ($row['encoded_from'] ?? '')
                         ) ?? [];
                         if (
                             !$processingOfficeRoute

@@ -2231,9 +2231,57 @@ function voucher_processing_office_origin_office(string $process_history, string
 }
 
 /**
- * True when the voucher originated at the configured processing office
- * and is not using a special-access skip path.
+ * True when the voucher is on the configured processing-office hop list
+ * (processing-office origin or liaison/CENRO origin after it reaches ICU).
+ * Special-access skip paths stay unconstrained unless a voucher-type flow exists.
  */
+function voucher_processing_office_origin_is_processing_office(
+    object $pdo,
+    string $process_history,
+    string $encoded_from = ''
+): bool {
+    require_once __DIR__ . '/utilities_office_helper.inc.php';
+    $origin = voucher_processing_office_origin_office($process_history, $encoded_from);
+
+    return $origin !== '' && utilities_office_is_processing_encoder_office($pdo, $origin);
+}
+
+/**
+ * @return list<string>
+ */
+function voucher_processing_office_route_steps_for_voucher(
+    object $pdo,
+    string $voucher_type,
+    string $process_history,
+    string $encoded_from = ''
+): array {
+    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+    $steps = utilities_processing_office_route_steps_for($pdo, $voucher_type);
+    if (voucher_processing_office_origin_is_processing_office($pdo, $process_history, $encoded_from)) {
+        return $steps;
+    }
+
+    return utilities_processing_office_route_steps_skip_local_planning($steps);
+}
+
+function voucher_processing_office_route_flow_label_for_voucher(
+    object $pdo,
+    string $voucher_type,
+    string $process_history,
+    string $encoded_from = ''
+): string {
+    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
+    $steps = voucher_processing_office_route_steps_for_voucher(
+        $pdo,
+        $voucher_type,
+        $process_history,
+        $encoded_from
+    );
+    $viaLiaison = !voucher_processing_office_origin_is_processing_office($pdo, $process_history, $encoded_from);
+
+    return utilities_processing_office_route_flow_label_from_steps($steps, $viaLiaison);
+}
+
 function voucher_processing_office_standard_route_applies(
     object $pdo,
     string $voucher_type,
@@ -2246,10 +2294,9 @@ function voucher_processing_office_standard_route_applies(
         return false;
     }
 
-    require_once __DIR__ . '/utilities_office_helper.inc.php';
     $origin = voucher_processing_office_origin_office($process_history, $encoded_from);
 
-    return $origin !== '' && utilities_office_is_processing_encoder_office($pdo, $origin);
+    return $origin !== '';
 }
 
 /**
@@ -2556,10 +2603,15 @@ function voucher_processing_office_next_route_step(
     object $pdo,
     string $current_step,
     string $process_history,
-    string $voucher_type = ''
+    string $voucher_type = '',
+    string $encoded_from = ''
 ): ?string {
-    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
-    $steps = utilities_processing_office_route_steps_for($pdo, $voucher_type);
+    $steps = voucher_processing_office_route_steps_for_voucher(
+        $pdo,
+        $voucher_type,
+        $process_history,
+        $encoded_from
+    );
     $current_step = trim($current_step);
     if ($current_step === '' || $steps === []) {
         return null;
@@ -2614,10 +2666,15 @@ function voucher_processing_office_allowed_forward_targets(
     object $pdo,
     array $user_designations,
     string $process_history,
-    string $voucher_type = ''
+    string $voucher_type = '',
+    string $encoded_from = ''
 ): ?array {
-    require_once __DIR__ . '/utilities_processing_office_route_helper.inc.php';
-    $steps = utilities_processing_office_route_steps_for($pdo, $voucher_type);
+    $steps = voucher_processing_office_route_steps_for_voucher(
+        $pdo,
+        $voucher_type,
+        $process_history,
+        $encoded_from
+    );
     $current = voucher_processing_office_current_route_step(
         $pdo,
         $user_designations,
@@ -2628,7 +2685,13 @@ function voucher_processing_office_allowed_forward_targets(
         return null;
     }
 
-    $next = voucher_processing_office_next_route_step($pdo, $current, $process_history, $voucher_type);
+    $next = voucher_processing_office_next_route_step(
+        $pdo,
+        $current,
+        $process_history,
+        $voucher_type,
+        $encoded_from
+    );
     if ($next === null || $next === '') {
         return null;
     }
@@ -2666,7 +2729,8 @@ function voucher_processing_office_forward_target_is_allowed(
     array $user_designations,
     string $process_history,
     string $document_to,
-    string $voucher_type = ''
+    string $voucher_type = '',
+    string $encoded_from = ''
 ): bool {
     $document_to = trim($document_to);
     if ($document_to === '') {
@@ -2677,7 +2741,8 @@ function voucher_processing_office_forward_target_is_allowed(
         $pdo,
         $user_designations,
         $process_history,
-        $voucher_type
+        $voucher_type,
+        $encoded_from
     );
     if ($allowed === null) {
         return true;

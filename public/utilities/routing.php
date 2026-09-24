@@ -1479,6 +1479,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Ordered hops for vouchers encoded at the <strong>processing office</strong> (after Encoder).
                 The same unit may appear more than once (for example Office of the PENRO before Budget and again after Accounting).
                 Inactive steps are skipped. Encoder always forwards to the first active step.
+                Vouchers encoded at a liaison/CENRO office skip Planning and the first Office of the PENRO hop
+                (those offices have their own planning): Encoder → Liaison → ICU → Budget Unit → then the remaining steps.
             </p>
 
             <div class="util-office-flow">
@@ -1806,6 +1808,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 forwards upstream to <strong>ICU</strong> at the processing office
                 (<?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'main PENRO', ENT_QUOTES, 'UTF-8') ?>).
                 Nested sub-offices (e.g. PAMO-GMRPLS under CENRO BORONGAN) route to the parent office Liaison Officer first.
+                After ICU at the processing office, those vouchers go to <strong>Budget Unit</strong> (not Planning).
             </p>
 
             <div class="util-stats">
@@ -1919,7 +1922,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Processing office (e.g. <?= htmlspecialchars($processing_office_name !== '' ? $processing_office_name : 'Main PENRO', ENT_QUOTES, 'UTF-8') ?>)
                 &rarr; sub-offices with Liaison Officers (e.g. CENRO BORONGAN) &rarr; nested sub-offices
                 (e.g. PAMO-GMRPLS) send vouchers to the parent sub-office Liaison Officer first,
-                who then forwards upstream to ICU at the processing office.
+                who then forwards upstream to ICU at the processing office, then Budget Unit (Planning is skipped).
             </div>
 
             <div class="util-stats">

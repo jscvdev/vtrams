@@ -314,12 +314,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 voucher_logged_user_designations(),
                                 $routeHistory,
                                 $document_to,
-                                $voucher_type
+                                $voucher_type,
+                                $encoded_from
                             )
                         ) {
-                            require_once __DIR__ . '/../../core/components/helpers/utilities_processing_office_route_helper.inc.php';
-                            $temp_dump['invalid_route'] = 'Processing-office vouchers must follow '
-                                . utilities_processing_office_route_flow_label_for($pdo, $voucher_type)
+                            $temp_dump['invalid_route'] = 'This voucher must follow '
+                                . voucher_processing_office_route_flow_label_for_voucher(
+                                    $pdo,
+                                    $voucher_type,
+                                    $routeHistory,
+                                    $encoded_from
+                                )
                                 . '.';
                         }
                     }

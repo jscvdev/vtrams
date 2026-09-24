@@ -136,6 +136,45 @@ function utilities_processing_office_route_steps_for(PDO $pdo, string $voucher_t
     return utilities_processing_office_route_active_steps($pdo);
 }
 
+/**
+ * Cross-office (liaison/CENRO) hops: skip Planning and PENRO-before-Budget.
+ * Those offices have their own planning; ICU goes to Budget next.
+ *
+ * @param list<string> $steps
+ * @return list<string>
+ */
+function utilities_processing_office_route_steps_skip_local_planning(array $steps): array
+{
+    $out = [];
+    $seenBudget = false;
+    foreach ($steps as $step) {
+        $step = utilities_processing_office_route_normalize_value((string) $step);
+        if ($step === '' || $step === 'Planning Section') {
+            continue;
+        }
+        if ($step === 'Office of the PENRO' && !$seenBudget) {
+            continue;
+        }
+        $out[] = $step;
+        if ($step === 'Budget Unit') {
+            $seenBudget = true;
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * @param list<string> $steps
+ */
+function utilities_processing_office_route_flow_label_from_steps(array $steps, bool $viaLiaison = false): string
+{
+    $parts = $viaLiaison ? ['Encoder', 'Liaison'] : ['Encoder'];
+    $parts = array_merge($parts, $steps);
+
+    return implode(' → ', $parts);
+}
+
 function utilities_processing_office_route_flow_label(PDO $pdo): string
 {
     $steps = utilities_processing_office_route_active_steps($pdo);
