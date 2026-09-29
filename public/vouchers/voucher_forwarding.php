@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_unit_forward_options_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 utilities_return_previous_ensure_schema($pdo);
@@ -136,6 +137,20 @@ $target = array_values(array_filter(array_map(
     explode(',', (string) ($_SESSION['logged_user_designation'] ?? ''))
 )));
 $isLiaisonOfficer = in_array('Liaison Officer', $target, true);
+utilities_unit_forward_options_ensure_schema($pdo);
+$unit_forward_select_options = utilities_unit_forward_options_for_user(
+    $pdo,
+    $target,
+    (string) ($_SESSION['logged_user_udc'] ?? '')
+);
+$liaisonOnlyIcu = $isLiaisonOfficer && (
+    $unit_forward_select_options === []
+    || (
+        count($unit_forward_select_options) === 1
+        && strcasecmp((string) ($unit_forward_select_options[0]['value'] ?? ''), 'ICU') === 0
+    )
+);
+$unit_forward_select_html = utilities_unit_forward_options_select_html($unit_forward_select_options, $liaisonOnlyIcu);
 $bulkForwardToken = (string) ($_SESSION['token'] ?? '');
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $isCashierBulkPay = $showCashierArchiveCol;
@@ -583,68 +598,8 @@ if ($showCashierArchiveCol) {
                             </div>
                             <div class='label-input__container input-dynamic'>
                                 <label for=''>Forward To</label>
-                                <select name='document_to' class='form-custom-input' id="document_to" required<?= $isLiaisonOfficer ? ' data-liaison-only="1"' : '' ?>>
-                                    <?php if ($isLiaisonOfficer) : ?>
-                                        <option value='ICU' selected>ICU</option>
-                                    <?php else : ?>
-                                        <option value="" disabled selected>Please Select</option>
-                                        <?php if (in_array("ICU", $target, true) && !in_array("Accounting Unit", $target, true) && !in_array("Processor", $target, true)) : ?>
-                                            <option value='Budget Unit'>Budget Unit</option>
-                                            <option value='Accounting Unit'>Accounting Unit</option>
-                                            <option value='Planning Section'>Planning Section</option>
-                                        <?php elseif (in_array("Planning Section", $target)) : ?>
-                                            <option value='Budget Unit'>Budget Unit</option>
-                                            <?php if (!in_array("Planning Section Chief", $target)) : ?>
-                                                <option value='Planning Section Chief' class="Planning_Officer">Planning Section Chief</option>
-                                            <?php endif ?>
-                                        <?php elseif (in_array("Conservation & Development Section", $target)) : ?>
-                                            <option value='Accounting Unit'>Accounting Unit</option>
-                                        <?php elseif (in_array("Budget Unit", $target)) : ?>
-                                            <option value='Accounting Unit'>Accounting Unit</option>
-                                            <option value='Accountant III' class="processed">Chief Accountant</option>
-                                            <?php if (!in_array("Budget Officer", $target)) : ?>
-                                                <option value='Budget Officer' class="Budget_Officer">Budget Officer</option>
-                                            <?php endif ?>
-                                        <?php elseif (in_array("Accounting Unit", $target) or in_array("Processor", $target)) : ?>
-                                            <?php if (in_array("Accounting Unit", $target)) : ?>
-                                                <optgroup label="Processed" class="Processed">
-                                                    <option value='Accountant III' class="processed">Chief Accountant</option>
-                                                    <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
-                                                    <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
-                                                </optgroup>
-                                                <?php if (in_array("Processor", $target)) : ?>
-                                                    <optgroup label="Processor" class="Processor">
-                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
-                                                            <option value='4HyLy'>1. Marife C. Briton</option>
-                                                        <?php endif; ?>
-                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
-                                                            <option value='YS9M3'>2. Diana E. Costuna </option>
-                                                        <?php endif; ?>
-                                                        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
-                                                            <option value='s1JxV'>3. Gracile B. Palce</option>
-                                                        <?php endif; ?>
-                                                    </optgroup>
-                                                <?php endif; ?>
-                                            <?php elseif (!in_array("Accounting Unit", $target) and in_array("Processor", $target)) : ?>
-                                                <option value='Accountant III' class="processed">Chief Accountant</option>
-                                                <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
-                                                <option value='Cashiers Unit' class="processed">Cashiers Unit</option>
-                                            <?php endif ?>
-                                        <?php elseif (in_array("Office of the PENRO", $target)) : ?>
-                                            <option value='Budget Unit'>Budget Unit</option>
-                                            <option value='Cashiers Unit'>Cashiers Unit</option>
-                                        <?php elseif (in_array("Cashiers Unit", $target)) : ?>
-                                            <option value='Accountant III'>Chief Accountant</option>
-                                            <option value='Office of the PENRO'>Office of the PENRO</option>
-                                            <?php if (!in_array("Cashier", $target)) : ?>
-                                                <option value='Cashier' class="Cashier_Officer">Cashier</option>
-                                            <?php endif ?>
-                                        <?php else : ?>
-                                            <option value='Accounting Unit'>Accounting Unit</option>
-                                            <option value='Office of the PENRO' class="processed">Office of the PENRO</option>
-                                            <option value='Cashiers Unit'>Cashiers Unit</option>
-                                        <?php endif ?>
-                                    <?php endif ?>
+                                <select name='document_to' class='form-custom-input' id="document_to" required<?= $liaisonOnlyIcu ? ' data-liaison-only="1"' : '' ?>>
+                                    <?= $unit_forward_select_html ?>
                                 </select>
                             </div>
                             <div class="label-input__container">
@@ -1296,30 +1251,8 @@ if ($showCashierArchiveCol) {
                         $rowBulkPayable = $isCashierBulkPay
                             && (in_array('Cashiers Unit', $target, true) || in_array('Cashier', $target, true))
                             && ($rowTransmitEmpty || $rowTransmitYes);
-                        $processingOfficeRoute = voucher_processing_office_standard_route_applies(
-                            $pdo,
-                            (string) ($row['voucher_type'] ?? ''),
-                            $forwarding_process_history,
-                            (string) ($row['encoded_from'] ?? '')
-                        );
-                        $processingOfficeNext = voucher_processing_office_allowed_forward_targets(
-                            $pdo,
-                            $target,
-                            $forwarding_process_history,
-                            (string) ($row['voucher_type'] ?? ''),
-                            (string) ($row['encoded_from'] ?? '')
-                        ) ?? [];
-                        if (
-                            !$processingOfficeRoute
-                            && in_array('Accountant III', $processingOfficeNext, true)
-                        ) {
-                            $processingOfficeRoute = true;
-                        }
-                        if (!$processingOfficeRoute) {
-                            $processingOfficeNext = [];
-                        }
                     ?>
-                        <tr data-processing-office-route="<?= $processingOfficeRoute ? '1' : '0' ?>" data-processing-office-next="<?= htmlspecialchars(json_encode($processingOfficeNext, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
+                        <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
                                 <td class="voucher-bulk-select-cell" data-label="">
                                     <input type="checkbox" class="voucher-bulk-select" value="<?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>" aria-label="Select voucher <?php echo htmlspecialchars((string) $row['processing_no'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -2244,96 +2177,10 @@ if ($showCashierArchiveCol) {
         return '';
     }
 
-    function applyProcessingOfficeForwardOptions(nextTargets) {
-        if (!docToSelect) {
-            return false;
-        }
-        if (!Array.isArray(nextTargets) || nextTargets.length === 0) {
-            restoreForwardDestinationOptions();
-            return true;
-        }
-
-        var html = '<option value="" disabled selected>Please Select</option>';
-        nextTargets.forEach(function(value) {
-            value = String(value || '').trim();
-            if (!value) {
-                return;
-            }
-            var optionClass = processingOfficeOptionClass(value);
-            html += '<option value="' + value.replace(/"/g, '&quot;') + '"' +
-                (optionClass ? ' class="' + optionClass + '"' : '') + '>' +
-                processingOfficeOptionLabel(value) + '</option>';
-        });
-        docToSelect.innerHTML = html;
-        hideOwnDesignationOptions(docToSelect);
-        return true;
-    }
-
-    function applyForwardingDestinationOptions(voucherType, processHistory, useProcessingOfficeRoute, nextTargets) {
-        if (!docToSelect || isLiaisonOfficer) {
+    function applyForwardingDestinationOptions() {
+        if (!docToSelect || (docToSelect.getAttribute('data-liaison-only') === '1')) {
             return;
         }
-
-        if (useProcessingOfficeRoute && applyProcessingOfficeForwardOptions(nextTargets)) {
-            return;
-        }
-
-        if (isIcuOnlyForwardingRole()) {
-            docToSelect.innerHTML = `
-        <option value="" disabled selected>Please Select</option>
-        <option value="Budget Unit">Budget Unit</option>
-        <option value="Accounting Unit">Accounting Unit</option>
-        <option value="Planning Section">Planning Section</option>
-        <option value="Accountant III">Chief Accountant</option>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
-            <option value="4HyLy">Marife C. Briton</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
-            <option value="YS9M3">Diana E. Costuna</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
-            <option value="s1JxV">Gracile B. Palce</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '5Cw9e') : ?>
-            <option value="5Cw9e">Eda Buen</option>
-        <?php endif; ?>
-    `;
-            return;
-        }
-
-        if (isAlternateForwardingRole() && !forwardingTreatAsSameOfficeWorkflow(voucherType, processHistory)) {
-            docToSelect.innerHTML = `
-        <option value="" disabled selected>Please Select</option>
-        <option value="Budget Unit">Budget Unit</option>
-        <option value="Accounting Unit">Accounting Unit</option>
-        <option value="Planning Section">Planning Section</option>
-        <option value="Accountant III">Chief Accountant</option>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '4HyLy') : ?>
-            <option value="4HyLy">Marife C. Briton</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 'YS9M3') : ?>
-            <option value="YS9M3">Diana E. Costuna</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== 's1JxV') : ?>
-            <option value="s1JxV">Gracile B. Palce</option>
-        <?php endif; ?>
-
-        <?php if (!isset($_SESSION['logged_user_udc']) || $_SESSION['logged_user_udc'] !== '5Cw9e') : ?>
-            <option value="5Cw9e">Eda Buen</option>
-        <?php endif; ?>
-    `;
-
-            docToSelect.value = '';
-            return;
-        }
-
         restoreForwardDestinationOptions();
     }
 
@@ -2624,13 +2471,6 @@ if ($showCashierArchiveCol) {
             var voucher_type = row.querySelector('[data-label="voucher_type"]').textContent;
             var process_history_cell = row.querySelector('[data-label="process_history"]');
             var process_history_val = process_history_cell ? process_history_cell.textContent.trim() : '';
-            var useProcessingOfficeRoute = row.getAttribute('data-processing-office-route') === '1';
-            var processingOfficeNext = [];
-            try {
-                processingOfficeNext = JSON.parse(row.getAttribute('data-processing-office-next') || '[]');
-            } catch (e) {
-                processingOfficeNext = [];
-            }
             var charged_amount_cell = row.querySelector('[data-label="charged_amount"]');
             var charged_amount = normalizeAmountInput(charged_amount_cell ? charged_amount_cell.textContent : '');
             var coa_options_cell = row.querySelector('[data-label="coa_options"]');
@@ -2830,7 +2670,7 @@ if ($showCashierArchiveCol) {
                     if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {
-                        applyForwardingDestinationOptions(voucher_type, process_history_val, useProcessingOfficeRoute, processingOfficeNext);
+                        applyForwardingDestinationOptions();
                     }
                 }
                 document.querySelector(".btn-dynamic").setAttribute("name", "forward_voucher");

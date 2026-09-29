@@ -295,37 +295,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     if (!voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
-                        $postedHistory = voucher_tracking_normalize_process_history(
-                            (string) ($_POST['process_history'] ?? '')
-                        );
-                        $routeHistory = voucher_incoming_load_process_history($pdo, $processing_no, $postedHistory);
-                        if ($routeHistory === '') {
-                            $routeHistory = (string) (voucher_tracking_fetch_process_history($pdo, $processing_no) ?? '');
-                        }
+                        require_once __DIR__ . '/../../core/components/helpers/utilities_unit_forward_options_helper.inc.php';
                         if (
-                            voucher_processing_office_standard_route_applies(
-                                $pdo,
-                                $voucher_type,
-                                $routeHistory,
-                                $encoded_from
-                            )
-                            && !voucher_processing_office_forward_target_is_allowed(
+                            !utilities_unit_forward_option_is_allowed(
                                 $pdo,
                                 voucher_logged_user_designations(),
-                                $routeHistory,
                                 $document_to,
-                                $voucher_type,
-                                $encoded_from
+                                (string) ($_SESSION['logged_user_udc'] ?? '')
                             )
                         ) {
-                            $temp_dump['invalid_route'] = 'This voucher must follow '
-                                . voucher_processing_office_route_flow_label_for_voucher(
-                                    $pdo,
-                                    $voucher_type,
-                                    $routeHistory,
-                                    $encoded_from
-                                )
-                                . '.';
+                            $temp_dump['invalid_route'] = 'Select a Forward To destination configured for your unit in Routing (Unit forward options).';
                         }
                     }
 

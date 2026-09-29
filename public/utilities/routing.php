@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/utilities_speci
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_processing_office_route_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_voucher_type_route_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/utilities_unit_forward_options_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_office_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_list_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/sort_order_helper.inc.php';
@@ -21,6 +22,7 @@ utilities_special_access_ensure_schema($pdo);
 utilities_return_previous_ensure_schema($pdo);
 utilities_processing_office_route_ensure_schema($pdo);
 utilities_voucher_type_route_ensure_schema($pdo);
+utilities_unit_forward_options_ensure_schema($pdo);
 utilities_office_ensure_schema($pdo);
 
 $voucher_types = checklist_types_with_labels();
@@ -372,6 +374,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     utilities_voucher_type_route_invalidate_cache();
                     $flash = ['type' => 'success', 'msg' => 'Voucher-type flow step removed.'];
                 }
+            } elseif ($action === 'unit_forward_option_add') {
+                $from = utilities_unit_forward_options_normalize_value((string) ($_POST['from_designation'] ?? ''));
+                $to = utilities_unit_forward_options_normalize_value((string) ($_POST['to_designation'] ?? ''));
+                $label = utilities_unit_forward_options_normalize_value((string) ($_POST['label'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                if ($from === '' || !in_array($from, utilities_unit_forward_options_source_units($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid processing unit.'];
+                } elseif ($to === '' || !utilities_unit_forward_options_destination_is_allowed($pdo, $to)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid forward destination.'];
+                } else {
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        INSERT INTO voucher_unit_forward_options (from_designation, to_designation, label, sort_order, is_active)
+                        VALUES (:from_designation, :to_designation, :label, 0, 1)
+                    ");
+                    $stmt->execute([
+                        ':from_designation' => $from,
+                        ':to_designation' => $to,
+                        ':label' => $label !== '' ? $label : null,
+                    ]);
+                    sort_order_place_at_position(
+                        $pdo,
+                        'voucher_unit_forward_options',
+                        (int) $pdo->lastInsertId(),
+                        $sort,
+                        ['from_designation' => $from]
+                    );
+                    $pdo->commit();
+                    utilities_unit_forward_options_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Unit forward option added.'];
+                }
+            } elseif ($action === 'unit_forward_option_update') {
+                $id = (int) ($_POST['id'] ?? 0);
+                $from = utilities_unit_forward_options_normalize_value((string) ($_POST['from_designation'] ?? ''));
+                $to = utilities_unit_forward_options_normalize_value((string) ($_POST['to_designation'] ?? ''));
+                $label = utilities_unit_forward_options_normalize_value((string) ($_POST['label'] ?? ''));
+                $sort = (int) ($_POST['sort_order'] ?? 0);
+                $active = isset($_POST['is_active']) ? 1 : 0;
+                if ($id <= 0 || $from === '' || $to === '') {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid update payload.'];
+                } elseif (!in_array($from, utilities_unit_forward_options_source_units($pdo), true)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid processing unit.'];
+                } elseif (!utilities_unit_forward_options_destination_is_allowed($pdo, $to)) {
+                    $flash = ['type' => 'error', 'msg' => 'Please select a valid forward destination.'];
+                } else {
+                    $oldStmt = $pdo->prepare('SELECT from_designation FROM voucher_unit_forward_options WHERE id = :id LIMIT 1');
+                    $oldStmt->execute([':id' => $id]);
+                    $oldFrom = utilities_unit_forward_options_normalize_value((string) ($oldStmt->fetchColumn() ?: ''));
+                    $pdo->beginTransaction();
+                    $stmt = $pdo->prepare("
+                        UPDATE voucher_unit_forward_options
+                        SET from_designation = :from_designation,
+                            to_designation = :to_designation,
+                            label = :label,
+                            sort_order = :sort,
+                            is_active = :active
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':from_designation' => $from,
+                        ':to_designation' => $to,
+                        ':label' => $label !== '' ? $label : null,
+                        ':sort' => $sort,
+                        ':active' => $active,
+                        ':id' => $id,
+                    ]);
+                    sort_order_place_at_position(
+                        $pdo,
+                        'voucher_unit_forward_options',
+                        $id,
+                        $sort,
+                        ['from_designation' => $from]
+                    );
+                    if ($oldFrom !== '' && $oldFrom !== $from) {
+                        sort_order_reindex_sequential($pdo, 'voucher_unit_forward_options', ['from_designation' => $oldFrom]);
+                    }
+                    $pdo->commit();
+                    utilities_unit_forward_options_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Unit forward option updated.'];
+                }
+            } elseif ($action === 'unit_forward_option_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id <= 0) {
+                    $flash = ['type' => 'error', 'msg' => 'Invalid delete payload.'];
+                } else {
+                    $oldStmt = $pdo->prepare('SELECT from_designation FROM voucher_unit_forward_options WHERE id = :id LIMIT 1');
+                    $oldStmt->execute([':id' => $id]);
+                    $oldFrom = utilities_unit_forward_options_normalize_value((string) ($oldStmt->fetchColumn() ?: ''));
+                    $stmt = $pdo->prepare('DELETE FROM voucher_unit_forward_options WHERE id = :id');
+                    $stmt->execute([':id' => $id]);
+                    if ($oldFrom !== '') {
+                        sort_order_reindex_sequential($pdo, 'voucher_unit_forward_options', ['from_designation' => $oldFrom]);
+                    }
+                    utilities_unit_forward_options_invalidate_cache();
+                    $flash = ['type' => 'success', 'msg' => 'Unit forward option removed.'];
+                }
             } elseif ($action === 'office_add') {
                 $officeName = utilities_office_normalize_name((string) ($_POST['office_name'] ?? ''));
                 $parentId = (int) ($_POST['parent_office_id'] ?? 0);
@@ -530,6 +628,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash = ['type' => 'warning', 'msg' => 'That voucher type already has a routing rule for the selected destination.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'uniq_designation')) {
                     $flash = ['type' => 'warning', 'msg' => 'That forward destination is already configured.'];
+                } elseif (str_contains(strtolower($e->getMessage()), 'voucher_unit_forward_options')
+                    || str_contains(strtolower($e->getMessage()), 'uniq_from_to')) {
+                    $flash = ['type' => 'warning', 'msg' => 'That unit already has that forward destination.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'voucher_type_route')) {
                     $flash = ['type' => 'warning', 'msg' => 'That voucher-type flow step could not be saved.'];
                 } elseif (str_contains(strtolower($e->getMessage()), 'voucher_processing_office_route')) {
@@ -593,6 +694,17 @@ $voucher_type_route_active_count = 0;
 foreach ($voucher_type_route_units as $voucherTypeRouteUnit) {
     if ((int) ($voucherTypeRouteUnit['is_active'] ?? 1) === 1) {
         $voucher_type_route_active_count++;
+    }
+}
+
+$unit_forward_option_rows = utilities_unit_forward_options_fetch_all($pdo);
+$unit_forward_option_sources = utilities_unit_forward_options_source_units($pdo);
+$unit_forward_option_targets = utilities_unit_forward_options_target_units($pdo);
+$unit_forward_option_count = count($unit_forward_option_rows);
+$unit_forward_option_active_count = 0;
+foreach ($unit_forward_option_rows as $unitForwardOptionRow) {
+    if ((int) ($unitForwardOptionRow['is_active'] ?? 1) === 1) {
+        $unit_forward_option_active_count++;
     }
 }
 
@@ -688,6 +800,16 @@ $filtered_voucher_type_route_units = utilities_list_filter_rows(
 $voucher_type_route_units = $filtered_voucher_type_route_units;
 $voucher_type_route_grouped = utilities_voucher_type_route_group_by_type($voucher_type_route_units);
 
+$all_unit_forward_option_rows = $unit_forward_option_rows;
+$filtered_unit_forward_option_rows = utilities_list_filter_rows(
+    $all_unit_forward_option_rows,
+    $list_filter['q'],
+    'all',
+    ['from_designation', 'to_designation', 'label']
+);
+$unit_forward_option_rows = $filtered_unit_forward_option_rows;
+$unit_forward_option_grouped = utilities_unit_forward_options_group_by_from($unit_forward_option_rows);
+
 $all_liaison_routing = $liaison_routing;
 $filtered_liaison_routing = utilities_list_filter_rows(
     $all_liaison_routing,
@@ -712,6 +834,7 @@ $routing_list_total = count($all_forward_destination_units)
     + count($all_return_previous_units)
     + count($all_processing_office_route_units)
     + count($all_voucher_type_route_units)
+    + count($all_unit_forward_option_rows)
     + count($all_liaison_routing)
     + count($all_offices);
 $routing_list_visible = count($forward_destination_units)
@@ -719,6 +842,7 @@ $routing_list_visible = count($forward_destination_units)
     + count($return_previous_units)
     + count($processing_office_route_units)
     + count($voucher_type_route_units)
+    + count($unit_forward_option_rows)
     + count($liaison_routing)
     + count($offices_display);
 
@@ -819,12 +943,14 @@ function routing_forward_destinations_for_select(array $destinations, string $st
     return $destinations;
 }
 
-$routing_tab_ids = ['forward', 'flow', 'typeflow', 'return', 'liaison', 'hierarchy'];
+$routing_tab_ids = ['forward', 'unitfwd', 'flow', 'typeflow', 'return', 'liaison', 'hierarchy'];
 $active_routing_tab = 'forward';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $routing_post_action = (string) ($_POST['action'] ?? '');
     if (str_starts_with($routing_post_action, 'processing_office_route_')) {
         $active_routing_tab = 'flow';
+    } elseif (str_starts_with($routing_post_action, 'unit_forward_option_')) {
+        $active_routing_tab = 'unitfwd';
     } elseif (str_starts_with($routing_post_action, 'voucher_type_route_')) {
         $active_routing_tab = 'typeflow';
     } elseif (str_starts_with($routing_post_action, 'return_previous_')) {
@@ -1277,6 +1403,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="util-subtabs-toolbar">
                 <div class="util-subtabs-bar" role="tablist" aria-label="Routing sections">
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'forward' ? ' is-active' : '' ?>" role="tab" data-util-tab="forward" aria-selected="<?= $active_routing_tab === 'forward' ? 'true' : 'false' ?>">Direct forward</button>
+                    <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'unitfwd' ? ' is-active' : '' ?>" role="tab" data-util-tab="unitfwd" aria-selected="<?= $active_routing_tab === 'unitfwd' ? 'true' : 'false' ?>">Unit forward options</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'flow' ? ' is-active' : '' ?>" role="tab" data-util-tab="flow" aria-selected="<?= $active_routing_tab === 'flow' ? 'true' : 'false' ?>">Processing office flow</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'typeflow' ? ' is-active' : '' ?>" role="tab" data-util-tab="typeflow" aria-selected="<?= $active_routing_tab === 'typeflow' ? 'true' : 'false' ?>">Voucher type flow</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'return' ? ' is-active' : '' ?>" role="tab" data-util-tab="return" aria-selected="<?= $active_routing_tab === 'return' ? 'true' : 'false' ?>">Return to previous</button>
@@ -1467,6 +1594,133 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endforeach; ?>
                 </div>
             </div>
+            </section>
+                    </div>
+                </div>
+
+                <div class="util-subtab-panel<?= $active_routing_tab === 'unitfwd' ? ' is-active' : '' ?>" data-util-panel="unitfwd">
+                    <div class="util-subtab-panel__body">
+            <section class="util-routing-section">
+            <p class="util-section-title">Unit forward options</p>
+            <p class="util-dv-desc">
+                Forward To choices on Incoming/Forwarding for each processing unit.
+                Add every destination a unit should be able to send to. Dual-role users see the combined list for their designations.
+                Inactive rows are hidden. Liaison Officer stays locked to ICU unless you add more destinations for that role.
+            </p>
+
+            <div class="util-stats">
+                <div class="util-stat"><strong><?= (int) $unit_forward_option_count ?></strong> option<?= $unit_forward_option_count === 1 ? '' : 's' ?></div>
+                <div class="util-stat"><strong><?= (int) $unit_forward_option_active_count ?></strong> active</div>
+                <div class="util-stat"><strong><?= (int) count($unit_forward_option_grouped) ?></strong> unit<?= count($unit_forward_option_grouped) === 1 ? '' : 's' ?></div>
+            </div>
+
+            <div class="util-card" style="margin-bottom:1rem;">
+                <div class="util-card__head">
+                    <h3>Add forward option</h3>
+                </div>
+                <div class="util-card__body">
+                    <form method="post" class="util-add">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="unit_forward_option_add">
+                        <div class="field">
+                            <label for="add_unit_forward_from">From unit</label>
+                            <select class="form-custom-input" name="from_designation" id="add_unit_forward_from" required>
+                                <option value="" disabled selected>Select unit</option>
+                                <?php foreach ($unit_forward_option_sources as $sourceUnit): ?>
+                                    <option value="<?= htmlspecialchars($sourceUnit, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($sourceUnit, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="add_unit_forward_to">Forward to</label>
+                            <select class="form-custom-input" name="to_designation" id="add_unit_forward_to" required>
+                                <option value="" disabled selected>Select destination</option>
+                                <?php foreach ($unit_forward_option_targets as $targetUnit): ?>
+                                    <option value="<?= htmlspecialchars($targetUnit, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars(utilities_unit_forward_options_label($targetUnit), ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="add_unit_forward_label">Label (optional)</label>
+                            <input class="form-custom-input" type="text" name="label" id="add_unit_forward_label" placeholder="Display name">
+                        </div>
+                        <div class="field" style="max-width:110px;">
+                            <label for="add_unit_forward_sort">Sort</label>
+                            <input class="form-custom-input" type="number" name="sort_order" id="add_unit_forward_sort" value="0">
+                        </div>
+                        <div class="field util-add-btn-field">
+                            <label class="util-field-spacer" aria-hidden="true">&nbsp;</label>
+                            <button class="btn primary util-btn-add" type="submit" title="Add unit forward option" aria-label="Add unit forward option">+</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <?php if (!$unit_forward_option_rows): ?>
+                <p class="util-empty"><?= $list_filter['is_filtered'] ? 'No unit forward options match your search.' : 'No unit forward options yet. Add one above.' ?></p>
+            <?php endif; ?>
+
+            <?php foreach ($unit_forward_option_grouped as $fromUnit => $fromOptions): ?>
+                <div class="util-card" style="margin-bottom:1rem;">
+                    <div class="util-card__head">
+                        <h3><?= htmlspecialchars((string) $fromUnit, ENT_QUOTES, 'UTF-8') ?></h3>
+                    </div>
+                    <div class="util-card__body">
+                        <?php foreach ($fromOptions as $optIndex => $unitForwardOption):
+                            $optionId = (int) ($unitForwardOption['id'] ?? 0);
+                            $storedFrom = (string) ($unitForwardOption['from_designation'] ?? '');
+                            $storedTo = (string) ($unitForwardOption['to_designation'] ?? '');
+                            $storedLabel = (string) ($unitForwardOption['label'] ?? '');
+                            $fromChoices = routing_forward_destinations_for_select($unit_forward_option_sources, $storedFrom);
+                            $toChoices = routing_forward_destinations_for_select($unit_forward_option_targets, $storedTo);
+                        ?>
+                            <div class="util-routing-block">
+                                <div class="util-routing-block__main">
+                                    <div class="util-inline util-inline--edit-row">
+                                        <form method="post" class="util-inline util-inline--edit-row" style="flex:1; min-width:0;">
+                                            <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="action" value="unit_forward_option_update">
+                                            <input type="hidden" name="id" value="<?= $optionId ?>">
+                                            <span class="util-stat" style="min-width:2.25rem;"><?= (int) $optIndex + 1 ?></span>
+                                            <select class="form-custom-input" name="from_designation" required>
+                                                <?php foreach ($fromChoices as $sourceUnit): ?>
+                                                    <option value="<?= htmlspecialchars($sourceUnit, ENT_QUOTES, 'UTF-8') ?>"<?= $storedFrom === $sourceUnit ? ' selected' : '' ?>>
+                                                        <?= htmlspecialchars($sourceUnit, ENT_QUOTES, 'UTF-8') ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <select class="form-custom-input" name="to_designation" required>
+                                                <?php foreach ($toChoices as $targetUnit): ?>
+                                                    <option value="<?= htmlspecialchars($targetUnit, ENT_QUOTES, 'UTF-8') ?>"<?= $storedTo === $targetUnit ? ' selected' : '' ?>>
+                                                        <?= htmlspecialchars(utilities_unit_forward_options_label($targetUnit), ENT_QUOTES, 'UTF-8') ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <input class="form-custom-input" type="text" name="label" value="<?= htmlspecialchars($storedLabel, ENT_QUOTES, 'UTF-8') ?>" placeholder="Label">
+                                            <input class="form-custom-input" type="number" name="sort_order" value="<?= (int) ($unitForwardOption['sort_order'] ?? 0) ?>">
+                                            <label class="chk">
+                                                <input type="checkbox" name="is_active" <?= ((int) ($unitForwardOption['is_active'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                                <span>Active</span>
+                                            </label>
+                                            <button class="btn success" type="submit">Save</button>
+                                        </form>
+                                        <form method="post" onsubmit="return confirm('Remove this forward option?');" class="util-row-actions">
+                                            <input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="hidden" name="action" value="unit_forward_option_delete">
+                                            <input type="hidden" name="id" value="<?= $optionId ?>">
+                                            <button class="btn danger" type="submit">Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
             </section>
                     </div>
                 </div>
