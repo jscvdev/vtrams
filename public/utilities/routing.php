@@ -1360,6 +1360,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         display: flex;
         flex-direction: column;
     }
+
+    .rt-page .util-subtabs-toolbar {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        padding: 0.5rem 0.875rem;
+    }
+
+    .rt-page .util-subtabs-bar {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+    }
+
+    .rt-page .util-subtab-btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.75rem;
+    }
+
+    .rt-page .util-list-filter-embed--compact {
+        flex: 1 1 24rem;
+        max-width: 36rem;
+    }
+
+    @media (max-width: 1100px) {
+        .rt-page .util-subtabs-toolbar {
+            flex-wrap: wrap;
+        }
+
+        .rt-page .util-list-filter-embed--compact {
+            flex: 1 1 100%;
+            max-width: none;
+        }
+    }
 </style>
 <?php require __DIR__ . '/partials/list_filter_styles.php'; ?>
 
@@ -1370,18 +1405,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="voucher-dashboard-subtitle">Configure direct-forward rules and office hierarchy for voucher workflow routing.</p>
         </div>
     </header>
-
-    <?php
-    $list_total = $routing_list_total;
-    $list_visible = $routing_list_visible;
-    $list_placeholder = 'search';
-    $list_form_id = 'routingListFilterForm';
-    $list_filter_mode = 'voucher_type';
-    $list_voucher_types = $list_type_options;
-    $list_type_filter_label = 'Voucher type';
-    $list_hidden_fields = ['tab' => $active_routing_tab];
-    require __DIR__ . '/partials/list_filter_toolbar.php';
-    ?>
 
     <div class="voucher-card voucher-card--table">
         <h2 class="voucher-card-title">
@@ -1410,7 +1433,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'liaison' ? ' is-active' : '' ?>" role="tab" data-util-tab="liaison" aria-selected="<?= $active_routing_tab === 'liaison' ? 'true' : 'false' ?>">Liaison offices</button>
                     <button type="button" class="util-subtab-btn<?= $active_routing_tab === 'hierarchy' ? ' is-active' : '' ?>" role="tab" data-util-tab="hierarchy" aria-selected="<?= $active_routing_tab === 'hierarchy' ? 'true' : 'false' ?>">Office hierarchy</button>
                 </div>
-                <p class="util-subtabs-hint">Each tab uses the full panel for an unobstructed view.</p>
+                <?php
+                $list_total = $routing_list_total;
+                $list_visible = $routing_list_visible;
+                $list_placeholder = 'search';
+                $list_form_id = 'routingListFilterForm';
+                $list_filter_mode = 'voucher_type';
+                $list_voucher_types = $list_type_options;
+                $list_type_filter_label = 'Voucher type';
+                $list_hidden_fields = ['tab' => $active_routing_tab];
+                $list_filter_embed = true;
+                $list_filter_compact = true;
+                require __DIR__ . '/partials/list_filter_toolbar.php';
+                $list_filter_embed = false;
+                $list_filter_compact = false;
+                ?>
             </div>
 
             <div class="util-subtab-panels">

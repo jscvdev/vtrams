@@ -13,8 +13,14 @@ $list_filter_mode = (string) ($list_filter_mode ?? 'status');
 $list_voucher_types = is_array($list_voucher_types ?? null) ? $list_voucher_types : null;
 $list_type_filter_label = (string) ($list_type_filter_label ?? 'Voucher type');
 $list_hidden_fields = is_array($list_hidden_fields ?? null) ? $list_hidden_fields : [];
+$list_filter_embed = !empty($list_filter_embed);
+$list_filter_compact = !empty($list_filter_compact);
+$list_filter_wrap_class = 'util-list-filter-card voucher-card voucher-card--filter';
+if ($list_filter_embed) {
+    $list_filter_wrap_class = 'util-list-filter-embed' . ($list_filter_compact ? ' util-list-filter-embed--compact' : '');
+}
 ?>
-<div class="voucher-card voucher-card--filter util-list-filter-card">
+<div class="<?= htmlspecialchars($list_filter_wrap_class, ENT_QUOTES, 'UTF-8') ?>">
     <div class="filter-toolbar">
         <form method="get" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>" class="filter-toolbar-form util-list-filter-form">
             <?php foreach ($list_hidden_fields as $hiddenName => $hiddenValue): ?>
@@ -31,8 +37,8 @@ $list_hidden_fields = is_array($list_hidden_fields ?? null) ? $list_hidden_field
             </div>
             <?php if ($list_filter_mode === 'voucher_type' && $list_voucher_types !== null): ?>
                 <div class="util-list-filter-status">
-                    <label for="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_voucher_type"><?= htmlspecialchars($list_type_filter_label, ENT_QUOTES, 'UTF-8') ?></label>
-                    <select name="voucher_type" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_voucher_type" class="form-custom-input">
+                    <label for="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_voucher_type"<?= $list_filter_compact ? ' class="visually-hidden"' : '' ?>><?= htmlspecialchars($list_type_filter_label, ENT_QUOTES, 'UTF-8') ?></label>
+                    <select name="voucher_type" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_voucher_type" class="form-custom-input"<?= $list_filter_compact ? ' title="' . htmlspecialchars($list_type_filter_label, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
                         <option value=""<?= (($list_filter['voucher_type'] ?? '') === '') ? ' selected' : '' ?>>All types</option>
                         <?php foreach ($list_voucher_types as $typeValue => $typeLabel): ?>
                             <option value="<?= htmlspecialchars((string) $typeValue, ENT_QUOTES, 'UTF-8') ?>"<?= ((string) ($list_filter['voucher_type'] ?? '') === (string) $typeValue) ? ' selected' : '' ?>>
@@ -43,8 +49,8 @@ $list_hidden_fields = is_array($list_hidden_fields ?? null) ? $list_hidden_field
                 </div>
             <?php else: ?>
                 <div class="util-list-filter-status">
-                    <label for="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_status">Status</label>
-                    <select name="status" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_status" class="form-custom-input">
+                    <label for="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_status"<?= $list_filter_compact ? ' class="visually-hidden"' : '' ?>>Status</label>
+                    <select name="status" id="<?= htmlspecialchars($list_form_id, ENT_QUOTES, 'UTF-8') ?>_status" class="form-custom-input"<?= $list_filter_compact ? ' title="Status"' : '' ?>>
                         <option value="all"<?= (($list_filter['status'] ?? 'all') === 'all') ? ' selected' : '' ?>>All</option>
                         <option value="active"<?= (($list_filter['status'] ?? '') === 'active') ? ' selected' : '' ?>>Active</option>
                         <option value="inactive"<?= (($list_filter['status'] ?? '') === 'inactive') ? ' selected' : '' ?>>Inactive</option>
@@ -57,7 +63,7 @@ $list_hidden_fields = is_array($list_hidden_fields ?? null) ? $list_hidden_field
             <?php endif; ?>
         </form>
     </div>
-    <?php if ($list_total > 0): ?>
+    <?php if (!$list_filter_compact && $list_total > 0): ?>
         <p class="util-list-filter-meta">
             Showing <strong><?= $list_visible ?></strong> of <strong><?= $list_total ?></strong>
             <?php if (empty($list_filter['is_filtered']) && $list_total > $list_visible): ?>
