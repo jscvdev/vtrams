@@ -39,55 +39,62 @@ $isDefaultPreview = !voucher_status_report_has_active_query([
     'q' => $rawSearch,
     'show' => $rawShow,
 ]);
-$defaultPreviewLimit = voucher_status_report_default_limit();
 
 $officeFilter = ($rawOffice === '' || strcasecmp($rawOffice, 'all') === 0) ? null : utilities_signatory_resolve_office($pdo, $rawOffice);
+$queryFilters = [
+    'office' => $officeFilter,
+    'status' => $statusFilter,
+    'voucher_type' => $typeFilter,
+    'date_from' => $rawDateFrom,
+    'date_to' => $rawDateTo,
+    'q' => $rawSearch,
+];
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$tableLimit = $isDefaultPreview ? voucher_status_report_default_limit() : voucher_status_report_page_size();
+$tableOffset = 0;
+$totalPages = 1;
 
 if ($isDefaultPreview) {
-    $summary = voucher_status_report_compute_summary($pdo, $scope, $officeFilter);
-    $entries = voucher_status_report_fetch_entries($pdo, $scope, $officeFilter, voucher_status_report_default_limit());
-    $dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
-    $dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
-    $printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
-    $searchTerm = strtolower(trim($rawSearch));
+    $summary = voucher_status_report_compute_summary($pdo, $scope, []);
+    $entries = voucher_status_report_fetch_entries($pdo, $scope, [], $tableLimit, 0);
+    $matchedTotal = (int) $summary['total'];
+    $page = 1;
 } else {
-    $entries = voucher_status_report_fetch_entries($pdo, $scope, $officeFilter, 0);
-    $summary = voucher_status_report_summarize($entries);
-
-    $entries = voucher_status_report_filter_by_status($entries, $statusFilter);
-    $summary = voucher_status_report_summarize($entries);
-
-    $entries = voucher_status_report_filter_by_voucher_type($entries, $typeFilter);
-    $summary = voucher_status_report_summarize($entries);
-
-    $dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
-    $dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
-    $entries = voucher_status_report_filter_by_date($entries, $dateFromFilter, $dateToFilter);
-    $summary = voucher_status_report_summarize($entries);
-    $printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
-
-    $searchTerm = strtolower(trim($rawSearch));
-    if ($searchTerm !== '') {
-        $entries = array_values(array_filter($entries, static function (array $entry) use ($searchTerm): bool {
-            $haystack = strtolower(implode(' ', [
-                (string) ($entry['processing_no'] ?? ''),
-                (string) ($entry['payee'] ?? ''),
-                (string) ($entry['dv_no'] ?? ''),
-                (string) ($entry['ors_no'] ?? ''),
-                (string) ($entry['origin_office'] ?? ''),
-                (string) ($entry['status_label'] ?? ''),
-                (string) ($entry['category_label'] ?? ''),
-                (string) ($entry['current_location'] ?? ''),
-                (string) ($entry['current_section'] ?? ''),
-                (string) ($entry['forwarded_to_label'] ?? ''),
-                (string) ($entry['forwarded_to'] ?? ''),
-            ]));
-
-            return str_contains($haystack, $searchTerm);
-        }));
-        $summary = voucher_status_report_summarize($entries);
+    $summary = voucher_status_report_compute_summary($pdo, $scope, $queryFilters);
+    $matchedTotal = (int) $summary['total'];
+    $totalPages = max(1, (int) ceil(($matchedTotal > 0 ? $matchedTotal : 1) / $tableLimit));
+    if ($matchedTotal === 0) {
+        $totalPages = 1;
+        $page = 1;
+    } elseif ($page > $totalPages) {
+        $page = $totalPages;
     }
+    $tableOffset = ($page - 1) * $tableLimit;
+    $entries = voucher_status_report_fetch_entries($pdo, $scope, $queryFilters, $tableLimit, $tableOffset);
 }
+
+$dateFromFilter = voucher_status_report_parse_date_filter($rawDateFrom);
+$dateToFilter = voucher_status_report_parse_date_filter($rawDateTo);
+$printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFrom, $rawDateTo);
+$shownFrom = $entries === [] ? 0 : ($tableOffset + 1);
+$shownTo = $tableOffset + count($entries);
+
+$statusReportPagerQuery = static function (int $pageNumber) use ($rawOffice, $statusFilter, $typeFilter, $rawDateFrom, $rawDateTo, $rawSearch, $rawShow): string {
+    $params = [
+        'office' => $rawOffice !== '' ? $rawOffice : 'all',
+        'status' => $statusFilter,
+        'voucher_type' => $typeFilter,
+        'date_from' => $rawDateFrom,
+        'date_to' => $rawDateTo,
+        'q' => $rawSearch,
+        'page' => (string) $pageNumber,
+    ];
+    if (strcasecmp($rawShow, 'all') === 0) {
+        $params['show'] = 'all';
+    }
+
+    return '?' . http_build_query(array_filter($params, static fn($value): bool => $value !== '' && $value !== null));
+};
 
 $entriesJson = json_encode($entries, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);
 $selectedOfficeValue = $officeFilter ?? 'all';
@@ -96,7 +103,9 @@ $printGeneratedAt = date('Y-m-d H:i:s');
 $pageTitleHelperName = $header_text ?? 'Status Report';
 $statusReportRowMetaLabel = $isDefaultPreview
     ? 'Showing latest ' . count($entries) . ' of ' . (int) $summary['total'] . ' tracked (by last update)'
-    : count($entries) . ' voucher' . (count($entries) === 1 ? '' : 's') . ' shown';
+    : ($matchedTotal === 0
+        ? '0 vouchers shown'
+        : 'Showing ' . $shownFrom . '–' . $shownTo . ' of ' . $matchedTotal . ' matching');
 ?>
 <div class="main main--voucher-dashboard" id="main">
     <header class="voucher-dashboard-header no-print">
@@ -229,7 +238,11 @@ $statusReportRowMetaLabel = $isDefaultPreview
             <div class="status-report-table-head__meta">
                 <p class="status-report-table-meta" id="statusReportRowMeta"><?php echo htmlspecialchars($statusReportRowMetaLabel, ENT_QUOTES, 'UTF-8'); ?></p>
                 <?php if ($isDefaultPreview) : ?>
-                    <p class="status-report-table-hint">Stat cards reflect all tracked vouchers. The table shows the latest <?php echo (int) voucher_status_report_default_limit(); ?> only for faster loading — use search, filters, or <strong>Show All</strong> for the full list.</p>
+                    <p class="status-report-table-hint">Stat cards reflect all tracked vouchers. The table shows the latest <?php echo (int) voucher_status_report_default_limit(); ?> only — use search, filters, or <strong>Show All</strong> for matching pages. Row details load when opened.</p>
+                <?php elseif ($totalPages > 1) : ?>
+                    <p class="status-report-table-hint">Filtered results are paged (<?php echo (int) $tableLimit; ?> per page) so the list stays fast. Open a row to load full history.</p>
+                <?php else : ?>
+                    <p class="status-report-table-hint">Row details load when opened so the list stays fast.</p>
                 <?php endif; ?>
             </div>
         </div>
@@ -459,6 +472,39 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 max-width: 420px;
                 text-align: right;
                 line-height: 1.4;
+            }
+
+            .status-report-pager {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 10px;
+                margin-top: 12px;
+                flex-wrap: wrap;
+            }
+
+            .status-report-pager a,
+            .status-report-pager span {
+                font-size: 13px;
+                color: #374151;
+            }
+
+            .status-report-pager a {
+                text-decoration: none;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                padding: 6px 10px;
+                background: #fff;
+            }
+
+            .status-report-pager a:hover {
+                background: #eff6ff;
+                border-color: #93c5fd;
+            }
+
+            .status-report-pager[aria-disabled="true"] a {
+                pointer-events: none;
+                opacity: 0.45;
             }
 
             .status-report-table-meta {
@@ -854,6 +900,21 @@ $statusReportRowMetaLabel = $isDefaultPreview
             </table>
             <p class="status-report-print-footer print-only" id="statusReportPrintFooter">End of report · <?php echo count($entries); ?> record<?php echo count($entries) === 1 ? '' : 's'; ?> · <?php echo htmlspecialchars($printGeneratedAt, ENT_QUOTES, 'UTF-8'); ?></p>
         </div>
+        <?php if (!$isDefaultPreview && $totalPages > 1) : ?>
+            <nav class="status-report-pager no-print" aria-label="Status report pages">
+                <?php if ($page > 1) : ?>
+                    <a href="<?php echo htmlspecialchars($statusReportPagerQuery($page - 1), ENT_QUOTES, 'UTF-8'); ?>">Previous</a>
+                <?php else : ?>
+                    <span>Previous</span>
+                <?php endif; ?>
+                <span>Page <?php echo (int) $page; ?> of <?php echo (int) $totalPages; ?></span>
+                <?php if ($page < $totalPages) : ?>
+                    <a href="<?php echo htmlspecialchars($statusReportPagerQuery($page + 1), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
+                <?php else : ?>
+                    <span>Next</span>
+                <?php endif; ?>
+            </nav>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -946,6 +1007,8 @@ $statusReportRowMetaLabel = $isDefaultPreview
         const entries = <?php echo $entriesJson ?: '[]'; ?>;
         const initialQuery = <?php echo json_encode(trim($rawSearch), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
         const voucherTypeLabels = <?php echo json_encode($report_voucher_types, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
+        const detailUrl = '../../protected/handler/fetch_handlers/fetch_voucher_status_report_entry.php';
+        const detailCache = Object.create(null);
         const modal = document.getElementById('statusReportModal');
         const overlay = document.getElementById('statusReportOverlay');
 
@@ -1247,7 +1310,57 @@ $statusReportRowMetaLabel = $isDefaultPreview
             return text;
         }
 
+        function entryHasDetailPayload(entry) {
+            return !!(entry && (
+                entry.process_history_display != null
+                || entry.process_history != null
+                || (entry.section_breakdown && entry.section_breakdown.length)
+            ));
+        }
+
+        function fetchEntryDetail(processingNo) {
+            const pn = String(processingNo || '').trim();
+            if (pn === '') {
+                return Promise.resolve(null);
+            }
+            if (detailCache[pn]) {
+                return Promise.resolve(detailCache[pn]);
+            }
+            return fetch(detailUrl + '?processing_no=' + encodeURIComponent(pn), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(res) {
+                return res.json().catch(function() {
+                    return { success: false };
+                });
+            }).then(function(data) {
+                if (data && data.success && data.entry) {
+                    detailCache[pn] = data.entry;
+                    return data.entry;
+                }
+                return null;
+            });
+        }
+
         function openBreakdown(entry) {
+            if (!entry || !modal || !overlay) return;
+            if (entryHasDetailPayload(entry)) {
+                renderBreakdown(entry);
+                return;
+            }
+            const pn = String(entry.processing_no || '').trim();
+            document.getElementById('statusReportModalTitle').textContent = 'Loading…';
+            modal.style.display = 'block';
+            overlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            fetchEntryDetail(pn).then(function(full) {
+                renderBreakdown(full || entry);
+            }).catch(function() {
+                renderBreakdown(entry);
+            });
+        }
+
+        function renderBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
             document.getElementById('statusReportModalTitle').textContent = 'Status Breakdown';
             document.getElementById('sr_processing_no').textContent = entry.processing_no || '—';
@@ -1372,6 +1485,12 @@ $statusReportRowMetaLabel = $isDefaultPreview
         const autoOpenEntry = findEntryForAutoOpen();
         if (autoOpenEntry) {
             openBreakdown(autoOpenEntry);
+        } else if (String(initialQuery || '').trim() !== '') {
+            fetchEntryDetail(String(initialQuery).trim()).then(function(full) {
+                if (full) {
+                    openBreakdown(full);
+                }
+            }).catch(function() {});
         }
 
         ['close_status_report_modal', 'close_status_report_modal_btn'].forEach(function(id) {

@@ -290,6 +290,161 @@ function voucher_status_report_include_sql(string $alias = 'vt'): string
     )";
 }
 
+function voucher_status_report_last_update_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return "COALESCE(NULLIF(TRIM({$alias}.datetime_status), ''), NULLIF(TRIM({$alias}.datetime_encoded), ''), '1970-01-01 00:00:00')";
+}
+
+function voucher_status_report_paid_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return "(LOWER(TRIM({$alias}.status)) = 'paid' OR vsr_arch.processing_no IS NOT NULL)";
+}
+
+function voucher_status_report_archives_join_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return " LEFT JOIN (SELECT processing_no FROM voucher_archives GROUP BY processing_no) vsr_arch ON vsr_arch.processing_no = {$alias}.processing_no";
+}
+
+function voucher_status_report_search_is_identifier(string $term): bool
+{
+    return (bool) preg_match('/^[A-Za-z0-9][A-Za-z0-9._\\/-]{1,79}$/', $term);
+}
+
+function voucher_status_report_returned_sql(string $alias = 'vt'): string
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+
+    return "(LOWER(TRIM({$alias}.active_status)) = 'returned' OR (LOWER(TRIM({$alias}.active_status)) <> 'yes' AND {$alias}.voucher_status LIKE 'Returned by:%'))";
+}
+
+function voucher_status_report_like_contains(string $term): string
+{
+    return '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term) . '%';
+}
+
+function voucher_status_report_like_prefix(string $term): string
+{
+    return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term) . '%';
+}
+
+/**
+ * @param array<string, mixed> $filters
+ * @return array{
+ *   office: ?string,
+ *   status: string,
+ *   voucher_type: string,
+ *   date_from: ?string,
+ *   date_to: ?string,
+ *   q: string
+ * }
+ */
+function voucher_status_report_normalize_filters(array $filters): array
+{
+    $office = trim((string) ($filters['office'] ?? ''));
+    if ($office === '' || strcasecmp($office, 'all') === 0) {
+        $office = null;
+    }
+
+    $status = strtolower(trim((string) ($filters['status'] ?? 'all')));
+    if (!in_array($status, ['all', 'processing', 'paid', 'returned'], true)) {
+        $status = 'all';
+    }
+
+    $type = trim((string) ($filters['voucher_type'] ?? 'all'));
+    if ($type === '' || strcasecmp($type, 'all') === 0) {
+        $type = 'all';
+    }
+
+    $dateFrom = voucher_status_report_parse_date_filter($filters['date_from'] ?? null);
+    $dateTo = voucher_status_report_parse_date_filter($filters['date_to'] ?? null);
+    if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+        [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+    }
+
+    return [
+        'office' => $office,
+        'status' => $status,
+        'voucher_type' => $type,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'q' => trim((string) ($filters['q'] ?? '')),
+    ];
+}
+
+/**
+ * @param array<string, mixed> $filters
+ * @return array{0: string, 1: array<string, string>}
+ */
+function voucher_status_report_append_filter_sql(string $sql, array $filters, string $alias = 'vt'): array
+{
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
+    $filters = voucher_status_report_normalize_filters($filters);
+    $params = [];
+
+    if ($filters['office'] !== null) {
+        $sql .= " AND LOWER(TRIM({$alias}.office_from)) = LOWER(TRIM(:office_filter))";
+        $params[':office_filter'] = $filters['office'];
+    }
+
+    if ($filters['voucher_type'] !== 'all') {
+        $sql .= " AND LOWER(TRIM({$alias}.voucher_type)) = LOWER(TRIM(:voucher_type))";
+        $params[':voucher_type'] = $filters['voucher_type'];
+    }
+
+    $paidSql = voucher_status_report_paid_sql($alias);
+    $returnedSql = voucher_status_report_returned_sql($alias);
+    if ($filters['status'] === 'paid') {
+        $sql .= " AND {$paidSql}";
+    } elseif ($filters['status'] === 'returned') {
+        $sql .= " AND NOT {$paidSql} AND {$returnedSql}";
+    } elseif ($filters['status'] === 'processing') {
+        $sql .= " AND NOT {$paidSql} AND NOT {$returnedSql}";
+    }
+
+    $lastUpdate = voucher_status_report_last_update_sql($alias);
+    if ($filters['date_from'] !== null) {
+        $sql .= " AND {$lastUpdate} >= :date_from";
+        $params[':date_from'] = $filters['date_from'] . ' 00:00:00';
+    }
+    if ($filters['date_to'] !== null) {
+        $sql .= " AND {$lastUpdate} < :date_to";
+        $params[':date_to'] = date('Y-m-d', strtotime($filters['date_to'] . ' +1 day')) . ' 00:00:00';
+    }
+
+    $q = $filters['q'];
+    if ($q !== '') {
+        if (voucher_status_report_search_is_identifier($q)) {
+            $sql .= " AND ({$alias}.processing_no = :q_exact OR {$alias}.processing_no LIKE :q_prefix ESCAPE '\\\\')";
+            $params[':q_exact'] = $q;
+            $params[':q_prefix'] = voucher_status_report_like_prefix($q);
+        } else {
+            $like = voucher_status_report_like_contains($q);
+            $sql .= " AND (
+                {$alias}.payee LIKE :q_like_payee ESCAPE '\\\\'
+                OR {$alias}.dv_no LIKE :q_like_dv ESCAPE '\\\\'
+                OR {$alias}.ors_no LIKE :q_like_ors ESCAPE '\\\\'
+                OR {$alias}.office_from LIKE :q_like_office ESCAPE '\\\\'
+                OR {$alias}.voucher_status LIKE :q_like_status ESCAPE '\\\\'
+                OR {$alias}.processing_no LIKE :q_like_pn ESCAPE '\\\\'
+            )";
+            $params[':q_like_payee'] = $like;
+            $params[':q_like_dv'] = $like;
+            $params[':q_like_ors'] = $like;
+            $params[':q_like_office'] = $like;
+            $params[':q_like_status'] = $like;
+            $params[':q_like_pn'] = $like;
+        }
+    }
+
+    return [$sql, $params];
+}
+
 /**
  * @param array<string, mixed> $row
  * @param array{processing_office: string, sub_offices: list<string>} $scope
@@ -892,6 +1047,11 @@ function voucher_status_report_default_limit(): int
     return 20;
 }
 
+function voucher_status_report_page_size(): int
+{
+    return 100;
+}
+
 /**
  * Whether the report should query the full dataset instead of the default preview limit.
  *
@@ -934,81 +1094,128 @@ function voucher_status_report_has_active_query(array $query): bool
 }
 
 /**
+ * @param array<string, mixed> $filters
  * @return array{0: string, 1: array<string, string>}
  */
-function voucher_status_report_build_tracking_query(?string $officeFilter, int $limit = 0): array
+function voucher_status_report_build_tracking_query(array $filters = [], int $limit = 0, int $offset = 0): array
 {
-    $sql = 'SELECT vt.* FROM voucher_tracking vt WHERE 1=1' . voucher_status_report_include_sql('vt');
-    $params = [];
+    $paidSql = voucher_status_report_paid_sql('vt');
+    $sql = 'SELECT
+            vt.processing_no,
+            vt.ors_no,
+            vt.dv_no,
+            vt.payee,
+            vt.amount,
+            vt.charged_amount,
+            vt.voucher_type,
+            vt.office_from,
+            vt.voucher_status,
+            vt.status,
+            vt.datetime_status,
+            vt.datetime_encoded,
+            vt.active_status,
+            CASE WHEN ' . $paidSql . ' THEN 1 ELSE 0 END AS is_paid_flag
+        FROM voucher_tracking vt' . voucher_status_report_archives_join_sql('vt') . '
+        WHERE 1=1' . voucher_status_report_include_sql('vt');
+    [$sql, $params] = voucher_status_report_append_filter_sql($sql, $filters, 'vt');
 
-    $officeFilter = trim((string) ($officeFilter ?? ''));
-    if ($officeFilter !== '' && strcasecmp($officeFilter, 'all') !== 0) {
-        $sql .= ' AND LOWER(TRIM(vt.office_from)) = LOWER(TRIM(:office_filter))';
-        $params[':office_filter'] = $officeFilter;
-    }
-
-    $sql .= ' ORDER BY COALESCE(NULLIF(TRIM(vt.datetime_status), \'\'), NULLIF(TRIM(vt.datetime_encoded), \'\'), \'1970-01-01 00:00:00\') DESC, vt.processing_no DESC';
+    $sql .= ' ORDER BY ' . voucher_status_report_last_update_sql('vt') . ' DESC, vt.processing_no DESC';
     if ($limit > 0) {
-        $sql .= ' LIMIT ' . (int) max(1, min($limit, 5000));
+        $safeLimit = (int) max(1, min($limit, 500));
+        $safeOffset = (int) max(0, $offset);
+        $sql .= ' LIMIT ' . $safeLimit . ' OFFSET ' . $safeOffset;
     }
 
     return [$sql, $params];
 }
 
 /**
- * Full-dataset totals for stat cards (no section breakdowns; lighter than table rows).
+ * @param array<string, mixed> $row
+ * @return array<string, mixed>
+ */
+function voucher_status_report_map_list_row(array $row): array
+{
+    $officeFrom = trim((string) ($row['office_from'] ?? ''));
+    $isPaid = ((int) ($row['is_paid_flag'] ?? 0) === 1) || strcasecmp(trim((string) ($row['status'] ?? '')), 'Paid') === 0;
+    $isReturned = !$isPaid && voucher_status_report_is_returned($row);
+    if ($isPaid) {
+        $statusLabel = 'Paid';
+    } elseif ($isReturned) {
+        $statusLabel = 'Returned';
+    } else {
+        $statusLabel = 'Processing';
+    }
+
+    return [
+        'processing_no' => trim((string) ($row['processing_no'] ?? '')),
+        'ors_no' => trim((string) ($row['ors_no'] ?? '')),
+        'dv_no' => trim((string) ($row['dv_no'] ?? '')),
+        'payee' => trim((string) ($row['payee'] ?? '')),
+        'amount' => amount_resolve_charged_or_amount($row['charged_amount'] ?? '', $row['amount'] ?? ''),
+        'amount_gross' => ensure_amount_two_decimals(amount_pdo_value_to_string($row['amount'] ?? '')),
+        'amount_charged' => amount_is_non_zero($row['charged_amount'] ?? null)
+            ? ensure_amount_two_decimals(amount_pdo_value_to_string($row['charged_amount']))
+            : '',
+        'voucher_type' => trim((string) ($row['voucher_type'] ?? '')),
+        'office_from' => $officeFrom,
+        'origin_office' => $officeFrom,
+        'voucher_status' => trim((string) ($row['voucher_status'] ?? '')),
+        'status' => trim((string) ($row['status'] ?? '')),
+        'datetime_status' => trim((string) ($row['datetime_status'] ?? '')),
+        'datetime_encoded' => trim((string) ($row['datetime_encoded'] ?? '')),
+        'status_label' => $statusLabel,
+        'is_paid' => $isPaid,
+        'is_returned' => $isReturned,
+        'active_status' => trim((string) ($row['active_status'] ?? '')),
+    ];
+}
+
+/**
+ * Filter-aware totals for stat cards (one aggregate query).
  *
+ * @param array<string, mixed> $filters
  * @return array{total: int, sub_liaison: int, for_processing: int, paid: int, returned: int}
  */
-function voucher_status_report_compute_summary(PDO $pdo, array $scope, ?string $officeFilter = null): array
+function voucher_status_report_compute_summary(PDO $pdo, array $scope, array $filters = []): array
 {
-    voucher_status_report_warm_archived_cache($pdo);
+    unset($scope);
+    $paidSql = voucher_status_report_paid_sql('vt');
+    $returnedSql = voucher_status_report_returned_sql('vt');
+    $sql = "SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN {$paidSql} THEN 1 ELSE 0 END), 0) AS paid,
+            COALESCE(SUM(CASE WHEN NOT {$paidSql} AND {$returnedSql} THEN 1 ELSE 0 END), 0) AS returned,
+            COALESCE(SUM(CASE WHEN NOT {$paidSql} AND NOT {$returnedSql} THEN 1 ELSE 0 END), 0) AS for_processing
+        FROM voucher_tracking vt" . voucher_status_report_archives_join_sql('vt') . "
+        WHERE 1=1" . voucher_status_report_include_sql('vt');
+    [$sql, $params] = voucher_status_report_append_filter_sql($sql, $filters, 'vt');
 
-    [$sql, $params] = voucher_status_report_build_tracking_query($officeFilter, 0);
     $stmt = $pdo->prepare($sql);
     foreach ($params as $key => $value) {
         $stmt->bindValue($key, $value, PDO::PARAM_STR);
     }
     $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    $summary = [
-        'total' => 0,
+    return [
+        'total' => (int) ($row['total'] ?? 0),
         'sub_liaison' => 0,
-        'for_processing' => 0,
-        'paid' => 0,
-        'returned' => 0,
+        'for_processing' => (int) ($row['for_processing'] ?? 0),
+        'paid' => (int) ($row['paid'] ?? 0),
+        'returned' => (int) ($row['returned'] ?? 0),
     ];
-
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $classified = voucher_status_report_classify_row($pdo, $row, $scope);
-        if ($classified === null) {
-            continue;
-        }
-
-        $summary['total']++;
-        foreach ((array) ($classified['categories'] ?? []) as $category) {
-            if ((string) ($category['key'] ?? '') === 'sub_liaison') {
-                $summary['sub_liaison']++;
-            }
-        }
-        if (!empty($classified['is_paid'])) {
-            $summary['paid']++;
-        } elseif (!empty($classified['is_returned'])) {
-            $summary['returned']++;
-        } else {
-            $summary['for_processing']++;
-        }
-    }
-
-    return $summary;
 }
 
 /**
+ * Slim table rows only (no process history or section breakdowns).
+ *
+ * @param array<string, mixed> $filters
  * @return list<array<string, mixed>>
  */
-function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $officeFilter = null, int $limit = 0): array
+function voucher_status_report_fetch_entries(PDO $pdo, array $scope, array $filters = [], int $limit = 0, int $offset = 0): array
 {
-    [$sql, $params] = voucher_status_report_build_tracking_query($officeFilter, $limit);
+    unset($scope);
+    [$sql, $params] = voucher_status_report_build_tracking_query($filters, $limit, $offset);
 
     $stmt = $pdo->prepare($sql);
     foreach ($params as $key => $value) {
@@ -1017,19 +1224,55 @@ function voucher_status_report_fetch_entries(PDO $pdo, array $scope, ?string $of
     $stmt->execute();
 
     $entries = [];
-    $trackingRowsByPn = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $classified = voucher_status_report_classify_row($pdo, $row, $scope);
-        if ($classified !== null) {
-            $pn = trim((string) ($classified['processing_no'] ?? ''));
-            if ($pn !== '') {
-                $trackingRowsByPn[$pn] = $row;
-            }
-            $entries[] = $classified;
+        $mapped = voucher_status_report_map_list_row($row);
+        if ($mapped['processing_no'] !== '') {
+            $entries[] = $mapped;
         }
     }
 
-    return voucher_status_report_attach_section_breakdowns($pdo, voucher_tracking_attach_display_process_history($pdo, $entries), $trackingRowsByPn);
+    return $entries;
+}
+
+/**
+ * Full modal payload for a single voucher.
+ *
+ * @param array{processing_office: string, sub_offices: list<string>} $scope
+ * @return array<string, mixed>|null
+ */
+function voucher_status_report_fetch_entry_detail(PDO $pdo, array $scope, string $processingNo): ?array
+{
+    $processingNo = trim($processingNo);
+    if ($processingNo === '') {
+        return null;
+    }
+
+    voucher_status_report_warm_archived_cache($pdo);
+
+    $sql = 'SELECT vt.* FROM voucher_tracking vt WHERE vt.processing_no = :processing_no'
+        . voucher_status_report_include_sql('vt')
+        . ' LIMIT 1';
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':processing_no', $processingNo, PDO::PARAM_STR);
+    $stmt->execute();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+
+    $classified = voucher_status_report_classify_row($pdo, $row, $scope);
+    if ($classified === null) {
+        return null;
+    }
+
+    $pn = trim((string) ($classified['processing_no'] ?? ''));
+    $enriched = voucher_status_report_attach_section_breakdowns(
+        $pdo,
+        voucher_tracking_attach_display_process_history($pdo, [$classified]),
+        [$pn => $row]
+    );
+
+    return $enriched[0] ?? null;
 }
 
 /**

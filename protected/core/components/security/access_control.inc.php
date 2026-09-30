@@ -210,6 +210,7 @@ class AccessControl
             'voucher_status.php' => 'canAccessVoucherOverviewPages',
             'voucher_system_logs.php' => 'canAccessVoucherOverviewPages',
             'voucher_status_report.php' => 'canAccessOverviewReports',
+            'fetch_voucher_status_report_entry.php' => 'canAccessOverviewReports',
             'voucher_incoming.php' => 'canAccessVoucherProcessingPages',
             'voucher_forwarding.php' => 'canAccessVoucherProcessingPages',
             'voucher_sent.php' => 'canAccessVoucherWorkflowPages',
