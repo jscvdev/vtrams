@@ -11,19 +11,20 @@ $tpt_formula_variant = $tpt_formula_variant ?? 'card';
     }
     .tpt-formula__eq {
         margin: 0;
-        padding: 16px 18px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-        color: #f8fafc;
+        padding: 14px 16px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #0f172a;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: clamp(0.95rem, 1.6vw, 1.2rem);
+        font-size: clamp(0.9rem, 1.5vw, 1.05rem);
         font-weight: 650;
         letter-spacing: 0.01em;
         line-height: 1.55;
         overflow-x: auto;
     }
     .tpt-formula__eq span {
-        color: #93c5fd;
+        color: #1e3a8a;
     }
     .tpt-formula__grid {
         display: grid;
@@ -70,7 +71,6 @@ $tpt_formula_variant = $tpt_formula_variant ?? 'card';
     }
     .tpt-formula__eq + .tpt-formula__eq {
         margin-top: 8px;
-        background: linear-gradient(135deg, #1e3a8a 0%, #0f766e 100%);
     }
 </style>
 <div class="tpt-formula">

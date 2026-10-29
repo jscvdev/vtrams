@@ -569,9 +569,10 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
     .formula-sample-eq {
         margin: 0 0 12px;
         padding: 12px 14px;
-        border-radius: 12px;
-        background: #0f172a;
-        color: #e2e8f0;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #0f172a;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 13px;
         line-height: 1.5;
@@ -579,7 +580,7 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
     }
 
     .formula-sample-eq span {
-        color: #93c5fd;
+        color: #1e3a8a;
     }
 
     .formula-sample-meta {
