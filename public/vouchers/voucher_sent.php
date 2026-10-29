@@ -22,7 +22,7 @@ $q = filterInput($rawQ);
 $invalidSearch = (trim($rawQ) !== '' && $q === '');
 
 $sentSearchCols = [
-    'processing_no', 'ors_no', 'dv_no', 'ada_check_no', 'payee', 'address', 'particulars',
+    'processing_no', 'ors_no', 'dv_no', 'ada_check_no', 'payee', 'office_from', 'office_to', 'address', 'particulars',
     'tin_employee_no', 'voucher_type', 'remarks', 'sender_remarks', 'datetime_forwarded',
     'datetime_encoded', 'sender_udc', 'receiver_udc', 'encoded_by', 'encoded_from',
     'forwarded_by', 'process_status', 'process_history', 'supporting_documents',
@@ -409,7 +409,7 @@ $totalRows = $displayTotal;
                         </label>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
                 </form>
             </div>

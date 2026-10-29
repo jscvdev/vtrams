@@ -419,6 +419,77 @@ function voucher_incoming_sent_to_pending(
 }
 
 
+/**
+ * Route a returned voucher to the recipient Incoming queue, keeping the returner as sender.
+ */
+function voucher_return_update_incoming_routing(
+    object $pdo,
+    string $processing_no,
+    string $datetime_action,
+    string $office_from,
+    string $office_to,
+    string $sender_udc,
+    string $receiver_udc,
+    string $forwarded_by,
+    string $process_status,
+    string $combined_remarks,
+    string $sender_remarks
+): bool {
+    $query = 'UPDATE voucher_incoming SET
+        datetime_forwarded = :datetime_forwarded,
+        office_from = :office_from,
+        office_to = :office_to,
+        sender_udc = :sender_udc,
+        receiver_udc = :receiver_udc,
+        forwarded_by = :forwarded_by,
+        process_status = :process_status,
+        remarks = :remarks,
+        sender_remarks = :sender_remarks
+        WHERE processing_no = :processing_no';
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':datetime_forwarded', $datetime_action, PDO::PARAM_STR);
+    $statement->bindValue(':office_from', $office_from, PDO::PARAM_STR);
+    $statement->bindValue(':office_to', $office_to, PDO::PARAM_STR);
+    $statement->bindValue(':sender_udc', $sender_udc, PDO::PARAM_STR);
+    $statement->bindValue(':receiver_udc', $receiver_udc, PDO::PARAM_STR);
+    $statement->bindValue(':forwarded_by', $forwarded_by, PDO::PARAM_STR);
+    $statement->bindValue(':process_status', $process_status, PDO::PARAM_STR);
+    $statement->bindValue(':remarks', $combined_remarks, PDO::PARAM_STR);
+    $statement->bindValue(':sender_remarks', $sender_remarks, PDO::PARAM_STR);
+    $statement->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}
+
+/**
+ * Point office_from/sender at the returner and office_to/receiver at the return target.
+ *
+ * @return array{sender_udc: string, office_from: string, office_to: string}
+ */
+function voucher_return_apply_returner_hop(
+    object $pdo,
+    string $receiver_udc,
+    string $office_from,
+    string $office_to
+): array {
+    $returnerUdc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
+    $returnerOffice = voucher_logged_user_office();
+    if ($returnerOffice !== '') {
+        $office_from = $returnerOffice;
+    }
+    $targetOffice = voucher_tracking_lookup_office_by_udc($pdo, $receiver_udc);
+    if ($targetOffice !== '') {
+        $office_to = $targetOffice;
+    }
+
+    return [
+        'sender_udc' => $returnerUdc !== '' ? $returnerUdc : '',
+        'office_from' => $office_from,
+        'office_to' => $office_to,
+    ];
+}
+
 function voucher_incoming_return_log_to_document_tracking(object $pdo, string $processing_no, string $action, string $datetime_action, string $combined_remarks, string $active_status = 'returned') {
     if (!in_array($active_status, ['no', 'yes', 'returned'], true)) {
         $active_status = 'returned';

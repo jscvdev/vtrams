@@ -19,6 +19,11 @@ $rawDateFrom = trim((string) ($_GET['date_from'] ?? ''));
 $rawDateTo = trim((string) ($_GET['date_to'] ?? ''));
 $rawSearch = (string) ($_GET['q'] ?? '');
 $rawShow = trim((string) ($_GET['show'] ?? ''));
+$tableFilter = voucher_table_filter_parse();
+if ($tableFilter['is_date_filtered']) {
+    $rawDateFrom = (string) $tableFilter['date_from'];
+    $rawDateTo = (string) $tableFilter['date_to'];
+}
 
 $statusFilter = in_array(strtolower($rawStatus), ['all', 'processing', 'paid', 'returned'], true)
     ? strtolower($rawStatus)
@@ -36,8 +41,10 @@ $isDefaultPreview = !voucher_status_report_has_active_query([
     'voucher_type' => $typeFilter,
     'date_from' => $rawDateFrom,
     'date_to' => $rawDateTo,
+    'year' => $tableFilter['year_value'],
     'q' => $rawSearch,
     'show' => $rawShow,
+    'sort' => $tableFilter['sort'],
 ]);
 
 $officeFilter = ($rawOffice === '' || strcasecmp($rawOffice, 'all') === 0) ? null : utilities_signatory_resolve_office($pdo, $rawOffice);
@@ -48,6 +55,7 @@ $queryFilters = [
     'date_from' => $rawDateFrom,
     'date_to' => $rawDateTo,
     'q' => $rawSearch,
+    'sort' => $tableFilter['sort'],
 ];
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $tableLimit = $isDefaultPreview ? voucher_status_report_default_limit() : voucher_status_report_page_size();
@@ -56,7 +64,7 @@ $totalPages = 1;
 
 if ($isDefaultPreview) {
     $summary = voucher_status_report_compute_summary($pdo, $scope, []);
-    $entries = voucher_status_report_fetch_entries($pdo, $scope, [], $tableLimit, 0);
+    $entries = voucher_status_report_fetch_entries($pdo, $scope, ['sort' => $tableFilter['sort']], $tableLimit, 0);
     $matchedTotal = (int) $summary['total'];
     $page = 1;
 } else {
@@ -79,16 +87,26 @@ $printDateRangeLabel = voucher_status_report_format_date_range_label($rawDateFro
 $shownFrom = $entries === [] ? 0 : ($tableOffset + 1);
 $shownTo = $tableOffset + count($entries);
 
-$statusReportPagerQuery = static function (int $pageNumber) use ($rawOffice, $statusFilter, $typeFilter, $rawDateFrom, $rawDateTo, $rawSearch, $rawShow): string {
+$statusReportPagerQuery = static function (int $pageNumber) use ($rawOffice, $statusFilter, $typeFilter, $rawSearch, $rawShow, $tableFilter): string {
     $params = [
         'office' => $rawOffice !== '' ? $rawOffice : 'all',
         'status' => $statusFilter,
         'voucher_type' => $typeFilter,
-        'date_from' => $rawDateFrom,
-        'date_to' => $rawDateTo,
         'q' => $rawSearch,
         'page' => (string) $pageNumber,
     ];
+    if ($tableFilter['year'] !== null) {
+        $params['year'] = (string) $tableFilter['year'];
+        if ($tableFilter['month'] !== null) {
+            $params['month'] = $tableFilter['month_value'];
+            if ($tableFilter['day'] !== null) {
+                $params['day'] = $tableFilter['day_value'];
+            }
+        }
+    }
+    if ($tableFilter['sort'] === 'desc') {
+        $params['sort'] = $tableFilter['sort_value'];
+    }
     if (strcasecmp($rawShow, 'all') === 0) {
         $params['show'] = 'all';
     }
@@ -102,7 +120,7 @@ $printOfficeLabel = $selectedOfficeValue === 'all' ? 'All Offices' : (string) $s
 $printGeneratedAt = date('Y-m-d H:i:s');
 $pageTitleHelperName = $header_text ?? 'Status Report';
 $statusReportRowMetaLabel = $isDefaultPreview
-    ? 'Showing latest ' . count($entries) . ' of ' . (int) $summary['total'] . ' tracked (by last update)'
+    ? 'Showing first ' . count($entries) . ' of ' . (int) $summary['total'] . ' tracked (by processing no.)'
     : ($matchedTotal === 0
         ? '0 vouchers shown'
         : 'Showing ' . $shownFrom . '–' . $shownTo . ' of ' . $matchedTotal . ' matching');
@@ -139,6 +157,9 @@ $statusReportRowMetaLabel = $isDefaultPreview
         <?php endif; ?>
         <?php if ($printDateRangeLabel !== '') : ?>
             <p class="status-report-print-search">Date filter (last update): <?php echo htmlspecialchars($printDateRangeLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+        <?php endif; ?>
+        <?php if ($tableFilter['sort'] === 'desc') : ?>
+            <p class="status-report-print-search">Sort: Descending</p>
         <?php endif; ?>
         <div class="status-report-print-summary">
             <div class="status-report-print-summary__item"><span>Total</span><strong><?php echo (int) $summary['total']; ?></strong></div>
@@ -202,17 +223,13 @@ $statusReportRowMetaLabel = $isDefaultPreview
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="status-report-filter-bar__field status-report-filter-bar__field--date">
-                <label for="dateFromFilter">From</label>
-                <input type="date" id="dateFromFilter" name="date_from" value="<?php echo htmlspecialchars($dateFromFilter ?? $rawDateFrom, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Filter from date (last update)">
-            </div>
-            <div class="status-report-filter-bar__field status-report-filter-bar__field--date">
-                <label for="dateToFilter">To</label>
-                <input type="date" id="dateToFilter" name="date_to" value="<?php echo htmlspecialchars($dateToFilter ?? $rawDateTo, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Filter to date (last update)">
-            </div>
+            <?php voucher_table_filter_render_controls($tableFilter, [
+                'field_class' => 'status-report-filter-bar__field',
+                'visible_labels' => true,
+            ]); ?>
             <div class="status-report-filter-bar__field status-report-filter-bar__field--grow">
                 <label for="statusReportSearch">Search</label>
-                <input type="text" id="statusReportSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Processing no., payee, office, status…" autocomplete="off">
+                <input type="text" id="statusReportSearch" name="q" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
             </div>
             <button type="submit" class="status-report-filter-bar__apply">Apply Filters</button>
             <?php if ($isDefaultPreview) : ?>
@@ -325,6 +342,11 @@ $statusReportRowMetaLabel = $isDefaultPreview
             .status-report-filter-bar__field label {
                 font-size: 14px;
                 font-weight: 500;
+            }
+
+            .status-report-filter-bar__field select:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
             }
 
             .status-report-filter-bar__field select,
@@ -982,12 +1004,12 @@ $statusReportRowMetaLabel = $isDefaultPreview
                                 <tbody id="sr_section_breakdown"></tbody>
                             </table>
                         </div>
-                        <p class="status-section-breakdown-note" id="sr_section_breakdown_note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).</p>
+                        <p class="status-section-breakdown-note" id="sr_section_breakdown_note">Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu, 7:00 AM–7:00 PM, excluding holidays/special days). TPT is total processing time; PAPT (post-accounting) appears when Accounting processing receive is on the log (not ICU).</p>
                     </div>
                 </div>
                 <div class="status-breakdown-card status-breakdown-card--full status-breakdown-card--history">
                     <p class="status-breakdown-title"><i class="ri-history-line" aria-hidden="true"></i>Complete Process History</p>
-                    <ul class="status-history-list" id="sr_history"></ul>
+                    <div class="status-history-table-wrap" id="sr_history"></div>
                 </div>
             </div>
             <div class="popupForm-footer__container">
@@ -1166,8 +1188,8 @@ $statusReportRowMetaLabel = $isDefaultPreview
         }
 
         function renderHistoryList(raw) {
-            if (typeof renderProcessHistoryDisplayList === 'function') {
-                return renderProcessHistoryDisplayList(raw);
+            if (typeof renderProcessHistoryDisplayTable === 'function') {
+                return renderProcessHistoryDisplayTable(raw);
             }
 
             const normalized = String(raw || '')
@@ -1176,13 +1198,13 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 .replace(/\\n/g, '\n')
                 .trim();
             if (!normalized) {
-                return '<li class="status-history-item">No process history recorded.</li>';
+                return '<p class="status-history-empty-fallback">No process history recorded.</p>';
             }
-            return normalized.split('\n').filter(function(line) {
+            return '<table class="status-history-table"><tbody>' + normalized.split('\n').filter(function(line) {
                 return String(line).trim() !== '';
             }).map(function(line) {
-                return '<li class="status-history-item">' + escapeHtml(line.trim()) + '</li>';
-            }).join('');
+                return '<tr><td>' + escapeHtml(line.trim()) + '</td></tr>';
+            }).join('') + '</tbody></table>';
         }
 
         function resolveVoucherTypeLabel(typeKey) {
@@ -1214,7 +1236,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 head.innerHTML = '';
                 body.innerHTML = '';
                 if (note) {
-                    note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).';
+                    note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu, 7:00 AM–7:00 PM, excluding holidays/special days). TPT is total processing time; PAPT (post-accounting) appears when Accounting processing receive is on the log (not ICU).';
                 }
                 return;
             }
@@ -1246,8 +1268,13 @@ $statusReportRowMetaLabel = $isDefaultPreview
             });
 
             const tpt = String(entry.section_breakdown_tpt || '').trim();
-            headerCells += '<th class="status-section-breakdown-tpt">TPT</th>';
+            const papt = String(entry.section_breakdown_papt || '').trim();
+            headerCells += '<th class="status-section-breakdown-tpt">TPT<span class="status-section-metric-sub">Total Processing Time</span></th>';
             dataCells += '<td class="status-section-breakdown-tpt">' + (tpt !== '' ? escapeHtml(tpt) : '—') + '</td>';
+            if (papt !== '') {
+                headerCells += '<th class="status-section-breakdown-papt">PAPT<span class="status-section-metric-sub">Post-Accounting Processing Time</span></th>';
+                dataCells += '<td class="status-section-breakdown-papt">' + escapeHtml(papt) + '</td>';
+            }
 
             head.innerHTML = '<tr>' + headerCells + '</tr>';
             body.innerHTML = '<tr>' + dataCells + '</tr>';
@@ -1259,7 +1286,9 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 if (forwardedTo !== '') {
                     extra += ' Forwarded to ' + forwardedTo + ' (not yet received).';
                 }
-                note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu work hours).' + extra;
+                note.textContent = 'Sections from process history. Processing time is shown for paid vouchers only (Mon–Thu, 7:00 AM–7:00 PM, excluding holidays/special days). TPT is total processing time.'
+                    + (papt !== '' ? ' PAPT is post-accounting processing time from Accounting receive (not ICU).' : '')
+                    + extra;
             }
             card.style.display = '';
         }
@@ -1379,7 +1408,20 @@ $statusReportRowMetaLabel = $isDefaultPreview
             document.getElementById('sr_route_type').textContent = entry.category_label || '—';
             document.getElementById('sr_ors_no').textContent = formatBreakdownIdentifier(entry.ors_no);
             document.getElementById('sr_dv_no').textContent = formatBreakdownIdentifier(entry.dv_no);
-            document.getElementById('sr_current_location').textContent = String(entry.current_location || entry.current_section || '').trim() || '—';
+            const currentLocEl = document.getElementById('sr_current_location');
+            const currentLoc = String(entry.current_location || entry.current_section || '').trim();
+            const currentUser = String(entry.current_user || '').trim();
+            if (currentLocEl) {
+                if (currentLoc === '' && currentUser === '') {
+                    currentLocEl.textContent = '—';
+                } else if (currentUser === '' || currentLoc.toLowerCase().indexOf(currentUser.toLowerCase()) !== -1) {
+                    currentLocEl.textContent = currentLoc || '—';
+                } else {
+                    currentLocEl.innerHTML = escapeHtml(currentLoc || '—')
+                        + '<div class="status-breakdown-user"><i class="ri-user-3-line" aria-hidden="true"></i>'
+                        + escapeHtml(currentUser) + '</div>';
+                }
+            }
             const forwardedCard = document.getElementById('sr_forwarded_to_card');
             const forwardedEl = document.getElementById('sr_forwarded_to');
             const forwardedLabel = String(entry.forwarded_to_label || entry.forwarded_to || '').trim();
@@ -1540,6 +1582,22 @@ $statusReportRowMetaLabel = $isDefaultPreview
             }
         });
     })();
+</script>
+<script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
+<script>
+    if (typeof bindVoucherTableSequentialFilters === 'function') {
+        bindVoucherTableSequentialFilters({
+            onChange: function() {
+                var form = document.querySelector('.status-report-filter-bar__form');
+                if (form) {
+                    form.querySelectorAll('select[disabled]').forEach(function(el) {
+                        el.disabled = false;
+                    });
+                    form.submit();
+                }
+            }
+        });
+    }
 </script>
 <script src="../../protected/js/qr_scanner_search.js"></script>
 <script>

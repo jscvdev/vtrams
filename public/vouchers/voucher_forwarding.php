@@ -38,6 +38,8 @@ $receivingSearchCols = [
     'dv_no',
     'ada_check_no',
     'payee',
+    'office_from',
+    'office_to',
     'address',
     'particulars',
     'tin_employee_no',
@@ -114,10 +116,12 @@ $fetch_voucher_receiving_data->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_receiving_data->bindValue(':off', $offset, PDO::PARAM_INT);
 $fetch_voucher_receiving_data->execute();
 $forwardingRows = $fetch_voucher_receiving_data->fetchAll(PDO::FETCH_ASSOC);
+$forwardingProcessingNos = array_column($forwardingRows, 'processing_no');
 $forwardingHistoryMap = voucher_tracking_fetch_display_history_map(
     $pdo,
-    array_column($forwardingRows, 'processing_no')
+    $forwardingProcessingNos
 );
+$forwardingTrackingMap = voucher_tracking_fetch_rows_map($pdo, $forwardingProcessingNos);
 
 $totalRows = $displayTotal;
 
@@ -543,7 +547,7 @@ if ($showCashierArchiveCol) {
                         </label>
                     </div>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
                 </form>
             </div>
@@ -1251,6 +1255,15 @@ if ($showCashierArchiveCol) {
                         $rowBulkPayable = $isCashierBulkPay
                             && (in_array('Cashiers Unit', $target, true) || in_array('Cashier', $target, true))
                             && ($rowTransmitEmpty || $rowTransmitYes);
+                        $loggedForwarderName = (string) ($_SESSION['logged_user_emp_name'] ?? '');
+                        $rowTracking = $forwardingTrackingMap[(string) ($row['processing_no'] ?? '')] ?? [];
+                        $returnForwardTarget = voucher_tracking_return_forward_target(
+                            $pdo,
+                            (string) ($rowTracking['voucher_status'] ?? ''),
+                            (string) ($rowTracking['process_history'] ?? $rawForwardingHistory),
+                            $loggedForwarderName
+                        );
+                        $needsReturnForwardRow = voucher_tracking_is_pending_return_reply($rowTracking);
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -1483,6 +1496,9 @@ if ($showCashierArchiveCol) {
                             <td data-label="coa_category" class="hidden"><?php echo isset($row['coa_category']) ? htmlspecialchars((string)$row['coa_category'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount']) : ''; ?></td>
+                            <td data-label="needs_return_forward" class="hidden"><?php echo $needsReturnForwardRow ? '1' : '0'; ?></td>
+                            <td data-label="return_forward_label" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="return_forward_designation" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['designation'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php
                     }
@@ -2097,6 +2113,27 @@ if ($showCashierArchiveCol) {
         }
         docToSelect.innerHTML = docToOriginalHtml;
         hideOwnDesignationOptions(docToSelect);
+        docToSelect.disabled = false;
+    }
+
+    function lockForwardToReturner(label, designation) {
+        if (!docToSelect) {
+            return;
+        }
+        var value = String(designation || label || '').trim();
+        var text = String(label || designation || '').trim() || value;
+        if (!value) {
+            restoreForwardDestinationOptions();
+            return;
+        }
+        docToSelect.innerHTML = '';
+        var opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        opt.selected = true;
+        docToSelect.appendChild(opt);
+        docToSelect.required = true;
+        docToSelect.disabled = false;
     }
 
     function normalizeForwardingHistorySection(section) {
@@ -2665,9 +2702,14 @@ if ($showCashierArchiveCol) {
                 document.getElementById("form_title").textContent = "Forward Voucher";
                 restoreForwardDestinationOptions();
                 var docToForward = document.getElementById("document_to");
+                var needsReturnForward = (row.querySelector('[data-label="needs_return_forward"]')?.textContent || '').trim() === '1';
+                var returnForwardLabel = (row.querySelector('[data-label="return_forward_label"]')?.textContent || '').trim();
+                var returnForwardDesignation = (row.querySelector('[data-label="return_forward_designation"]')?.textContent || '').trim();
                 if (docToForward) {
                     docToForward.required = true;
-                    if (isLiaisonOfficer) {
+                    if (needsReturnForward && (returnForwardLabel || returnForwardDesignation)) {
+                        lockForwardToReturner(returnForwardLabel, returnForwardDesignation);
+                    } else if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {
                         applyForwardingDestinationOptions();

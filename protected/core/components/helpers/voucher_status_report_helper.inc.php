@@ -6,6 +6,7 @@ require_once __DIR__ . '/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/utilities_office_helper.inc.php';
 require_once __DIR__ . '/utilities_signatory_helper.inc.php';
 require_once __DIR__ . '/amount_helper.inc.php';
+require_once __DIR__ . '/voucher_table_filter_helper.inc.php';
 
 /**
  * @return array{processing_office: string, sub_offices: list<string>, processing_office_id: int}
@@ -367,6 +368,10 @@ function voucher_status_report_normalize_filters(array $filters): array
         [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
     }
 
+    $sort = function_exists('voucher_table_filter_normalize_sort')
+        ? voucher_table_filter_normalize_sort((string) ($filters['sort'] ?? 'asc'))
+        : ((strtolower(trim((string) ($filters['sort'] ?? 'asc'))) === 'desc') ? 'desc' : 'asc');
+
     return [
         'office' => $office,
         'status' => $status,
@@ -374,6 +379,7 @@ function voucher_status_report_normalize_filters(array $filters): array
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
         'q' => trim((string) ($filters['q'] ?? '')),
+        'sort' => $sort,
     ];
 }
 
@@ -419,27 +425,21 @@ function voucher_status_report_append_filter_sql(string $sql, array $filters, st
 
     $q = $filters['q'];
     if ($q !== '') {
-        if (voucher_status_report_search_is_identifier($q)) {
-            $sql .= " AND ({$alias}.processing_no = :q_exact OR {$alias}.processing_no LIKE :q_prefix ESCAPE '\\\\')";
-            $params[':q_exact'] = $q;
-            $params[':q_prefix'] = voucher_status_report_like_prefix($q);
-        } else {
-            $like = voucher_status_report_like_contains($q);
-            $sql .= " AND (
-                {$alias}.payee LIKE :q_like_payee ESCAPE '\\\\'
-                OR {$alias}.dv_no LIKE :q_like_dv ESCAPE '\\\\'
-                OR {$alias}.ors_no LIKE :q_like_ors ESCAPE '\\\\'
-                OR {$alias}.office_from LIKE :q_like_office ESCAPE '\\\\'
-                OR {$alias}.voucher_status LIKE :q_like_status ESCAPE '\\\\'
-                OR {$alias}.processing_no LIKE :q_like_pn ESCAPE '\\\\'
-            )";
-            $params[':q_like_payee'] = $like;
-            $params[':q_like_dv'] = $like;
-            $params[':q_like_ors'] = $like;
-            $params[':q_like_office'] = $like;
-            $params[':q_like_status'] = $like;
-            $params[':q_like_pn'] = $like;
-        }
+        $like = voucher_status_report_like_contains($q);
+        $sql .= " AND (
+            {$alias}.processing_no LIKE :q_like_pn ESCAPE '\\\\'
+            OR {$alias}.payee LIKE :q_like_payee ESCAPE '\\\\'
+            OR {$alias}.office_from LIKE :q_like_office ESCAPE '\\\\'
+            OR {$alias}.dv_no LIKE :q_like_dv ESCAPE '\\\\'
+            OR {$alias}.ors_no LIKE :q_like_ors ESCAPE '\\\\'
+            OR {$alias}.voucher_status LIKE :q_like_status ESCAPE '\\\\'
+        )";
+        $params[':q_like_pn'] = $like;
+        $params[':q_like_payee'] = $like;
+        $params[':q_like_office'] = $like;
+        $params[':q_like_dv'] = $like;
+        $params[':q_like_ors'] = $like;
+        $params[':q_like_status'] = $like;
     }
 
     return [$sql, $params];
@@ -523,6 +523,7 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'current_section' => '',
         'current_office' => '',
         'current_location' => '',
+        'current_user' => '',
         'forwarded_to' => '',
         'forwarded_to_office' => '',
         'forwarded_to_label' => '',
@@ -613,6 +614,35 @@ function voucher_status_report_total_processing_time_label(
     return trim((string) ($trackingRow['total_processing_time'] ?? ''));
 }
 
+function voucher_status_report_papt_label(
+    PDO $pdo,
+    array $entry,
+    array $trackingRow,
+    array $actions,
+    array &$userCache = []
+): string {
+    if (empty($entry['is_paid'])) {
+        return '';
+    }
+
+    $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+    if ($statusTs === false || $statusTs <= 0) {
+        return '';
+    }
+
+    $startTs = voucher_tracking_first_accounting_processing_receive_ts($actions, $pdo, $userCache);
+    if ($startTs === null || $statusTs < $startTs) {
+        return '';
+    }
+
+    $measured = voucher_tracking_measure_work_window($startTs, $statusTs, $actions, $pdo);
+    if ((int) ($measured['seconds'] ?? 0) <= 0) {
+        return '';
+    }
+
+    return (string) ($measured['label'] ?? '');
+}
+
 /**
  * @param list<array<string, mixed>> $entries
  * @param array<string, array<string, mixed>> $trackingRowsByPn
@@ -651,6 +681,13 @@ function voucher_status_report_attach_section_breakdowns(PDO $pdo, array $entrie
             $entries[$index],
             $trackingRowsByPn[$pn] ?? [],
             $logs
+        );
+        $entries[$index]['section_breakdown_papt'] = voucher_status_report_papt_label(
+            $pdo,
+            $entries[$index],
+            $trackingRowsByPn[$pn] ?? [],
+            $logs,
+            $userCache
         );
         $location = voucher_status_report_resolve_location(
             $pdo,
@@ -797,7 +834,7 @@ function voucher_status_report_unit_from_history_line(PDO $pdo, array $line, arr
  *
  * @param list<array{name: string, action: string, section: string, office: string}> $lines
  * @param array<string, array<string, mixed>|null> $userCache
- * @return array{section: string, office: string}
+ * @return array{section: string, office: string, user: string}
  */
 function voucher_status_report_last_held_location(PDO $pdo, array $lines, array &$userCache): array
 {
@@ -814,10 +851,24 @@ function voucher_status_report_last_held_location(PDO $pdo, array $lines, array 
             continue;
         }
 
-        return ['section' => $section, 'office' => $office];
+        return [
+            'section' => $section,
+            'office' => $office,
+            'user' => voucher_status_report_person_name((string) ($line['name'] ?? '')),
+        ];
     }
 
-    return ['section' => '', 'office' => ''];
+    return ['section' => '', 'office' => '', 'user' => ''];
+}
+
+function voucher_status_report_person_name(string $name): string
+{
+    $name = trim((string) preg_replace('/\s+/u', ' ', $name));
+    if ($name === '' || strcasecmp($name, 'n/a') === 0) {
+        return '';
+    }
+
+    return $name;
 }
 
 function voucher_status_report_format_location_label(string $section, string $office): string
@@ -847,6 +898,7 @@ function voucher_status_report_format_location_label(string $section, string $of
  *   current_section: string,
  *   current_office: string,
  *   current_location: string,
+ *   current_user: string,
  *   forwarded_to: string,
  *   forwarded_to_office: string,
  *   forwarded_to_label: string
@@ -864,6 +916,7 @@ function voucher_status_report_resolve_location(
     $lastHeld = voucher_status_report_last_held_location($pdo, $lines, $userCache);
     $currentSection = $lastHeld['section'];
     $currentOffice = $lastHeld['office'];
+    $currentUser = voucher_status_report_person_name((string) ($lastHeld['user'] ?? ''));
     $forwardedTo = '';
     $forwardedOffice = '';
 
@@ -892,6 +945,7 @@ function voucher_status_report_resolve_location(
         if ($currentSection === '' && $currentOffice === '') {
             $currentSection = 'In transit';
         }
+        $currentUser = '';
     } elseif ($receivingRow !== []) {
         $holder = voucher_status_report_user_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
         $heldSection = voucher_status_report_unit_label_from_user($holder);
@@ -905,16 +959,30 @@ function voucher_status_report_resolve_location(
         if ($heldOffice !== '') {
             $currentOffice = $heldOffice;
         }
+        $holderName = $holder !== null
+            ? voucher_status_report_person_name((string) ($holder['display_name'] ?? ''))
+            : '';
+        if ($holderName !== '') {
+            $currentUser = $holderName;
+        }
     } elseif (!empty($entry['is_returned'])) {
         if ($currentSection === '') {
             $currentSection = 'Returned';
         }
     }
 
+    if ($currentUser !== '' && (
+        strcasecmp($currentUser, $currentSection) === 0
+        || strcasecmp($currentUser, $currentOffice) === 0
+    )) {
+        $currentUser = '';
+    }
+
     return [
         'current_section' => $currentSection,
         'current_office' => $currentOffice,
         'current_location' => voucher_status_report_format_location_label($currentSection, $currentOffice),
+        'current_user' => $currentUser,
         'forwarded_to' => $forwardedTo,
         'forwarded_to_office' => $forwardedOffice,
         'forwarded_to_label' => voucher_status_report_format_location_label($forwardedTo, $forwardedOffice),
@@ -1086,7 +1154,19 @@ function voucher_status_report_has_active_query(array $query): bool
         return true;
     }
 
+    $year = trim((string) ($query['year'] ?? ''));
+    if ($year !== '' && strcasecmp($year, 'all') !== 0) {
+        return true;
+    }
+
     if (trim((string) ($query['q'] ?? '')) !== '') {
+        return true;
+    }
+
+    $sort = function_exists('voucher_table_filter_normalize_sort')
+        ? voucher_table_filter_normalize_sort((string) ($query['sort'] ?? 'asc'))
+        : strtolower(trim((string) ($query['sort'] ?? 'asc')));
+    if ($sort === 'desc') {
         return true;
     }
 
@@ -1119,7 +1199,12 @@ function voucher_status_report_build_tracking_query(array $filters = [], int $li
         WHERE 1=1' . voucher_status_report_include_sql('vt');
     [$sql, $params] = voucher_status_report_append_filter_sql($sql, $filters, 'vt');
 
-    $sql .= ' ORDER BY ' . voucher_status_report_last_update_sql('vt') . ' DESC, vt.processing_no DESC';
+    $filters = voucher_status_report_normalize_filters($filters);
+    $sql .= ' ORDER BY ' . voucher_table_filter_order_sql(
+        voucher_status_report_last_update_sql('vt'),
+        'vt.processing_no',
+        $filters
+    );
     if ($limit > 0) {
         $safeLimit = (int) max(1, min($limit, 500));
         $safeOffset = (int) max(0, $offset);

@@ -19,33 +19,128 @@
         return txt;
     }
 
-    function formatProcessHistoryDisplayLine(rawLine) {
+    function parseProcessHistoryDisplayRow(rawLine) {
         var line = String(rawLine || '').trim();
         if (line === '') {
-            return '';
+            return null;
         }
         if (line.indexOf('|') === -1) {
-            return line;
+            return { name: '', action: line, unit: '', office: '', datetime: '' };
         }
 
         var parts = line.split(/\s*\|\s*/);
         var name = String(parts[0] || '').trim();
         var action = String(parts[1] || '').trim();
         var section = String(parts[2] || '').trim();
-        var tail = String(parts[3] || '').trim();
+        var office = String(parts[3] || '').trim();
         var datetime = String(parts[4] || '').trim();
-        var unit = section !== '' ? section : tail;
-        var actionPart = simplifyActionLabel(action);
 
-        if (datetime !== '') {
-            actionPart = actionPart + ' on ' + datetime;
+        if (parts.length === 3) {
+            return {
+                name: name,
+                action: simplifyActionLabel(action),
+                unit: section,
+                office: '',
+                datetime: ''
+            };
         }
 
-        if (name === '' && unit === '' && actionPart === '') {
-            return line;
+        var unit = section !== '' ? section : office;
+        if (section === '') {
+            office = '';
         }
 
-        return name + ' | ' + unit + ' | ' + actionPart;
+        return {
+            name: name,
+            action: simplifyActionLabel(action),
+            unit: unit,
+            office: office,
+            datetime: datetime
+        };
+    }
+
+    function formatProcessHistoryDisplayLine(rawLine) {
+        var row = parseProcessHistoryDisplayRow(rawLine);
+        if (!row) {
+            return '';
+        }
+        var actionPart = row.action;
+        if (row.datetime !== '') {
+            actionPart = actionPart + ' on ' + row.datetime;
+        }
+        if (row.name === '' && row.unit === '' && actionPart === '') {
+            return String(rawLine || '').trim();
+        }
+
+        return row.name + ' | ' + row.unit + ' | ' + actionPart;
+    }
+
+    function historyActionTone(action) {
+        var a = String(action || '').toLowerCase();
+        if (a.indexOf('forward') === 0) return 'is-forwarded';
+        if (a.indexOf('receiv') === 0) return 'is-received';
+        if (a.indexOf('process') === 0) return 'is-processed';
+        if (a.indexOf('return') === 0) return 'is-returned';
+        if (a.indexOf('encod') === 0) return 'is-encoded';
+        if (a.indexOf('archiv') === 0 || a.indexOf('paid') !== -1) return 'is-paid';
+        return '';
+    }
+
+    function formatHistoryDatetime(value) {
+        var raw = String(value || '').trim();
+        if (raw === '') {
+            return '—';
+        }
+        var parts = raw.split(/\s+/);
+        if (parts.length < 2) {
+            return escapeHtml(raw);
+        }
+        return '<span class="status-history-date">' + escapeHtml(parts[0]) + '</span>'
+            + '<span class="status-history-time">' + escapeHtml(parts.slice(1).join(' ')) + '</span>';
+    }
+
+    function renderProcessHistoryDisplayTable(raw) {
+        var normalized = String(raw || '')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .replace(/\\n/g, '\n')
+            .trim();
+
+        var rows = normalized === '' ? [] : normalized.split('\n').map(function(line) {
+            return parseProcessHistoryDisplayRow(String(line).trim());
+        }).filter(function(row) {
+            return row !== null;
+        });
+
+        var html = '<table class="status-history-table">'
+            + '<thead><tr>'
+            + '<th class="status-history-col-step">#</th>'
+            + '<th>User</th>'
+            + '<th>Action</th>'
+            + '<th>Unit</th>'
+            + '<th>Office</th>'
+            + '<th>Date / Time</th>'
+            + '</tr></thead><tbody>';
+
+        if (rows.length === 0) {
+            html += '<tr class="status-history-empty"><td colspan="6">No process history recorded.</td></tr>';
+        } else {
+            rows.forEach(function(row, index) {
+                var tone = historyActionTone(row.action);
+                var latest = index === rows.length - 1 ? ' is-latest' : '';
+                html += '<tr class="' + tone + latest + '">'
+                    + '<td class="status-history-col-step">' + (index + 1) + '</td>'
+                    + '<td>' + escapeHtml(row.name || '—') + '</td>'
+                    + '<td><span class="status-history-action">' + escapeHtml(row.action || '—') + '</span></td>'
+                    + '<td>' + escapeHtml(row.unit || '—') + '</td>'
+                    + '<td>' + escapeHtml(row.office || '—') + '</td>'
+                    + '<td class="status-history-col-datetime">' + formatHistoryDatetime(row.datetime) + '</td>'
+                    + '</tr>';
+            });
+        }
+
+        return html + '</tbody></table>';
     }
 
     function renderProcessHistoryDisplayList(raw) {
@@ -123,7 +218,9 @@
     }
 
     global.formatProcessHistoryDisplayLine = formatProcessHistoryDisplayLine;
+    global.parseProcessHistoryDisplayRow = parseProcessHistoryDisplayRow;
     global.renderProcessHistoryDisplayList = renderProcessHistoryDisplayList;
+    global.renderProcessHistoryDisplayTable = renderProcessHistoryDisplayTable;
     global.setVoucherPortalViewMode = setVoucherPortalViewMode;
     global.getProcessHistoryDisplayFromRow = getProcessHistoryDisplayFromRow;
     global.bindVoucherPortalProcessHistory = bindVoucherPortalProcessHistory;

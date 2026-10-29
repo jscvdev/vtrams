@@ -1698,6 +1698,44 @@ html.page-loaded #main {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
+.voucher-card--filter .voucher-overview-filter-form .filter-ymd-select,
+.voucher-card--filter .filter-toolbar-form .filter-ymd-select {
+    flex: 0 0 auto;
+    min-width: 5.5rem;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-ymd-select--sort,
+.voucher-card--filter .filter-toolbar-form .filter-ymd-select--sort {
+    min-width: 8.5rem;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-ymd-select select,
+.voucher-card--filter .filter-toolbar-form .filter-ymd-select select {
+    width: 100%;
+    box-sizing: border-box;
+    background: #F8F9FA;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 42px;
+    color: #444;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-ymd-select select:disabled,
+.voucher-card--filter .filter-toolbar-form .filter-ymd-select select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.voucher-card--filter .voucher-overview-filter-form .filter-ymd-select select:focus,
+.voucher-card--filter .filter-toolbar-form .filter-ymd-select select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
 .voucher-card--filter .voucher-overview-filter-form .filter-search {
     flex: 1 1 auto;
     min-width: 0;

@@ -222,6 +222,11 @@
         margin-bottom: 0.375rem;
     }
 
+    .util-premium-page .calc-filter-field select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
     .util-premium-page .calc-filter-field select,
     .util-premium-page .calc-filter-field input[type="search"],
     .util-premium-page .calc-filter-field input[type="text"] {
@@ -276,6 +281,43 @@
         line-height: 1.55;
     }
 
+    .util-premium-page.calc-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-height: 0;
+    }
+
+    .util-premium-page .calc-workspace {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.2fr);
+        gap: 1rem;
+        align-items: start;
+        min-width: 0;
+    }
+
+    .util-premium-page .calc-workspace__list,
+    .util-premium-page .calc-workspace__detail {
+        min-width: 0;
+    }
+
+    .util-premium-page .calc-formula-result {
+        margin: 0 0 1rem;
+        padding: 0.875rem 1rem;
+        border-radius: 12px;
+        background: #eef2ff;
+        color: #1e3a8a;
+        font-size: 0.875rem;
+        line-height: 1.55;
+        font-weight: 600;
+    }
+
+    @media (max-width: 1100px) {
+        .util-premium-page .calc-workspace {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
     .util-premium-page .calc-detail-block {
         margin-top: 1.25rem;
         padding-top: 1rem;
@@ -293,6 +335,8 @@
     .util-premium-page #calculationBreakdownTable td,
     .util-premium-page #calculationEventsTable th,
     .util-premium-page #calculationEventsTable td,
+    .util-premium-page #calculationCalendarTable th,
+    .util-premium-page #calculationCalendarTable td,
     .util-premium-page #calculationSegmentsTable th,
     .util-premium-page #calculationSegmentsTable td {
         border-bottom: 1px solid #f1f5f9;
@@ -303,6 +347,7 @@
 
     .util-premium-page #calculationBreakdownTable thead th,
     .util-premium-page #calculationEventsTable thead th,
+    .util-premium-page #calculationCalendarTable thead th,
     .util-premium-page #calculationSegmentsTable thead th {
         background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
         color: #475569;

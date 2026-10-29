@@ -269,7 +269,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                         $can_view_system_utilities = AccessControl::canAccessSystemUtilities();
                         $can_view_designations = $can_view_system_utilities;
                         $can_view_performance = AccessControl::canAccessExtended();
-                        $can_view_processing = AccessControl::canAccessExtended();
+                        $can_view_processing = AccessControl::canAccessVoucherProcessingPages();
                         $can_view_returned_liaison = AccessControl::canAccessLiaisonReturnedVouchers();
                         $can_view_retract_approvals = AccessControl::canAccessRetractApprovals();
 

@@ -185,10 +185,12 @@ class AccessControl
 
     /**
      * Incoming and Processing (forwarding) pages.
+     * Incoming is available to all voucher workflow users so returned
+     * documents can be received outside processing-office roles.
      */
     public static function canAccessVoucherProcessingPages(): bool
     {
-        return self::canAccessVoucherWorkflowPages() && self::canAccessExtended();
+        return self::canAccessVoucherWorkflowPages();
     }
 
     /**
@@ -196,7 +198,9 @@ class AccessControl
      */
     public static function canAccessVoucherArchives(): bool
     {
-        return self::hasMinimumACL(8) || self::hasRole('Cashiers Unit');
+        return self::hasMinimumACL(8)
+            || self::hasRole('Cashiers Unit')
+            || self::hasRole('Accounting Unit');
     }
 
     /**
@@ -218,6 +222,7 @@ class AccessControl
             'voucher_performance.php' => 'canAccessExtended',
             'voucher_returned_liaison.php' => 'canAccessLiaisonReturnedVouchers',
             'voucher_retract_approvals.php' => 'canAccessRetractApprovals',
+            'processing_calendar_handler.php' => 'canAccessOverviewReports',
         ];
     }
 
@@ -398,6 +403,8 @@ class AccessControl
 
             case 'voucher_incoming':
             case 'voucher_forwarding':
+                return self::canAccessVoucherProcessingPages();
+
             case 'voucher_performance':
                 return self::canAccessExtended() ||
                     self::hasAnyRole([
@@ -408,7 +415,7 @@ class AccessControl
                         'Processor',
                         'Liaison Officer',
                         'Office of the PENRO'
-                    ]);;
+                    ]);
 
                 // case 'voucher_incoming':
                 //     // ACL >= 3 OR specific designations

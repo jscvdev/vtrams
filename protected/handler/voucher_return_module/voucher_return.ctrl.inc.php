@@ -158,3 +158,31 @@ function voucher_forwarding_return_remove_from_receiving(object $pdo, string $pr
     require_once __DIR__ . '/../voucher_receiving_module/voucher_receiving.model.inc.php';
     voucher_delete_from_receiving($pdo, $processing_no);
 }
+
+function voucher_return_route_to_incoming_target(
+    object $pdo,
+    string $processing_no,
+    string $datetime_action,
+    string $office_from,
+    string $office_to,
+    string $sender_udc,
+    string $receiver_udc,
+    string $forwarded_by,
+    string $process_status,
+    string $combined_remarks,
+    string $sender_remarks
+): void {
+    voucher_return_update_incoming_routing(
+        $pdo,
+        $processing_no,
+        $datetime_action,
+        $office_from,
+        $office_to,
+        $sender_udc,
+        $receiver_udc,
+        $forwarded_by,
+        $process_status,
+        $combined_remarks,
+        $sender_remarks
+    );
+}

@@ -471,6 +471,22 @@
     text-align: left;
 }
 
+.popup-form.status-breakdown-modal .status-breakdown-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    white-space: normal;
+}
+
+.popup-form.status-breakdown-modal .status-breakdown-user i {
+    font-size: 14px;
+    color: #6366f1;
+}
+
 .popup-form.status-breakdown-modal .status-remarks-latest {
     color: #dc2626;
     font-weight: 600;
@@ -494,50 +510,135 @@
     background: #fafbfc;
 }
 
-.popup-form.status-breakdown-modal .status-history-list::before {
-    content: '';
-    position: absolute;
-    left: 15px;
-    top: 14px;
-    bottom: 14px;
-    width: 2px;
-    background: #e2e8f0;
-    transform: translateX(-50%);
-    pointer-events: none;
-}
-
-.popup-form.status-breakdown-modal .status-history-item {
-    position: relative;
-    padding: 10px 0 12px 32px;
-    font-size: 13px;
-    line-height: 1.45;
-    color: #334155;
-    text-align: left;
-}
-
-.popup-form.status-breakdown-modal .status-history-item::before {
-    content: '';
-    position: absolute;
-    left: 15px;
-    top: 15px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    transform: translateX(-50%);
+.popup-form.status-breakdown-modal .status-history-table-wrap {
+    width: 100%;
     box-sizing: border-box;
+    overflow: auto;
+    max-height: min(42vh, 440px);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
 }
 
-.popup-form.status-breakdown-modal .status-history-item:first-child {
+.popup-form.status-breakdown-modal .status-history-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    min-width: 640px;
+}
+
+.popup-form.status-breakdown-modal .status-history-table th,
+.popup-form.status-breakdown-modal .status-history-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.popup-form.status-breakdown-modal .status-history-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    background: #f8fafc;
+    white-space: nowrap;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody td {
     color: #0f172a;
-    font-weight: 600;
+    background: #fff;
 }
 
-.popup-form.status-breakdown-modal .status-history-item:first-child::before {
-    background: #6366f1;
-    border-color: #6366f1;
+.popup-form.status-breakdown-modal .status-history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr:nth-child(even) td {
+    background: #fafbfc;
+}
+
+.popup-form.status-breakdown-modal .status-history-col-step {
+    width: 44px;
+    text-align: center;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+}
+
+.popup-form.status-breakdown-modal .status-history-col-datetime {
+    white-space: nowrap;
+}
+
+.popup-form.status-breakdown-modal .status-history-date,
+.popup-form.status-breakdown-modal .status-history-time {
+    display: block;
+    line-height: 1.3;
+}
+
+.popup-form.status-breakdown-modal .status-history-time {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.popup-form.status-breakdown-modal .status-history-action {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-encoded .status-history-action {
+    background: #eef2ff;
+    color: #3730a3;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-forwarded .status-history-action {
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-received .status-history-action {
+    background: #ecfeff;
+    color: #155e75;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-processed .status-history-action {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-returned .status-history-action {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-paid .status-history-action {
+    background: #f5f3ff;
+    color: #5b21b6;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-latest td {
+    background: #eef2ff;
+}
+
+.popup-form.status-breakdown-modal .status-history-table tbody tr.is-latest td:first-child {
+    box-shadow: inset 3px 0 0 #6366f1;
+}
+
+.popup-form.status-breakdown-modal .status-history-empty td,
+.popup-form.status-breakdown-modal .status-history-empty-fallback {
+    text-align: center;
+    color: #64748b;
+    padding: 16px 12px;
 }
 
 .popup-form.status-breakdown-modal .status-section-breakdown-table {
@@ -594,6 +695,24 @@
     background: #eef2ff;
     color: #3730a3;
     font-weight: 700;
+}
+
+.popup-form.status-breakdown-modal .status-section-breakdown-table th.status-section-breakdown-papt,
+.popup-form.status-breakdown-modal .status-section-breakdown-table td.status-section-breakdown-papt {
+    background: #ecfeff;
+    color: #0f766e;
+    font-weight: 700;
+}
+
+.popup-form.status-breakdown-modal .status-section-metric-sub {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-transform: none;
+    color: inherit;
+    opacity: 0.75;
 }
 
 .popup-form.status-breakdown-modal .status-section-breakdown-table th.is-current,

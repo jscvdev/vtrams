@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.i
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_status_report_helper.inc.php';
 require_once __DIR__ . '/../../protected/handler/voucher_module/voucher.model.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_table_filter_helper.inc.php';
 require_once __DIR__ . '/checklist_config.php';
 AuditHelper::logPageView('Voucher System Logs');
 
@@ -56,6 +57,9 @@ $officeSql = $officeWhere['sql'];
 $officeParams = $officeWhere['params'];
 $q = filterInput($rawSearch);
 $invalidSearch = (trim($rawSearch) !== '' && $q === '');
+$tableFilter = voucher_table_filter_parse();
+[$tableDateSql, $tableDateParams] = voucher_table_filter_date_sql('val.datetime_action', $tableFilter, 'vslog');
+$tableOrderSql = voucher_table_filter_order_sql('val.datetime_action', 'val.processing_no', $tableFilter);
 $rowsPerPage = clamp_int($_GET['rowsPerPage'] ?? null, 1, 50, 50);
 $maxBrowse = 100;
 
@@ -63,7 +67,7 @@ $searchParams = [];
 $searchSql = '';
 if (!$invalidSearch && $q !== '') {
     $pat = '%' . $q . '%';
-    $cols = ['processing_no', 'payee', 'address', 'particulars', 'action', 'action_by', 'dv_no', 'ors_no', 'ada_check_no'];
+    $cols = ['processing_no', 'payee', 'office_from', 'office_to', 'address', 'particulars', 'action', 'action_by', 'dv_no', 'ors_no', 'ada_check_no'];
     $parts = [];
     foreach ($cols as $i => $col) {
         $ph = ':sq' . $i;
@@ -76,9 +80,9 @@ if (!$invalidSearch && $q !== '') {
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs val WHERE 1=1' . $officeSql . str_replace(
-        ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
-        ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
+    $countSql = 'SELECT COUNT(*) AS total FROM voucher_action_logs val WHERE 1=1' . $officeSql . $tableDateSql . str_replace(
+        ['`processing_no`', '`payee`', '`office_from`', '`office_to`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
+        ['`val`.`processing_no`', '`val`.`payee`', '`val`.`office_from`', '`val`.`office_to`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
         $searchSql
     );
     $voucher_action_logs_statementCount = $pdo->prepare($countSql);
@@ -87,6 +91,9 @@ if ($invalidSearch) {
     }
     foreach ($searchParams as $key => $pair) {
         $voucher_action_logs_statementCount->bindValue($key, $pair[0], $pair[1]);
+    }
+    foreach ($tableDateParams as $key => $value) {
+        $voucher_action_logs_statementCount->bindValue($key, $value, PDO::PARAM_INT);
     }
     $voucher_action_logs_statementCount->execute();
     $dbCount = (int) $voucher_action_logs_statementCount->fetch(PDO::FETCH_ASSOC)['total'];
@@ -104,16 +111,19 @@ $fetchLimit = $displayTotal > 0 ? min($rowsPerPage, max(0, $maxBrowse - $offset)
 $fetch_voucher_action_logs_query = 'SELECT val.*, CAST(val.amount AS CHAR) AS amount_log
     FROM voucher_action_logs val
     WHERE 1=1' . $officeSql . str_replace(
-    ['`processing_no`', '`payee`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
-    ['`val`.`processing_no`', '`val`.`payee`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
+    ['`processing_no`', '`payee`', '`office_from`', '`office_to`', '`address`', '`particulars`', '`action`', '`action_by`', '`dv_no`', '`ors_no`', '`ada_check_no`'],
+    ['`val`.`processing_no`', '`val`.`payee`', '`val`.`office_from`', '`val`.`office_to`', '`val`.`address`', '`val`.`particulars`', '`val`.`action`', '`val`.`action_by`', '`val`.`dv_no`', '`val`.`ors_no`', '`val`.`ada_check_no`'],
     $searchSql
-) . ' ORDER BY val.id DESC LIMIT :lim OFFSET :off';
+) . $tableDateSql . ' ORDER BY ' . $tableOrderSql . ' LIMIT :lim OFFSET :off';
 $fetch_voucher_action_logs = $pdo->prepare($fetch_voucher_action_logs_query);
 foreach ($officeParams as $key => $value) {
     $fetch_voucher_action_logs->bindValue($key, $value, PDO::PARAM_STR);
 }
 foreach ($searchParams as $key => $pair) {
     $fetch_voucher_action_logs->bindValue($key, $pair[0], $pair[1]);
+}
+foreach ($tableDateParams as $key => $value) {
+    $fetch_voucher_action_logs->bindValue($key, $value, PDO::PARAM_INT);
 }
 $fetch_voucher_action_logs->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_action_logs->bindValue(':off', $offset, PDO::PARAM_INT);
@@ -124,6 +134,7 @@ $qsSearch = $rawSearch !== '' ? ('&searchTerm=' . rawurlencode($rawSearch)) : ''
 $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($officeQueryContext['selected_office'] ?? 'all') !== 'all'
     ? ('&office=' . rawurlencode((string) $officeQueryContext['selected_office']))
     : '';
+$qsTableFilter = voucher_table_filter_query_suffix($tableFilter);
 
 ?>
 <script src="../../protected/js/set_print_time.js"></script>
@@ -155,8 +166,9 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                             </select>
                         </div>
                     <?php endif; ?>
+                    <?php voucher_table_filter_render_controls($tableFilter); ?>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="searchTerm" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
+                        <input type="text" id="filterInput" name="searchTerm" value="<?php echo htmlspecialchars($rawSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
                 </form>
             </div>
@@ -722,7 +734,7 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                             <button class="pagination_btn_modern" type="button" disabled>Next</button>
                         <?php else: ?>
                             <?php if ($currentPage > 1): ?>
-                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage - 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice; ?>">Previous</a>
+                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage - 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice . $qsTableFilter; ?>">Previous</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Previous</button>
                             <?php endif; ?>
@@ -739,23 +751,23 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
                                 if ($totalPages <= 7) {
                                     for ($i = 1; $i <= $totalPages; $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . $qsTableFilter . '">' . $i . '</a>';
                                     }
                                 } else {
-                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="?page=1&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">1</a>';
+                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="?page=1&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . $qsTableFilter . '">1</a>';
                                     if ($startPage > 2) echo '<span class="pagination_ellipsis">...</span>';
                                     for ($i = max(2, $startPage); $i <= min($totalPages - 1, $endPage2); $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="?page=' . $i . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . $qsTableFilter . '">' . $i . '</a>';
                                     }
                                     if ($endPage2 < $totalPages - 1) echo '<span class="pagination_ellipsis">...</span>';
-                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="?page=' . $totalPages . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . '">' . $totalPages . '</a>';
+                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="?page=' . $totalPages . '&rowsPerPage=' . (int)$rowsPerPage . $qsSearch . $qsOffice . $qsTableFilter . '">' . $totalPages . '</a>';
                                 }
                                 ?>
                             </div>
 
                             <?php if ($currentPage < $totalPages): ?>
-                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage + 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice; ?>">Next</a>
+                                <a class="pagination_btn_modern" href="?page=<?php echo ($currentPage + 1); ?>&rowsPerPage=<?php echo (int)$rowsPerPage; ?><?php echo $qsSearch . $qsOffice . $qsTableFilter; ?>">Next</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Next</button>
                             <?php endif; ?>
@@ -930,33 +942,43 @@ $qsOffice = ($officeQueryContext['is_main_processing_view'] ?? false) && ($offic
     })();
 </script>
 <script src="../../protected/js/qr_scanner_search.js"></script>
+<script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
     (function() {
         var inp = document.getElementById('filterInput');
         if (!inp) return;
         var initial = String(inp.value || '');
-        function applyFilterSearch() {
+        function currentFilterUrl() {
+            var url = '?page=1&rowsPerPage=50';
             var v = String(inp.value || '');
-            if (v === initial) return;
-            var url = '?page=1&rowsPerPage=50&searchTerm=' + encodeURIComponent(v);
+            if (v !== '') {
+                url += '&searchTerm=' + encodeURIComponent(v);
+            }
             var officeFilter = document.getElementById('officeFilter');
             if (officeFilter && officeFilter.value && officeFilter.value !== 'all') {
                 url += '&office=' + encodeURIComponent(officeFilter.value);
             }
-            window.location.href = url;
+            if (typeof appendVoucherTableYmdSortToUrl === 'function') {
+                url = appendVoucherTableYmdSortToUrl(url);
+            }
+            return url;
+        }
+        function applyFilterSearch() {
+            var v = String(inp.value || '');
+            if (v === initial) return;
+            window.location.href = currentFilterUrl();
         }
         var officeFilter = document.getElementById('officeFilter');
         if (officeFilter) {
             officeFilter.addEventListener('change', function() {
-                var url = '?page=1&rowsPerPage=50';
-                var v = String(inp.value || '');
-                if (v !== '') {
-                    url += '&searchTerm=' + encodeURIComponent(v);
+                window.location.href = currentFilterUrl();
+            });
+        }
+        if (typeof bindVoucherTableSequentialFilters === 'function') {
+            bindVoucherTableSequentialFilters({
+                onChange: function() {
+                    window.location.href = currentFilterUrl();
                 }
-                if (officeFilter.value && officeFilter.value !== 'all') {
-                    url += '&office=' + encodeURIComponent(officeFilter.value);
-                }
-                window.location.href = url;
             });
         }
         inp.addEventListener('keydown', function(e) {

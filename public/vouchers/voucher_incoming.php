@@ -34,6 +34,8 @@ $incomingSearchCols = [
     'dv_no',
     'ada_check_no',
     'payee',
+    'office_from',
+    'office_to',
     'address',
     'particulars',
     'tin_employee_no',
@@ -469,7 +471,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                     </div>
 
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
                 </form>
             </div>
@@ -582,9 +584,9 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                 <label for="">Encoded By</label>
                                 <input type="text" name="encoded_by" class="encoded_by" id="encoded_by" value="">
                             </div>
-                            <div class="label-input__container hidden_input">
-                                <label for="">Forwarded By</label>
-                                <input type="text" name="forwarded_by" class="forwarded_by" id="forwarded_by" value="">
+                            <div class="label-input__container">
+                                <label for="">Returned / Forwarded By</label>
+                                <input type="text" name="forwarded_by" class="forwarded_by form-custom-input" id="forwarded_by" value="" readonly>
                             </div>
                             <div class="label-input__container hidden_input">
                                 <label for="">Encoded From</label>

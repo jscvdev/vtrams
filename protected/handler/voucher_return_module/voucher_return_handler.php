@@ -245,8 +245,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (!voucher_receiving_return_exists($pdo, $processing_no)) {
                             $temp_dump['voucher_missing'] = 'Voucher not found in forwarding queue.';
                         }
-                    } elseif (voucher_incoming_check_if_returned_exists($pdo, $processing_no)) {
-                        $temp_dump['voucher_exists'] = 'Voucher is already returned!';
+                    } elseif (!voucher_incoming_return_exists($pdo, $processing_no)) {
+                        $temp_dump['voucher_missing'] = 'Voucher not found in incoming queue.';
                     }
 
                     if ($return_previous_validation_error !== '') {
@@ -261,26 +261,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         die();
                     } else {
                         // DATABASE STATEMENTS VIA MODE/CTRL
-                        $target = array_map('trim', explode(',', (string) ($_SESSION['logged_user_designation'] ?? '')));
-                        if (
-                            in_array('Accounting Unit', $target, true)
-                            && $logged_user_office !== ''
-                            && trim((string) $payee) !== ''
-                            && (empty($return_destination) || $return_destination !== 'previous_sender')
-                        ) {
-                            $payeeLookup = voucher_lookup_payee_at_office($pdo, (string) $payee, $logged_user_office);
-                            if ($payeeLookup['udc'] !== '') {
-                                $sender_udc = $payeeLookup['udc'];
-                            } elseif ($payeeLookup['found']) {
-                                $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
-                                $sender_udc = 'failed';
-                            }
+                        $return_remarks_for_incoming = $sender_remarks !== '' ? $sender_remarks : (string) $remarks;
+                        $return_forwarded_by = trim((string) ($_SESSION['logged_user_emp_name'] ?? ''));
+                        if ($return_forwarded_by === '') {
+                            $return_forwarded_by = $forwarded_by !== ''
+                                ? $forwarded_by
+                                : $return_forwarded_by;
                         }
 
-                        $return_remarks_for_incoming = $sender_remarks !== '' ? $sender_remarks : (string) $remarks;
-                        $return_forwarded_by = $forwarded_by !== ''
-                            ? $forwarded_by
-                            : ($_SESSION['logged_user_emp_name'] ?? '');
+                        $returnHop = voucher_return_apply_returner_hop($pdo, (string) $receiver_udc, (string) $office_from, (string) $office_to);
+                        if ($returnHop['sender_udc'] !== '') {
+                            $sender_udc = $returnHop['sender_udc'];
+                        }
+                        $office_from = $returnHop['office_from'];
+                        $office_to = $returnHop['office_to'];
 
                         if (!empty($return_destination) && $return_destination === 'encoder') {
                             $retained = voucher_return_encoder_retention_values($pdo, $processing_no, $return_source, [
@@ -315,125 +309,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         if ($return_source === 'forwarding') {
-                            if (!empty($return_destination) && $return_destination === 'encoder') {
-                                voucher_incoming_sent_return_document(
-                                    $pdo,
-                                    $processing_no,
-                                    $ors_no,
-                                    $dv_no,
-                                    $ada_check_no,
-                                    $payee,
-                                    $address,
-                                    $particulars,
-                                    $tin_employee_no,
-                                    $amount,
-                                    $voucher_type,
-                                    $voucher_date,
-                                    $encoded_by,
-                                    $encoded_from,
-                                    $datetime_encoded,
-                                    $retained_coa_options ?? null,
-                                    $retained_coa_category ?? null,
-                                    $retained_coa_subsection ?? null
-                                );
-                                voucher_return_sync_dv_entry_for_encoder_return(
-                                    $pdo,
-                                    $processing_no,
-                                    $encoded_from,
-                                    $ors_no,
-                                    $dv_no,
-                                    $ada_check_no
-                                );
-                            } else {
-                                voucher_forwarding_return_move_to_incoming(
-                                    $pdo,
-                                    $processing_no,
-                                    $dv_no,
-                                    $ors_no,
-                                    $ada_check_no,
-                                    $payee,
-                                    $address,
-                                    $particulars,
-                                    $tin_employee_no,
-                                    $amount,
-                                    $voucher_type,
-                                    $voucher_date,
-                                    $datetime_action,
-                                    $office_from,
-                                    $office_to,
-                                    $sender_udc,
-                                    $receiver_udc,
-                                    $encoded_by,
-                                    $encoded_from,
-                                    $datetime_encoded,
-                                    $return_forwarded_by,
-                                    $process_status,
-                                    $combined_remarks,
-                                    $return_remarks_for_incoming
-                                );
-                            }
+                            voucher_forwarding_return_move_to_incoming(
+                                $pdo,
+                                $processing_no,
+                                $dv_no,
+                                $ors_no,
+                                $ada_check_no,
+                                $payee,
+                                $address,
+                                $particulars,
+                                $tin_employee_no,
+                                $amount,
+                                $voucher_type,
+                                $voucher_date,
+                                $datetime_action,
+                                $office_from,
+                                $office_to,
+                                $sender_udc,
+                                $receiver_udc,
+                                $encoded_by,
+                                $encoded_from,
+                                $datetime_encoded,
+                                $return_forwarded_by,
+                                $process_status,
+                                $combined_remarks,
+                                $return_remarks_for_incoming
+                            );
                             voucher_forwarding_return_remove_from_receiving($pdo, $processing_no);
                         } else {
-                            // Incoming: return to encoder (pending) or previous unit (receiving).
-                            if (!empty($return_destination) && $return_destination === 'encoder') {
-                                voucher_incoming_sent_return_document(
-                                    $pdo,
-                                    $processing_no,
-                                    $ors_no,
-                                    $dv_no,
-                                    $ada_check_no,
-                                    $payee,
-                                    $address,
-                                    $particulars,
-                                    $tin_employee_no,
-                                    $amount,
-                                    $voucher_type,
-                                    $voucher_date,
-                                    $encoded_by,
-                                    $encoded_from,
-                                    $datetime_encoded,
-                                    $retained_coa_options ?? null,
-                                    $retained_coa_category ?? null,
-                                    $retained_coa_subsection ?? null
-                                );
-                                voucher_return_sync_dv_entry_for_encoder_return(
-                                    $pdo,
-                                    $processing_no,
-                                    $encoded_from,
-                                    $ors_no,
-                                    $dv_no,
-                                    $ada_check_no
-                                );
-                            } else {
-                                voucher_incoming_sent_move_to_receiving(
-                                    $pdo,
-                                    $ors_no,
-                                    $ada_check_no,
-                                    $processing_no,
-                                    $dv_no,
-                                    $payee,
-                                    $address,
-                                    $particulars,
-                                    $tin_employee_no,
-                                    $amount,
-                                    $voucher_type,
-                                    $voucher_date,
-                                    $datetime_action,
-                                    $sender_udc,
-                                    $receiver_udc,
-                                    $office_from,
-                                    $office_to,
-                                    $encoded_by,
-                                    $encoded_from,
-                                    $datetime_encoded,
-                                    $process_status,
-                                    $combined_remarks
-                                );
-                            }
-                            incoming_voucher_remove_incoming_from_sent($pdo, $processing_no);
+                            voucher_return_route_to_incoming_target(
+                                $pdo,
+                                $processing_no,
+                                $datetime_action,
+                                $office_from,
+                                $office_to,
+                                $sender_udc,
+                                $receiver_udc,
+                                $return_forwarded_by,
+                                $process_status,
+                                $combined_remarks,
+                                $return_remarks_for_incoming
+                            );
                             incoming_voucher_remove_from_sent($pdo, $processing_no);
                         }
-                        $return_active_status = (!empty($return_destination) && $return_destination === 'encoder') ? 'no' : 'returned';
+                        if (!empty($return_destination) && $return_destination === 'encoder') {
+                            voucher_return_sync_dv_entry_for_encoder_return(
+                                $pdo,
+                                $processing_no,
+                                $encoded_from,
+                                $ors_no,
+                                $dv_no,
+                                $ada_check_no
+                            );
+                        }
+                        $return_active_status = 'returned';
                         voucher_incoming_return_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, $return_active_status);
                         if (!empty($remarks)) {
                             // Persist the accumulated remarks history so it remains visible

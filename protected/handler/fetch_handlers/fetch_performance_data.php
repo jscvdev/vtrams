@@ -11,6 +11,7 @@ require __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../core/components/helpers/voucher_table_filter_helper.inc.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -28,6 +29,8 @@ $date   = isset($_GET['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['dat
 $allowedActionTypes = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted', 'Other'];
 $rawActionType = trim((string) ($_GET['action_type'] ?? 'all'));
 $actionTypeFilter = in_array($rawActionType, $allowedActionTypes, true) ? $rawActionType : null;
+$tableSort = voucher_table_filter_normalize_sort((string) ($_GET['sort'] ?? 'asc'));
+$tableOrderSql = voucher_table_filter_order_sql('a.datetime_action', 'a.processing_no', ['sort' => $tableSort]);
 
 $whereParts = ["1=1"];
 $params = [];
@@ -47,16 +50,15 @@ if (!$user) {
 if ($year && $year >= 1900 && $year <= 2100) {
     $whereParts[] = "YEAR(datetime_action) = :year";
     $params[':year'] = $year;
-}
-if ($month && $month >= 1 && $month <= 12) {
-    $whereParts[] = "MONTH(datetime_action) = :month";
-    $params[':month'] = $month;
-}
-if ($day && $day >= 1 && $day <= 31) {
-    $whereParts[] = "DAY(datetime_action) = :day";
-    $params[':day'] = $day;
-}
-if ($date) {
+    if ($month && $month >= 1 && $month <= 12) {
+        $whereParts[] = "MONTH(datetime_action) = :month";
+        $params[':month'] = $month;
+        if ($day && $day >= 1 && $day <= 31) {
+            $whereParts[] = "DAY(datetime_action) = :day";
+            $params[':day'] = $day;
+        }
+    }
+} elseif ($date) {
     $whereParts[] = "DATE(datetime_action) = :date";
     $params[':date'] = $date;
 }
@@ -198,6 +200,8 @@ try {
             a.processing_no,
             a.dv_no,
             a.payee,
+            a.office_from,
+            a.office_to,
             a.amount,
             $actionCaseAliased AS action_type,
             a.action_by,
@@ -209,7 +213,7 @@ try {
             WHERE $whereSQL
             GROUP BY processing_no
         ) pick ON a.id = pick.max_id
-        ORDER BY a.datetime_action DESC
+        ORDER BY {$tableOrderSql}
     ";
     $stmt = $pdo->prepare($sqlTable);
     foreach ($params as $k => $v) {
@@ -222,6 +226,8 @@ try {
             'processing_no' => $row['processing_no'],
             'dv_no' => $row['dv_no'],
             'payee' => $row['payee'],
+            'office_from' => $row['office_from'] ?? '',
+            'office_to' => $row['office_to'] ?? '',
             'amount' => format_amount_display(amount_resolve_charged_or_amount('', $row['amount'] ?? '')),
             'amount_raw' => amount_resolve_charged_or_amount('', $row['amount'] ?? ''),
             'action_type' => $row['action_type'],
@@ -238,6 +244,8 @@ try {
                 (string) ($r['processing_no'] ?? ''),
                 (string) ($r['dv_no'] ?? ''),
                 (string) ($r['payee'] ?? ''),
+                (string) ($r['office_from'] ?? ''),
+                (string) ($r['office_to'] ?? ''),
                 (string) ($r['action_type'] ?? ''),
                 (string) ($r['action_by'] ?? ''),
                 (string) ($r['datetime_action'] ?? ''),

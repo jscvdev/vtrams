@@ -6,7 +6,9 @@ if (!AccessControl::canAccessExtended()) {
 }
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/notifications/notification.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_table_filter_helper.inc.php';
 AuditHelper::logPageView('Performance');
+$tableFilter = voucher_table_filter_parse();
 ?>
 <style>
     .main.main--analytics-dashboard {
@@ -109,6 +111,11 @@ AuditHelper::logPageView('Performance');
         font-size: 12px;
         font-weight: 500;
         transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+
+    .analytics-filter-field select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
     }
 
     .analytics-filter-field select:focus,
@@ -564,24 +571,11 @@ AuditHelper::logPageView('Performance');
             </header>
 
             <section class="analytics-filter-bar no-print">
-                <div class="analytics-filter-field">
-                    <label for="dateFilter">Date</label>
-                    <input type="date" id="dateFilter">
-                </div>
-                <div class="analytics-filter-field">
-                    <label for="yearFilter">Year</label>
-                    <select id="yearFilter">
-                        <option value="all">All</option>
-                        <?php for ($y = date('Y'); $y >= 2020; $y--) echo "<option value=\"$y\">$y</option>"; ?>
-                    </select>
-                </div>
-                <div class="analytics-filter-field">
-                    <label for="monthFilter">Month</label>
-                    <select id="monthFilter">
-                        <option value="all">All</option>
-                        <?php for ($m = 1; $m <= 12; $m++) echo '<option value="' . str_pad((string)$m, 2, '0', STR_PAD_LEFT) . '">' . date('M', mktime(0, 0, 0, $m, 1)) . '</option>'; ?>
-                    </select>
-                </div>
+                <?php voucher_table_filter_render_controls($tableFilter, [
+                    'field_class' => 'analytics-filter-field',
+                    'visible_labels' => true,
+                    'start_year' => 2020,
+                ]); ?>
                 <div class="analytics-filter-field">
                     <label for="actionTypeFilter">Action</label>
                     <select id="actionTypeFilter">
@@ -598,7 +592,7 @@ AuditHelper::logPageView('Performance');
                 <button type="button" class="analytics-filter-apply analytics-filter-apply--print" id="printDailyBtn">Print Report</button>
                 <div class="analytics-filter-field analytics-filter-field--search">
                     <label for="perfTableSearch">Table search</label>
-                    <input type="text" id="perfTableSearch" placeholder="Processing no., payee, action…" autocomplete="off">
+                    <input type="text" id="perfTableSearch" placeholder="Payee, office, or processing no." autocomplete="off">
                 </div>
             </section>
         </div>
@@ -683,6 +677,7 @@ AuditHelper::logPageView('Performance');
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="../../protected/js/main.js"></script>
 <script src="../../protected/js/popscript.js"></script>
+<script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
     (function() {
         const base = '../../protected/handler/fetch_handlers/fetch_performance_data.php';
@@ -754,26 +749,31 @@ AuditHelper::logPageView('Performance');
 
         function getParams() {
             const p = {};
-            const d = document.getElementById('dateFilter').value;
-            const y = document.getElementById('yearFilter').value;
-            const m = document.getElementById('monthFilter').value;
+            const y = document.getElementById('tableYearFilter');
+            const m = document.getElementById('tableMonthFilter');
+            const d = document.getElementById('tableDayFilter');
+            const s = document.getElementById('tableSortFilter');
             const a = document.getElementById('actionTypeFilter').value;
-            if (d) p.date = d;
-            if (y !== 'all') p.year = y;
-            if (m !== 'all') p.month = m;
+            if (y && y.value !== 'all') {
+                p.year = y.value;
+                if (m && m.value !== 'all') {
+                    p.month = m.value;
+                    if (d && d.value !== 'all') p.day = d.value;
+                }
+            }
+            if (s && s.value && s.value !== 'asc') p.sort = s.value;
             if (a !== 'all') p.action_type = a;
             return new URLSearchParams(p).toString();
         }
 
         function formatFilterLabel() {
-            const d = document.getElementById('dateFilter').value;
-            const y = document.getElementById('yearFilter').value;
-            const m = document.getElementById('monthFilter').value;
-            const a = document.getElementById('actionTypeFilter').value;
-            if (d) return d;
+            const y = document.getElementById('tableYearFilter');
+            const m = document.getElementById('tableMonthFilter');
+            const d = document.getElementById('tableDayFilter');
             const parts = [];
-            if (m !== 'all') parts.push(m);
-            if (y !== 'all') parts.push(y);
+            if (y && y.value !== 'all') parts.push(y.value);
+            if (m && m.value !== 'all') parts.push(m.value);
+            if (d && d.value !== 'all') parts.push(d.value);
             return parts.length ? parts.join('/') : 'All dates';
         }
 
@@ -1001,9 +1001,16 @@ AuditHelper::logPageView('Performance');
             });
         }
 
+        if (typeof bindVoucherTableSequentialFilters === 'function') {
+            bindVoucherTableSequentialFilters({
+                onChange: function() {
+                    tablePage = 1;
+                    refresh();
+                }
+            });
+        }
         document.getElementById('applyFiltersBtn').addEventListener('click', refresh);
         document.getElementById('printDailyBtn').addEventListener('click', function() {
-            const d = document.getElementById('dateFilter').value;
             const actionSel = document.getElementById('actionTypeFilter');
             const actionLabel = actionSel && actionSel.value !== 'all' ? actionSel.value : 'All';
             const generated = new Date().toLocaleString();
@@ -1021,7 +1028,7 @@ AuditHelper::logPageView('Performance');
                         return;
                     }
                     const printWindow = window.open('', '_blank');
-                    const dateLabel = d || formatFilterLabel();
+                    const dateLabel = formatFilterLabel();
                     const summaryItems = ['Forwarded', 'Processed', 'Returned', 'Received', 'Transmitted'].filter(t => (overall[t] || 0) > 0).map(t => {
                         const amt = overallAmount[t] ? ` · ₱${overallAmount[t]}` : '';
                         return `<div class="summary-item"><span>${t}</span><strong>${overall[t] || 0}${amt}</strong></div>`;

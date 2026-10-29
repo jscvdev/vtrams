@@ -84,8 +84,13 @@
         if (isModifier(e)) return;
 
         var now = Date.now();
+        var typingInSearch = document.activeElement === input;
 
         if (e.key === 'Enter') {
+          if (typingInSearch) {
+            clearBuffer();
+            return;
+          }
           if (buffer.length >= minLength && isActiveScan(now)) {
             e.preventDefault();
             e.stopPropagation();
@@ -93,6 +98,11 @@
           } else {
             clearBuffer();
           }
+          return;
+        }
+
+        if (typingInSearch) {
+          clearBuffer();
           return;
         }
 

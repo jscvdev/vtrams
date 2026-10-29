@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/processing_calendar_helper.inc.php';
+
 /** @return 'no'|'yes'|'returned' */
 function voucher_tracking_normalize_active_status(?string $status): string
 {
@@ -222,6 +224,50 @@ function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing
     return $row ?: null;
 }
 
+/**
+ * True while a returned voucher still needs to be sent back to the returner.
+ */
+function voucher_tracking_is_pending_return_reply(?array $tracking_row): bool
+{
+    return voucher_tracking_normalize_active_status((string) (($tracking_row ?? [])['active_status'] ?? '')) === 'returned';
+}
+
+/**
+ * @param list<string> $processingNos
+ * @return array<string, array<string, mixed>>
+ */
+function voucher_tracking_fetch_rows_map(object $pdo, array $processingNos): array
+{
+    $processingNos = array_values(array_unique(array_filter(array_map(
+        static fn($pn): string => trim((string) $pn),
+        $processingNos
+    ))));
+    if ($processingNos === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($processingNos), '?'));
+    $stmt = $pdo->prepare(
+        'SELECT processing_no, voucher_status, active_status, process_history
+         FROM voucher_tracking
+         WHERE processing_no IN (' . $placeholders . ')'
+    );
+    foreach ($processingNos as $index => $processingNo) {
+        $stmt->bindValue($index + 1, $processingNo, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+
+    $map = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $pn = trim((string) ($row['processing_no'] ?? ''));
+        if ($pn !== '') {
+            $map[$pn] = $row;
+        }
+    }
+
+    return $map;
+}
+
 function voucher_tracking_fetch_process_history(object $pdo, string $processing_no): ?string
 {
     $row = voucher_tracking_fetch_by_processing_no($pdo, $processing_no);
@@ -379,6 +425,22 @@ function voucher_tracking_user_is_accounting_unit_role(?array $user): bool
     }
 
     return false;
+}
+
+/**
+ * Accounting Unit / Processor / Accountant III — not ICU (ICU is a checking hop).
+ *
+ * @param array{designation?: string}|null $user
+ */
+function voucher_tracking_user_is_accounting_processing_role(?array $user): bool
+{
+    if ($user === null || voucher_tracking_user_is_icu_role($user)) {
+        return false;
+    }
+
+    return voucher_tracking_user_has_designation($user, 'Accounting Unit')
+        || voucher_tracking_user_has_designation($user, 'Processor')
+        || voucher_tracking_user_has_designation($user, 'Accountant III');
 }
 
 /**
@@ -3155,7 +3217,7 @@ function voucher_tracking_format_turnaround_seconds(int $seconds): string
 function voucher_tracking_total_processing_start_section(string $voucher_type): string
 {
     return voucher_type_is_engp($voucher_type)
-        ? 'Conservation & Development Section'
+        ? 'TSD-ENGP'
         : 'Planning Section';
 }
 
@@ -3200,8 +3262,178 @@ function voucher_tracking_first_receive_at_section(
 }
 
 /**
- * Total processing time: first receive at the workflow start section (Planning or CDS)
- * through paid/processed by cashier.
+ * Earliest receive at any dashboard process section (used when the type's start section
+ * never logged a receive, e.g. e-NGP received at TSD instead of CDS).
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ */
+function voucher_tracking_first_dashboard_receive_ts(array $actions, ?object $pdo = null): ?int
+{
+    $userCache = [];
+    $earliest = null;
+    foreach ($actions as $row) {
+        if (voucher_tracking_action_kind($row['action'] ?? '') !== 'receive') {
+            continue;
+        }
+
+        $section = voucher_tracking_dashboard_section_from_action_row($row, $pdo, $userCache);
+        if (!voucher_tracking_is_dashboard_section($section)) {
+            continue;
+        }
+
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts === false) {
+            continue;
+        }
+
+        if ($earliest === null || $ts < $earliest) {
+            $earliest = $ts;
+        }
+    }
+
+    return $earliest;
+}
+
+/**
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @return array{start_ts: ?int, start_section: string, start_source: string}
+ */
+function voucher_tracking_resolve_total_processing_start(
+    array $actions,
+    string $voucher_type,
+    string $fallbackStartTimestamp = '',
+    ?object $pdo = null
+): array {
+    $startSection = voucher_tracking_total_processing_start_section($voucher_type);
+    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
+    $startSource = 'voucher_action_logs — earliest "Received by" at ' . voucher_tracking_dashboard_section_label($startSection);
+
+    if ($startTs === null) {
+        $startTs = voucher_tracking_first_dashboard_receive_ts($actions, $pdo);
+        if ($startTs !== null) {
+            $startSource = 'voucher_action_logs — earliest "Received by" at a process section (start section had no receive)';
+        }
+    }
+
+    if ($startTs === null && trim($fallbackStartTimestamp) !== '') {
+        $fallbackTs = strtotime(trim($fallbackStartTimestamp));
+        if ($fallbackTs !== false) {
+            $startTs = $fallbackTs;
+            $startSource = 'voucher_tracking.datetime_encoded (fallback when no process-section receive log)';
+        }
+    }
+
+    return [
+        'start_ts' => $startTs,
+        'start_section' => $startSection,
+        'start_source' => $startSource,
+    ];
+}
+
+/**
+ * First receive by Accounting for processing (Accounting Unit / Processor / Accountant III).
+ * ICU receives are excluded — that hop is checking, not accounting processing.
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @param array<string, array<string, mixed>|null> $userCache
+ */
+function voucher_tracking_first_accounting_processing_receive_ts(
+    array $actions,
+    ?object $pdo = null,
+    array &$userCache = []
+): ?int {
+    $earliest = null;
+    foreach ($actions as $row) {
+        if (voucher_tracking_action_kind((string) ($row['action'] ?? '')) !== 'receive') {
+            continue;
+        }
+
+        $actionBy = trim((string) ($row['action_by'] ?? ''));
+        $user = null;
+        if ($pdo !== null && $actionBy !== '') {
+            if (!array_key_exists($actionBy, $userCache)) {
+                $userCache[$actionBy] = voucher_tracking_lookup_user_by_display_name($pdo, $actionBy);
+            }
+            $user = $userCache[$actionBy];
+        }
+
+        if (voucher_tracking_user_is_icu_role($user)) {
+            continue;
+        }
+
+        $rawFrom = trim((string) ($row['action_from'] ?? ''));
+        if (strcasecmp($rawFrom, 'ICU') === 0 || voucher_tracking_normalize_section_label($rawFrom) === 'ICU') {
+            continue;
+        }
+
+        $isAccountingProcessor = voucher_tracking_user_is_accounting_processing_role($user);
+        if (!$isAccountingProcessor) {
+            continue;
+        }
+
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts === false) {
+            continue;
+        }
+        if ($earliest === null || $ts < $earliest) {
+            $earliest = $ts;
+        }
+    }
+
+    return $earliest;
+}
+
+/**
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @return array{
+ *   gross_seconds: int,
+ *   pause_seconds: int,
+ *   seconds: int,
+ *   gross_label: string,
+ *   pause_label: string,
+ *   label: string,
+ *   pause_intervals: list<array{start: string, end: string, seconds: int, label: string}>
+ * }
+ */
+function voucher_tracking_measure_work_window(
+    int $startTs,
+    int $endTs,
+    array $actions,
+    mixed $pdo = null
+): array {
+    $gross = voucher_tracking_elapsed_work_seconds($startTs, $endTs, $pdo);
+    $pauseIntervals = [];
+    $paused = 0;
+    foreach (voucher_tracking_return_wait_intervals($actions, $startTs, $endTs) as [$waitStart, $waitEnd]) {
+        $sec = voucher_tracking_elapsed_work_seconds($waitStart, $waitEnd, $pdo);
+        if ($sec <= 0) {
+            continue;
+        }
+        $paused += $sec;
+        $pauseIntervals[] = [
+            'start' => date('Y-m-d H:i:s', $waitStart),
+            'end' => date('Y-m-d H:i:s', $waitEnd),
+            'seconds' => $sec,
+            'label' => voucher_tracking_format_turnaround_seconds($sec),
+        ];
+    }
+    $paused = min($gross, max(0, $paused));
+    $net = max(0, $gross - $paused);
+
+    return [
+        'gross_seconds' => $gross,
+        'pause_seconds' => $paused,
+        'seconds' => $net,
+        'gross_label' => $gross > 0 ? voucher_tracking_format_turnaround_seconds($gross) : '0 seconds',
+        'pause_label' => $paused > 0 ? voucher_tracking_format_turnaround_seconds($paused) : '0 seconds',
+        'label' => $net > 0 ? voucher_tracking_format_turnaround_seconds($net) : '',
+        'pause_intervals' => $pauseIntervals,
+    ];
+}
+
+/**
+ * Total processing time: first receive at the workflow start section (Planning or TSD-ENGP)
+ * through paid/processed by cashier. Time while returned and waiting to be received is excluded.
  */
 function voucher_tracking_calculate_total_processing_time(
     object $pdo,
@@ -3224,23 +3456,23 @@ function voucher_tracking_calculate_total_processing_time(
         $voucher_type = voucher_fetch_stored_voucher_type($pdo, $processing_no);
     }
 
-    $startSection = voucher_tracking_total_processing_start_section($voucher_type);
     $logs = voucher_tracking_fetch_action_logs_grouped($pdo, [$processing_no]);
     $actions = $logs[$processing_no] ?? [];
-    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
-
-    if ($startTs === null && trim($fallbackStartTimestamp) !== '') {
-        $fallbackTs = strtotime(trim($fallbackStartTimestamp));
-        if ($fallbackTs !== false) {
-            $startTs = $fallbackTs;
-        }
-    }
+    $resolved = voucher_tracking_resolve_total_processing_start(
+        $actions,
+        $voucher_type,
+        $fallbackStartTimestamp,
+        $pdo
+    );
+    $startTs = $resolved['start_ts'];
 
     if ($startTs === null || $endTs < $startTs) {
         return 'TBD';
     }
 
-    return voucher_tracking_format_turnaround_seconds($endTs - $startTs);
+    $measured = voucher_tracking_elapsed_work_seconds_excluding_return_waits($startTs, $endTs, $actions, $pdo);
+
+    return voucher_tracking_format_turnaround_seconds($measured['seconds']);
 }
 
 /** Whether a voucher_tracking row represents a paid (archived) voucher. */
@@ -3499,7 +3731,7 @@ function voucher_tracking_section_sort_key(string $section): string
     return sprintf('%03d-%s', $rank, strtolower($section));
 }
 
-/** Whether a calendar day counts as work time for dashboard processing metrics (Mon–Thu only). */
+/** Whether a calendar day is a regular office weekday (Monday–Thursday). */
 function voucher_tracking_is_work_day(DateTimeInterface $date): bool
 {
     $dayOfWeek = (int) $date->format('N');
@@ -3508,38 +3740,208 @@ function voucher_tracking_is_work_day(DateTimeInterface $date): bool
 }
 
 /**
- * Elapsed seconds between two timestamps, counting only Monday through Thursday.
- * Used by voucher dashboard processing-time analytics.
+ * Elapsed seconds between two timestamps, counting only Monday–Thursday office hours
+ * (7:00 AM to 6:00 PM, counting until 7:00 PM max). Fridays, Saturdays, Sundays,
+ * holidays, and special-order days from the processing calendar are excluded.
  */
-function voucher_tracking_elapsed_work_seconds(int $startTs, int $endTs): int
+function voucher_tracking_elapsed_work_seconds(int $startTs, int $endTs, mixed $pdo = null): int
 {
     if ($startTs <= 0 || $endTs <= 0 || $endTs <= $startTs) {
         return 0;
     }
 
+    if (!($pdo instanceof PDO) && isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        $pdo = $GLOBALS['pdo'];
+    }
+
+    $exceptions = [];
+    if ($pdo instanceof PDO) {
+        $exceptions = processing_calendar_all_exceptions($pdo);
+    }
+
+    $timezoneName = date_default_timezone_get() ?: 'Asia/Manila';
+    try {
+        $tz = new DateTimeZone($timezoneName);
+    } catch (Exception) {
+        $tz = new DateTimeZone('Asia/Manila');
+    }
+
+    $cursorDay = (new DateTimeImmutable('@' . $startTs))->setTimezone($tz)->setTime(0, 0, 0);
+    $lastDay = (new DateTimeImmutable('@' . $endTs))->setTimezone($tz)->setTime(0, 0, 0);
     $total = 0;
-    $cursor = (new DateTimeImmutable())->setTimestamp($startTs);
 
-    while ($cursor->getTimestamp() < $endTs) {
-        $dayStart = $cursor->setTime(0, 0, 0);
-        $dayEnd = $dayStart->modify('+1 day');
-
-        if (voucher_tracking_is_work_day($dayStart)) {
-            $segmentStart = max($startTs, $cursor->getTimestamp());
-            $segmentEnd = min($endTs, $dayEnd->getTimestamp());
+    while ($cursorDay <= $lastDay) {
+        $ymd = $cursorDay->format('Y-m-d');
+        $window = processing_calendar_work_window_for_date($cursorDay, $exceptions[$ymd] ?? null);
+        if ($window !== null) {
+            $segmentStart = max($startTs, $window['start']);
+            $segmentEnd = min($endTs, $window['end']);
             if ($segmentEnd > $segmentStart) {
                 $total += $segmentEnd - $segmentStart;
             }
         }
-
-        $cursor = $dayEnd;
+        $cursorDay = $cursorDay->modify('+1 day');
     }
 
     return $total;
 }
 
 /**
+ * Work-hour windows while a voucher is returned and waiting to be received.
+ * The clock pauses at Returned by and resumes only when the next processor
+ * (anyone other than the returner) logs Received by.
+ *
+ * @param list<array<string, mixed>> $actions
+ * @return list<array{0: int, 1: int}>
+ */
+function voucher_tracking_return_wait_intervals(array $actions, int $rangeStart, int $rangeEnd): array
+{
+    if ($rangeEnd <= $rangeStart) {
+        return [];
+    }
+
+    $pausedAt = null;
+    $returner = '';
+    $intervals = [];
+
+    foreach ($actions as $row) {
+        $ts = strtotime((string) ($row['datetime_action'] ?? ''));
+        if ($ts === false) {
+            continue;
+        }
+
+        $kind = voucher_tracking_action_kind((string) ($row['action'] ?? ''));
+        $actor = trim((string) ($row['action_by'] ?? ''));
+
+        if ($kind === 'return') {
+            if ($pausedAt === null) {
+                $pausedAt = $ts;
+                $returner = $actor;
+            }
+            continue;
+        }
+
+        if ($kind !== 'receive' || $pausedAt === null) {
+            continue;
+        }
+
+        if ($returner !== '' && $actor !== '' && strcasecmp($actor, $returner) === 0) {
+            continue;
+        }
+
+        $waitStart = max($pausedAt, $rangeStart);
+        $waitEnd = min($ts, $rangeEnd);
+        if ($waitEnd > $waitStart) {
+            $intervals[] = [$waitStart, $waitEnd];
+        }
+        $pausedAt = null;
+        $returner = '';
+    }
+
+    if ($pausedAt !== null) {
+        $waitStart = max($pausedAt, $rangeStart);
+        $waitEnd = $rangeEnd;
+        if ($waitEnd > $waitStart) {
+            $intervals[] = [$waitStart, $waitEnd];
+        }
+    }
+
+    return $intervals;
+}
+
+/**
+ * Calendar tab days that fall inside a processing-time window.
+ *
+ * @return list<array{
+ *   date: string,
+ *   title: string,
+ *   event_type: string,
+ *   type_label: string,
+ *   coverage: string,
+ *   work_label: string,
+ *   applied: bool,
+ *   note: string
+ * }>
+ */
+function voucher_tracking_calendar_days_in_range(int $startTs, int $endTs, mixed $pdo = null): array
+{
+    if (!($pdo instanceof PDO) && isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        $pdo = $GLOBALS['pdo'];
+    }
+    if (!($pdo instanceof PDO) || $startTs <= 0 || $endTs <= 0 || $endTs < $startTs) {
+        return [];
+    }
+
+    $timezoneName = date_default_timezone_get() ?: 'Asia/Manila';
+    try {
+        $tz = new DateTimeZone($timezoneName);
+    } catch (Exception) {
+        $tz = new DateTimeZone('Asia/Manila');
+    }
+
+    $startDay = (new DateTimeImmutable('@' . $startTs))->setTimezone($tz)->format('Y-m-d');
+    $endDay = (new DateTimeImmutable('@' . $endTs))->setTimezone($tz)->format('Y-m-d');
+    $typeLabels = processing_calendar_event_types();
+    $out = [];
+
+    foreach (processing_calendar_all_exceptions($pdo) as $date => $row) {
+        if ($date < $startDay || $date > $endDay) {
+            continue;
+        }
+
+        try {
+            $day = new DateTimeImmutable($date . ' 00:00:00', $tz);
+        } catch (Exception) {
+            continue;
+        }
+
+        $weekday = (int) $day->format('N');
+        $applied = $weekday >= 1 && $weekday <= 4;
+        $eventType = (string) ($row['event_type'] ?? 'other');
+
+        $out[] = [
+            'date' => $date,
+            'title' => (string) ($row['title'] ?? ''),
+            'event_type' => $eventType,
+            'type_label' => $typeLabels[$eventType] ?? $eventType,
+            'coverage' => (string) ($row['coverage'] ?? 'whole_day'),
+            'work_label' => processing_calendar_work_label($row),
+            'applied' => $applied,
+            'note' => $applied
+                ? 'Applied to total processing time'
+                : 'Not applied (Friday–Sunday already excluded)',
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * @param list<array<string, mixed>> $actions
+ * @return array{seconds: int, pause_seconds: int}
+ */
+function voucher_tracking_elapsed_work_seconds_excluding_return_waits(
+    int $startTs,
+    int $endTs,
+    array $actions,
+    mixed $pdo = null
+): array {
+    $gross = voucher_tracking_elapsed_work_seconds($startTs, $endTs, $pdo);
+    $paused = 0;
+    foreach (voucher_tracking_return_wait_intervals($actions, $startTs, $endTs) as [$waitStart, $waitEnd]) {
+        $paused += voucher_tracking_elapsed_work_seconds($waitStart, $waitEnd, $pdo);
+    }
+    $paused = min($gross, max(0, $paused));
+
+    return [
+        'seconds' => max(0, $gross - $paused),
+        'pause_seconds' => $paused,
+    ];
+}
+
+/**
  * Dashboard total processing time (Mon–Thu): first receive at workflow start through last status time.
+ * Time while returned and waiting to be received is excluded.
  *
  * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
  */
@@ -3560,21 +3962,20 @@ function voucher_tracking_dashboard_total_processing_seconds(
         $voucher_type = voucher_fetch_stored_voucher_type($pdo, $processing_no);
     }
 
-    $startSection = voucher_tracking_total_processing_start_section($voucher_type);
-    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
-
-    if ($startTs === null && trim($fallbackStartTimestamp) !== '') {
-        $fallbackTs = strtotime(trim($fallbackStartTimestamp));
-        if ($fallbackTs !== false) {
-            $startTs = $fallbackTs;
-        }
-    }
+    $resolved = voucher_tracking_resolve_total_processing_start(
+        $actions,
+        $voucher_type,
+        $fallbackStartTimestamp,
+        $pdo
+    );
+    $startTs = $resolved['start_ts'];
 
     if ($startTs === null || $endTs < $startTs) {
         return null;
     }
 
-    $seconds = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
+    $measured = voucher_tracking_elapsed_work_seconds_excluding_return_waits($startTs, $endTs, $actions, $pdo);
+    $seconds = $measured['seconds'];
 
     return $seconds > 0 ? $seconds : null;
 }
@@ -3582,13 +3983,18 @@ function voucher_tracking_dashboard_total_processing_seconds(
 /**
  * @param array<string, int> $totals
  */
-function voucher_tracking_add_section_duration(array &$totals, string $section, int $startTs, int $endTs): void
-{
+function voucher_tracking_add_section_duration(
+    array &$totals,
+    string $section,
+    int $startTs,
+    int $endTs,
+    mixed $pdo = null
+): void {
     if ($startTs <= 0 || $endTs <= 0 || $endTs < $startTs) {
         return;
     }
 
-    $delta = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
+    $delta = voucher_tracking_elapsed_work_seconds($startTs, $endTs, $pdo);
     if ($delta > 0) {
         $totals[$section] = ($totals[$section] ?? 0) + $delta;
     }
@@ -3607,6 +4013,7 @@ function voucher_tracking_complete_pending_forward_on_handoff(
     array &$totals,
     string $receivingSection,
     int $receiveTs,
+    mixed $pdo = null,
     ?array &$trace = null
 ): void {
     $bestSection = null;
@@ -3637,10 +4044,11 @@ function voucher_tracking_complete_pending_forward_on_handoff(
         $totals,
         $bestSection,
         $startTs,
-        $receiveTs
+        $receiveTs,
+        $pdo
     );
     if ($trace !== null) {
-        $seconds = voucher_tracking_elapsed_work_seconds($startTs, $receiveTs);
+        $seconds = voucher_tracking_elapsed_work_seconds($startTs, $receiveTs, $pdo);
         if ($seconds > 0) {
             $trace['segments'][] = [
                 'section' => $bestSection,
@@ -3732,8 +4140,6 @@ function voucher_tracking_section_durations_from_actions(
     $open = [];
     $pendingForward = [];
     $totals = [];
-    /** @var int|null Timestamp of the most recent return (voucher redelivered for re-processing). */
-    $lastReturnTs = null;
     $tracing = $trace !== null;
     if ($tracing) {
         $trace = [
@@ -3767,11 +4173,11 @@ function voucher_tracking_section_durations_from_actions(
         int $endTs,
         string $startReason,
         string $endReason
-    ) use (&$trace, $tracing, &$totals): void {
+    ) use (&$trace, $tracing, &$totals, $pdo): void {
         if ($startTs <= 0 || $endTs <= 0 || $endTs < $startTs) {
             return;
         }
-        $seconds = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
+        $seconds = voucher_tracking_elapsed_work_seconds($startTs, $endTs, $pdo);
         if ($seconds <= 0) {
             return;
         }
@@ -3786,7 +4192,7 @@ function voucher_tracking_section_durations_from_actions(
                 'end_reason' => $endReason,
             ];
         }
-        voucher_tracking_add_section_duration($totals, $section, $startTs, $endTs);
+        voucher_tracking_add_section_duration($totals, $section, $startTs, $endTs, $pdo);
     };
 
     foreach ($actions as $row) {
@@ -3835,6 +4241,7 @@ function voucher_tracking_section_durations_from_actions(
                     $totals,
                     $section,
                     $ts,
+                    $pdo,
                     $trace
                 );
             } else {
@@ -3843,7 +4250,8 @@ function voucher_tracking_section_durations_from_actions(
                     $pendingForward,
                     $totals,
                     $section,
-                    $ts
+                    $ts,
+                    $pdo
                 );
             }
 
@@ -3854,7 +4262,6 @@ function voucher_tracking_section_durations_from_actions(
             } else {
                 $recordTraceEvent($row, $kind, $section, $ts, 'Receive logged (non-dashboard section — not timed)');
             }
-            $lastReturnTs = null;
             continue;
         }
 
@@ -3890,8 +4297,13 @@ function voucher_tracking_section_durations_from_actions(
                 );
             }
             unset($open[$section], $pendingForward[$section]);
-            $lastReturnTs = $ts;
-            $recordTraceEvent($row, $kind, $section, $ts, 'Return logged — section clock stopped; may restart after re-forward');
+            $recordTraceEvent(
+                $row,
+                $kind,
+                $section,
+                $ts,
+                'Return logged — section clock stopped; total processing time paused until the next processor receives it'
+            );
             continue;
         }
 
@@ -3904,31 +4316,19 @@ function voucher_tracking_section_durations_from_actions(
 
         if ($kind === 'forward') {
             if (!isset($open[$section])) {
-                if ($lastReturnTs !== null && $lastReturnTs > 0 && $lastReturnTs <= $ts) {
-                    $open[$section] = $lastReturnTs;
-                    $recordTraceEvent(
-                        $row,
-                        $kind,
-                        $section,
-                        $ts,
-                        'Processing clock started at return time — forward after return without receive log'
-                    );
-                } else {
-                    $recordTraceEvent(
-                        $row,
-                        $kind,
-                        $section,
-                        $ts,
-                        'Excluded — forward without prior receive (e.g. encode-and-forward from process section)'
-                    );
-                }
+                $recordTraceEvent(
+                    $row,
+                    $kind,
+                    $section,
+                    $ts,
+                    'Excluded — forward without prior receive (clock does not restart on return; wait until received)'
+                );
             } else {
                 $recordTraceEvent($row, $kind, $section, $ts, 'Forward logged — pending handoff to next section');
             }
             if ($section !== $cashiersSection && isset($open[$section])) {
                 $pendingForward[$section] = $ts;
             }
-            $lastReturnTs = null;
             continue;
         }
 
@@ -4198,6 +4598,8 @@ function voucher_tracking_voucher_last_processed_ts(array $trackingRow, array $a
  *   label: string,
  *   start_source: string,
  *   end_source: string,
+ *   pause_seconds: int,
+ *   calendar_days: list<array<string, mixed>>,
  *   data_sources: list<string>
  * }
  */
@@ -4213,22 +4615,20 @@ function voucher_tracking_build_total_processing_breakdown(
         $voucherType = voucher_fetch_stored_voucher_type($pdo, $pn);
     }
 
-    $startSection = voucher_tracking_total_processing_start_section($voucherType);
-    $startTs = voucher_tracking_first_receive_at_section($actions, $startSection, $pdo);
-    $startSource = 'voucher_action_logs — earliest "Received by" at ' . voucher_tracking_dashboard_section_label($startSection);
-
-    if ($startTs === null) {
-        $fallback = trim((string) ($trackingRow['datetime_encoded'] ?? ''));
-        $fallbackTs = $fallback !== '' ? strtotime($fallback) : false;
-        if ($fallbackTs !== false) {
-            $startTs = $fallbackTs;
-            $startSource = 'voucher_tracking.datetime_encoded (fallback when no receive log at start section)';
-        }
-    }
+    $resolved = voucher_tracking_resolve_total_processing_start(
+        $actions,
+        $voucherType,
+        (string) ($trackingRow['datetime_encoded'] ?? ''),
+        $pdo
+    );
+    $startSection = $resolved['start_section'];
+    $startTs = $resolved['start_ts'];
+    $startSource = $resolved['start_source'];
 
     $dataSources = [
         'voucher_action_logs (action, action_by, action_from, datetime_action)',
         'voucher_tracking (datetime_encoded, datetime_status, total_processing_time)',
+        'processing_calendar_days (holidays, special orders, half days, custom hours from the dashboard Calendar tab)',
         'user_group (actor designation/section for section mapping)',
     ];
 
@@ -4237,30 +4637,157 @@ function voucher_tracking_build_total_processing_breakdown(
         $endTs = $statusTs !== false ? $statusTs : null;
     }
 
+    $emptyMeasured = [
+        'gross_seconds' => 0,
+        'pause_seconds' => 0,
+        'seconds' => 0,
+        'gross_label' => '0 seconds',
+        'pause_label' => '0 seconds',
+        'label' => '',
+        'pause_intervals' => [],
+    ];
+
     if ($startTs === null || $endTs === null || $endTs < $startTs) {
-        return [
+        return array_merge($emptyMeasured, [
+            'metric' => 'TPT',
             'start_section' => $startSection,
             'start' => '',
             'end' => $endTs !== null ? date('Y-m-d H:i:s', $endTs) : '',
-            'seconds' => 0,
-            'label' => '',
             'start_source' => $startSource,
             'end_source' => 'voucher_tracking.datetime_status (paid/processed)',
+            'calendar_days' => [],
             'data_sources' => $dataSources,
-        ];
+        ]);
     }
 
-    $seconds = voucher_tracking_elapsed_work_seconds($startTs, $endTs);
+    $measured = voucher_tracking_measure_work_window($startTs, $endTs, $actions, $pdo);
+    $calendarDays = voucher_tracking_calendar_days_in_range($startTs, $endTs, $pdo);
+    $appliedCalendar = 0;
+    foreach ($calendarDays as $calendarDay) {
+        if (!empty($calendarDay['applied'])) {
+            $appliedCalendar++;
+        }
+    }
+    $endSource = 'voucher_tracking.datetime_status (paid/processed)';
+    if ($measured['pause_seconds'] > 0) {
+        $endSource .= '; excludes ' . $measured['pause_label']
+            . ' while returned and waiting to be received';
+    }
+    if ($appliedCalendar > 0) {
+        $endSource .= '; applies ' . $appliedCalendar . ' dashboard Calendar day(s) in this window';
+    }
 
-    return [
+    return array_merge($measured, [
+        'metric' => 'TPT',
         'start_section' => $startSection,
         'start' => date('Y-m-d H:i:s', $startTs),
         'end' => date('Y-m-d H:i:s', $endTs),
-        'seconds' => $seconds,
-        'label' => $seconds > 0 ? voucher_tracking_format_turnaround_seconds($seconds) : '',
+        'start_source' => $startSource,
+        'end_source' => $endSource,
+        'calendar_days' => $calendarDays,
+        'data_sources' => $dataSources,
+    ]);
+}
+
+/**
+ * Post-Accounting Processing Time: first Accounting processing receive (not ICU) through paid.
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @param array<string, array<string, mixed>|null> $userCache
+ * @return array<string, mixed>
+ */
+function voucher_tracking_build_papt_breakdown(
+    object $pdo,
+    array $trackingRow,
+    array $actions,
+    ?int $endTs,
+    array &$userCache = []
+): array {
+    $startTs = voucher_tracking_first_accounting_processing_receive_ts($actions, $pdo, $userCache);
+    $startSource = 'voucher_action_logs — earliest "Received by" at Accounting Unit for processing (excludes ICU)';
+    $dataSources = [
+        'voucher_action_logs (Received by Accounting Unit / Processor / Accountant III)',
+        'voucher_tracking.datetime_status (paid/processed)',
+        'processing_calendar_days',
+        'user_group (ICU vs Accounting designations)',
+    ];
+
+    if ($endTs === null || $endTs <= 0) {
+        $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+        $endTs = $statusTs !== false ? $statusTs : null;
+    }
+
+    $emptyMeasured = [
+        'gross_seconds' => 0,
+        'pause_seconds' => 0,
+        'seconds' => 0,
+        'gross_label' => '0 seconds',
+        'pause_label' => '0 seconds',
+        'label' => '',
+        'pause_intervals' => [],
+    ];
+
+    if ($startTs === null || $endTs === null || $endTs < $startTs) {
+        return array_merge($emptyMeasured, [
+            'metric' => 'PAPT',
+            'start_section' => 'Accounting Unit',
+            'start' => '',
+            'end' => $endTs !== null ? date('Y-m-d H:i:s', $endTs) : '',
+            'start_source' => $startSource,
+            'end_source' => 'voucher_tracking.datetime_status (paid/processed)',
+            'calendar_days' => [],
+            'data_sources' => $dataSources,
+        ]);
+    }
+
+    $measured = voucher_tracking_measure_work_window($startTs, $endTs, $actions, $pdo);
+    $calendarDays = voucher_tracking_calendar_days_in_range($startTs, $endTs, $pdo);
+
+    return array_merge($measured, [
+        'metric' => 'PAPT',
+        'start_section' => 'Accounting Unit',
+        'start' => date('Y-m-d H:i:s', $startTs),
+        'end' => date('Y-m-d H:i:s', $endTs),
         'start_source' => $startSource,
         'end_source' => 'voucher_tracking.datetime_status (paid/processed)',
+        'calendar_days' => $calendarDays,
         'data_sources' => $dataSources,
+    ]);
+}
+
+/**
+ * Worked example for the dashboard formula tab (one voucher).
+ *
+ * @param list<array{action?: string, action_from?: string, action_by?: string, datetime_action?: string}> $actions
+ * @return array<string, mixed>
+ */
+function voucher_tracking_build_formula_sample(object $pdo, array $trackingRow, array $actions): array
+{
+    $userCache = [];
+    $trace = [];
+    $statusTs = strtotime((string) ($trackingRow['datetime_status'] ?? ''));
+    $endTs = $statusTs !== false ? $statusTs : null;
+    voucher_tracking_section_durations_from_actions(
+        $actions,
+        $endTs,
+        $pdo,
+        $userCache,
+        trim((string) ($trackingRow['status'] ?? '')),
+        trim((string) ($trackingRow['total_processing_time'] ?? '')),
+        $trace
+    );
+
+    $tpt = voucher_tracking_build_total_processing_breakdown($pdo, $trackingRow, $actions, $endTs);
+    $papt = voucher_tracking_build_papt_breakdown($pdo, $trackingRow, $actions, $endTs, $userCache);
+
+    return [
+        'processing_no' => trim((string) ($trackingRow['processing_no'] ?? '')),
+        'payee' => trim((string) ($trackingRow['payee'] ?? '')),
+        'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
+        'voucher_type' => trim((string) ($trackingRow['voucher_type'] ?? '')),
+        'tpt' => $tpt,
+        'papt' => $papt,
+        'section_trace' => is_array($trace) ? $trace : ['events' => [], 'segments' => []],
     ];
 }
 
@@ -4355,11 +4882,13 @@ function voucher_tracking_dashboard_timing_calculation_rules(): array
     return [
         'Section time starts when a voucher is received by that section (Received by log).',
         'Encoding and forwarding by a process-section user (e.g. Cashiers) before receive does not count.',
-        'After a return, if re-forward happens without a receive log, the clock restarts at the return time.',
+        'After a return, total processing time pauses until the next processor receives the voucher.',
         'Non-cashier sections end when the next section receives the voucher, or at forward if still in transit.',
         'Cashiers Unit ends when the voucher is processed or paid.',
-        'Only Monday through Thursday count toward elapsed time (Fridays, Saturdays, and Sundays are excluded).',
-        'Total processing time runs from first receive at Planning (or CDS for e-NGP) through paid/processed datetime.',
+        'Only Monday through Thursday office hours count (7:00 AM to 6:00 PM, until 7:00 PM max). Fridays, Saturdays, and Sundays are excluded.',
+        'Days on the dashboard Calendar tab (national/local holidays, special orders, half days, custom hours) are excluded or reduced in both section time and total processing time.',
+        'Total processing time (TPT) runs from first receive at Planning (or TSD-ENGP for e-NGP) through paid/processed datetime. Encoding time before the first process-section receive is not counted.',
+        'Post-Accounting Processing Time (PAPT) starts at the first Received by Accounting Unit / Processor / Accountant III for processing. ICU receive is not a PAPT start.',
     ];
 }
 
@@ -4431,7 +4960,9 @@ function voucher_tracking_build_section_timing_report(
         }
 
         $totalProcessingTime = '';
+        $paptLabel = '';
         $isPaid = voucher_tracking_is_paid($pdo, $trackingRow, $archivedProcessingNos);
+        $voucherActions = $logsByPn[$pn] ?? [];
         if ($isPaid) {
             if ($openEndTs !== null && $openEndTs > 0) {
                 $totalSeconds = voucher_tracking_dashboard_total_processing_seconds(
@@ -4440,10 +4971,26 @@ function voucher_tracking_build_section_timing_report(
                     $openEndTs,
                     trim((string) ($trackingRow['voucher_type'] ?? '')),
                     trim((string) ($trackingRow['datetime_encoded'] ?? '')),
-                    $logsByPn[$pn] ?? []
+                    $voucherActions
                 );
                 if ($totalSeconds !== null) {
                     $totalProcessingTime = voucher_tracking_format_turnaround_seconds($totalSeconds);
+                }
+                $paptStartTs = voucher_tracking_first_accounting_processing_receive_ts(
+                    $voucherActions,
+                    $pdo,
+                    $userCache
+                );
+                if ($paptStartTs !== null && $openEndTs >= $paptStartTs) {
+                    $paptMeasured = voucher_tracking_measure_work_window(
+                        $paptStartTs,
+                        $openEndTs,
+                        $voucherActions,
+                        $pdo
+                    );
+                    if ($paptMeasured['seconds'] > 0) {
+                        $paptLabel = $paptMeasured['label'];
+                    }
                 }
             }
             if ($totalProcessingTime === '') {
@@ -4456,6 +5003,7 @@ function voucher_tracking_build_section_timing_report(
             'payee' => trim((string) ($trackingRow['payee'] ?? '')),
             'dv_no' => trim((string) ($trackingRow['dv_no'] ?? '')),
             'total_processing_time' => $totalProcessingTime,
+            'papt' => $paptLabel,
             'sections' => array_intersect_key($durations, $sectionLookup),
             'sections_label' => $labels,
             'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
@@ -4471,8 +5019,17 @@ function voucher_tracking_build_section_timing_report(
                     ? voucher_tracking_build_total_processing_breakdown(
                         $pdo,
                         $trackingRow,
-                        $logsByPn[$pn] ?? [],
+                        $voucherActions,
                         $openEndTs
+                    )
+                    : null,
+                'papt' => $isPaid
+                    ? voucher_tracking_build_papt_breakdown(
+                        $pdo,
+                        $trackingRow,
+                        $voucherActions,
+                        $openEndTs,
+                        $userCache
                     )
                     : null,
             ];
@@ -4532,6 +5089,23 @@ function voucher_tracking_build_section_timing_report(
         'by_voucher_limit' => $recentLimit,
     ];
 
+    $sampleCandidates = $byVoucher;
+    usort(
+        $sampleCandidates,
+        static fn(array $a, array $b): int => strcmp(
+            (string) ($a['processing_no'] ?? ''),
+            (string) ($b['processing_no'] ?? '')
+        )
+    );
+    $samplePn = trim((string) (($sampleCandidates[0]['processing_no'] ?? '')));
+    if ($samplePn !== '' && isset($rowByPn[$samplePn])) {
+        $result['formula_sample'] = voucher_tracking_build_formula_sample(
+            $pdo,
+            $rowByPn[$samplePn],
+            $logsByPn[$samplePn] ?? []
+        );
+    }
+
     if ($includeCalculationBreakdown) {
         $calculationBreakdown = array_map(
             static fn(array $row): array => [
@@ -4539,6 +5113,7 @@ function voucher_tracking_build_section_timing_report(
                 'payee' => $row['payee'] ?? '',
                 'dv_no' => $row['dv_no'] ?? '',
                 'total_processing_time' => $row['total_processing_time'] ?? '',
+                'papt' => $row['papt'] ?? '',
                 'sections_label' => $row['sections_label'] ?? [],
                 'calculation' => $row['calculation'] ?? null,
             ],
@@ -4549,6 +5124,7 @@ function voucher_tracking_build_section_timing_report(
             'data_sources' => [
                 'voucher_action_logs',
                 'voucher_tracking',
+                'processing_calendar_days',
                 'user_group',
             ],
             'vouchers' => $calculationBreakdown,

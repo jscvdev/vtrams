@@ -269,7 +269,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $logged_user_office = voucher_logged_user_office();
-                    if (voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
+                    $tracking_row = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no) ?? [];
+                    $trackingStatus = (string) ($tracking_row['voucher_status'] ?? '');
+                    $trackingHistory = (string) ($tracking_row['process_history'] ?? '');
+                    $loggedForwarderName = trim((string) ($_SESSION['logged_user_emp_name'] ?? ''));
+                    $needsReturnForward = voucher_tracking_is_pending_return_reply($tracking_row);
+                    if ($needsReturnForward) {
+                        $returnTarget = voucher_tracking_return_forward_target(
+                            $pdo,
+                            $trackingStatus,
+                            $trackingHistory,
+                            $loggedForwarderName
+                        );
+                        $resolved = voucher_forward_receiver_for_return_target(
+                            $pdo,
+                            $trackingStatus,
+                            (string) $document_to,
+                            $office_to,
+                            $sender_udc,
+                            $trackingHistory,
+                            $loggedForwarderName
+                        );
+                        $receiver_udc = $resolved['receiver_udc'];
+                        if ($resolved['forwarded_to'] !== '') {
+                            $document_to = $resolved['forwarded_to'];
+                        } elseif (($returnTarget['label'] ?? '') !== '') {
+                            $document_to = (string) $returnTarget['label'];
+                        }
+                        $returnOffice = trim((string) ($returnTarget['office'] ?? ''));
+                        if ($returnOffice !== '') {
+                            $office_to = $returnOffice;
+                        }
+                        if ($resolved['temp_errors']) {
+                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        }
+                    } elseif (voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
                         $document_to = 'ICU';
                         $liaisonResolved = voucher_forward_liaison_icu_receiver($pdo, $logged_user_office);
                         $receiver_udc = $liaisonResolved['receiver_udc'];
@@ -294,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $temp_dump['self_send'] = 'Cannot forward this document to yourself';
                     }
 
-                    if (!voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
+                    if (!$needsReturnForward && !voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
                         require_once __DIR__ . '/../../core/components/helpers/utilities_unit_forward_options_helper.inc.php';
                         if (
                             !utilities_unit_forward_option_is_allowed(
@@ -349,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $x = explode(',', $_SESSION['logged_user_designation']);
 
-                    if (in_array($document_to, $x)) {
+                    if (!$needsReturnForward && in_array($document_to, $x)) {
                         $temp_dump["self_send"] = "Cannot forward this document to yourself";
                     }
 

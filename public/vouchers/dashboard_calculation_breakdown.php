@@ -7,6 +7,7 @@ if (!AccessControl::canAccessCalculationBreakdown()) {
 require_once __DIR__ . '/../../protected/core/components/helpers/audit_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_signatory_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_table_filter_helper.inc.php';
 AuditHelper::logPageView('Calculation Breakdown');
 require_once __DIR__ . '/checklist_config.php';
 utilities_signatory_ensure_schema($pdo);
@@ -23,12 +24,24 @@ if ($scriptName !== '') {
     <header class="voucher-dashboard-header">
         <div class="voucher-dashboard-header__text">
             <h1 class="voucher-dashboard-title">Processing Time Calculation Breakdown</h1>
-            <p class="voucher-dashboard-subtitle">How section and total processing times are derived from action logs and tracking data.</p>
+            <p class="voucher-dashboard-subtitle">Apply the total processing time formula to a voucher’s action log, calendar days, and counted segments.</p>
         </div>
         <div class="voucher-dashboard-header__actions">
             <p id="dashboardRefreshStatus">Loading…</p>
         </div>
     </header>
+
+    <div class="voucher-card">
+        <h2 class="voucher-card-title">
+            <span class="voucher-card-title__label">
+                <i class="ri-functions ri-icon"></i>
+                Total processing time formula
+            </span>
+        </h2>
+        <div class="content-wrapper content-wrapper--padded">
+            <?php require __DIR__ . '/partials/total_processing_formula.php'; ?>
+        </div>
+    </div>
 
     <div class="voucher-card voucher-card--filter">
         <div class="calc-filter-grid">
@@ -54,44 +67,14 @@ if ($scriptName !== '') {
                 </select>
             </div>
 
-            <div class="calc-filter-field">
-                <label>Date (MDY)</label>
-                <div style="display:flex;gap:0.375rem;">
-                    <select id="monthFilter" style="width:5.5rem;">
-                        <option value="all" selected>Month</option>
-                        <option value="01">Jan</option>
-                        <option value="02">Feb</option>
-                        <option value="03">Mar</option>
-                        <option value="04">Apr</option>
-                        <option value="05">May</option>
-                        <option value="06">Jun</option>
-                        <option value="07">Jul</option>
-                        <option value="08">Aug</option>
-                        <option value="09">Sep</option>
-                        <option value="10">Oct</option>
-                        <option value="11">Nov</option>
-                        <option value="12">Dec</option>
-                    </select>
-                    <select id="dayFilter" style="width:4.5rem;">
-                        <option value="all" selected>Day</option>
-                        <?php
-                        for ($i = 1; $i <= 31; $i++) {
-                            $day = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
-                            echo "<option value=\"{$day}\">{$day}</option>";
-                        }
-                        ?>
-                    </select>
-                    <select id="yearDateFilter" style="width:5rem;">
-                        <option value="all" selected>Year</option>
-                        <?php
-                        $currentYear = (int) date('Y');
-                        for ($year = $currentYear; $year >= 2010; $year--) {
-                            echo "<option value=\"{$year}\">{$year}</option>";
-                        }
-                        ?>
-                    </select>
-                </div>
-            </div>
+            <?php voucher_table_filter_render_controls(voucher_table_filter_parse([]), [
+                'year_id' => 'yearDateFilter',
+                'month_id' => 'monthFilter',
+                'day_id' => 'dayFilter',
+                'include_sort' => false,
+                'visible_labels' => true,
+                'field_class' => 'calc-filter-field',
+            ]); ?>
 
             <div class="calc-filter-actions">
                 <button type="button" class="btn primary" id="applyFiltersBtn">Apply filters</button>
@@ -109,19 +92,18 @@ if ($scriptName !== '') {
         </div>
     </div>
 
-    <div class="voucher-card voucher-card--table">
-        <h2 class="voucher-card-title">
-            <span class="voucher-card-title__label">
-                <i class="ri-time-line ri-icon"></i>
-                Calculation breakdown
-            </span>
-        </h2>
-        <div class="content-wrapper content-wrapper--padded">
-            <p class="calc-meta">Data sources: <code>voucher_action_logs</code>, <code>voucher_tracking</code>, and user role mapping (<code>user_group</code>).</p>
-            <ul id="calculationRulesList" class="calc-rules-list"></ul>
-            <div class="calc-detail-block">
-                <h4>Voucher calculation detail</h4>
-                <p class="calc-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Use Search database to look up any voucher across the system (ignores filters above).</p>
+    <div class="calc-workspace">
+        <div class="voucher-card voucher-card--table calc-workspace__list">
+            <h2 class="voucher-card-title">
+                <span class="voucher-card-title__label">
+                    <i class="ri-time-line ri-icon"></i>
+                    Vouchers
+                </span>
+            </h2>
+            <div class="content-wrapper content-wrapper--padded">
+                <p class="calc-meta">Sources: <code>voucher_action_logs</code>, <code>voucher_tracking</code>, Calendar, <code>user_group</code>.</p>
+                <ol id="calculationRulesList" class="calc-rules-list"></ol>
+                <p class="calc-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Search looks up any voucher system-wide.</p>
                 <div class="section-table-scroll">
                     <table id="calculationBreakdownTable">
                         <thead>
@@ -129,33 +111,63 @@ if ($scriptName !== '') {
                                 <th>Processing No.</th>
                                 <th>Payee</th>
                                 <th>DV No.</th>
-                                <th style="text-align:right;">Total</th>
-                                <th>Detail</th>
+                                <th style="text-align:right;" title="Total Processing Time">TPT<br><span style="font-size:10px;font-weight:600;text-transform:none;color:#64748b;">Total Processing Time</span></th>
+                                <th style="text-align:right;" title="Post-Accounting Processing Time">PAPT<br><span style="font-size:10px;font-weight:600;text-transform:none;color:#64748b;">Post-Accounting Processing Time</span></th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
-            <div class="calc-detail-block" id="calculationDetailPanel" style="display:none;">
-                <h4 id="calculationDetailTitle">Action log trace</h4>
-                <p class="calc-meta" id="calculationTotalMeta"></p>
-                <div class="section-table-scroll">
-                    <table id="calculationEventsTable">
-                        <thead>
-                            <tr>
-                                <th>Date/Time</th>
-                                <th>Action</th>
-                                <th>Section</th>
-                                <th>Included?</th>
-                                <th>Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+        </div>
+
+        <div class="voucher-card voucher-card--table calc-workspace__detail" id="calculationDetailPanel" style="display:none;">
+            <h2 class="voucher-card-title">
+                <span class="voucher-card-title__label">
+                    <i class="ri-flow-chart ri-icon"></i>
+                    <span id="calculationDetailTitle">Applied formula</span>
+                </span>
+            </h2>
+            <div class="content-wrapper content-wrapper--padded">
+                <p class="calc-formula-result" id="calculationTotalMeta"></p>
+                <p class="calc-formula-result" id="calculationPaptMeta"></p>
+                <div class="calc-detail-block" style="margin-top:0;padding-top:0;border-top:0;">
+                    <h4>Action log</h4>
+                    <div class="section-table-scroll">
+                        <table id="calculationEventsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date/Time</th>
+                                    <th>Action</th>
+                                    <th>Section</th>
+                                    <th>In TPT?</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="calc-detail-block">
-                    <h4>Counted time segments</h4>
+                    <h4>Calendar days in W(Start, End)</h4>
+                    <div class="section-table-scroll">
+                        <table id="calculationCalendarTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Title</th>
+                                    <th>Type</th>
+                                    <th>Work hours</th>
+                                    <th>Effect</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="calc-detail-block">
+                    <h4>Section segments (not the TPT sum)</h4>
                     <div class="section-table-scroll">
                         <table id="calculationSegmentsTable">
                             <thead>
@@ -178,6 +190,7 @@ if ($scriptName !== '') {
 </div>
 
     <script src="../../protected/js/main.js"></script>
+    <script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const FETCH_VOUCHER_DATA = <?= json_encode($fetch_voucher_data_url, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
@@ -191,10 +204,18 @@ if ($scriptName !== '') {
             const applyBtn = document.getElementById('applyFiltersBtn');
             const refreshStatusEl = document.getElementById('dashboardRefreshStatus');
             const listMetaEl = document.getElementById('calculationListMeta');
-            const REFRESH_INTERVAL_MS = 15000;
+            const REFRESH_INTERVAL_MS = 60000;
             let refreshTimer = null;
             let fetchInFlight = false;
             let selectedCalculationPn = null;
+
+            if (typeof bindVoucherTableSequentialFilters === 'function') {
+                bindVoucherTableSequentialFilters({
+                    yearId: 'yearDateFilter',
+                    monthId: 'monthFilter',
+                    dayId: 'dayFilter'
+                });
+            }
 
             function escapeHtml(value) {
                 return String(value ?? '')
@@ -204,10 +225,29 @@ if ($scriptName !== '') {
                     .replace(/"/g, '&quot;');
             }
 
+            function metricSummaryText(prefix, metric, unpaidFallback) {
+                if (!metric || !metric.label) {
+                    return unpaidFallback;
+                }
+                let text = prefix + ': ' + metric.label
+                    + ' (' + (metric.start || '—') + ' → ' + (metric.end || '—')
+                    + '). Start: ' + (metric.start_source || '—') + '.';
+                if (Number(metric.pause_seconds || 0) > 0) {
+                    text += ' Clock pauses while returned and waiting to be received.';
+                }
+                const calendarDays = Array.isArray(metric.calendar_days) ? metric.calendar_days : [];
+                const appliedCalendar = calendarDays.filter(day => day && day.applied).length;
+                if (appliedCalendar > 0) {
+                    text += ' Includes ' + appliedCalendar + ' Calendar tab day(s) in this window.';
+                }
+                return text;
+            }
+
             function renderCalculationDetail(voucherRow) {
                 const detailPanel = document.getElementById('calculationDetailPanel');
                 const detailTitle = document.getElementById('calculationDetailTitle');
                 const totalMeta = document.getElementById('calculationTotalMeta');
+                const paptMeta = document.getElementById('calculationPaptMeta');
                 const eventsBody = document.querySelector('#calculationEventsTable tbody');
                 const segmentsBody = document.querySelector('#calculationSegmentsTable tbody');
 
@@ -217,14 +257,24 @@ if ($scriptName !== '') {
 
                 selectedCalculationPn = voucherRow.processing_no || null;
                 detailPanel.style.display = 'block';
-                detailTitle.textContent = `Action log trace — ${voucherRow.processing_no || '-'}`;
+                detailTitle.textContent = voucherRow.processing_no || 'Applied formula';
 
                 const calc = voucherRow.calculation || {};
                 const total = calc.total || null;
-                if (total && total.label) {
-                    totalMeta.textContent = `Total processing: ${total.label} (${total.start || '—'} → ${total.end || '—'}). Start: ${total.start_source || '—'}. End: ${total.end_source || '—'}.`;
-                } else {
-                    totalMeta.textContent = 'Total processing time is shown for paid vouchers only.';
+                const papt = calc.papt || null;
+                if (totalMeta) {
+                    totalMeta.textContent = metricSummaryText(
+                        'TPT',
+                        total,
+                        'TPT is shown for paid vouchers only.'
+                    );
+                }
+                if (paptMeta) {
+                    paptMeta.textContent = metricSummaryText(
+                        'PAPT',
+                        papt && papt.start ? papt : null,
+                        'PAPT is shown for paid vouchers after Accounting processing receive (not ICU).'
+                    );
                 }
 
                 const trace = calc.section_trace || { events: [], segments: [] };
@@ -246,6 +296,25 @@ if ($scriptName !== '') {
                             <td>${escapeHtml(note || '—')}</td>`;
                         eventsBody.appendChild(tr);
                     });
+                }
+
+                const calendarBody = document.querySelector('#calculationCalendarTable tbody');
+                const calendarDays = Array.isArray(total && total.calendar_days) ? total.calendar_days : [];
+                if (calendarBody) {
+                    calendarBody.innerHTML = '';
+                    if (calendarDays.length === 0) {
+                        calendarBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No dashboard Calendar days fall in this voucher\'s processing window.</td></tr>';
+                    } else {
+                        calendarDays.forEach(day => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `<td>${escapeHtml(day.date || '—')}</td>
+                                <td>${escapeHtml(day.title || '—')}</td>
+                                <td>${escapeHtml(day.type_label || day.event_type || '—')}</td>
+                                <td>${escapeHtml(day.work_label || '—')}</td>
+                                <td>${escapeHtml(day.note || '—')}</td>`;
+                            calendarBody.appendChild(tr);
+                        });
+                    }
                 }
 
                 const segments = Array.isArray(trace.segments) ? trace.segments : [];
@@ -302,7 +371,7 @@ if ($scriptName !== '') {
                 tbody.innerHTML = '';
 
                 if (vouchers.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No calculation breakdown data for the current filters.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No calculation breakdown data for the current filters.</td></tr>';
                     const detailPanel = document.getElementById('calculationDetailPanel');
                     if (detailPanel) {
                         detailPanel.style.display = 'none';
@@ -320,6 +389,7 @@ if ($scriptName !== '') {
                         <td>${escapeHtml(row.payee || '—')}</td>
                         <td>${escapeHtml(row.dv_no || '—')}</td>
                         <td style="text-align:right;">${escapeHtml((row.total_processing_time || '').trim() || '—')}</td>
+                        <td style="text-align:right;">${escapeHtml((row.papt || '').trim() || '—')}</td>
                         <td><button type="button" class="calculation-trace-btn">View trace</button></td>`;
                     tr.querySelector('button')?.addEventListener('click', () => renderCalculationDetail(row));
                     tbody.appendChild(tr);
@@ -362,7 +432,7 @@ if ($scriptName !== '') {
                 }
                 if (data && (data.section_timing || Array.isArray(data.rows) || data.ok)) {
                     updateCalculationBreakdown(data.section_timing || null);
-                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 15s');
+                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 1 min');
                     return;
                 }
                 if (data && typeof data.error === 'string') {

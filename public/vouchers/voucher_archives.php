@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../protected/core/components/security/filter_input.i
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/schema_cache_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_table_filter_helper.inc.php';
 AuditHelper::logPageView('Voucher Archives');
 include('../../protected/handler/archiving_module/archiving_errhandler.inc.php');
 require_once __DIR__ . '/checklist_config.php';
@@ -19,8 +20,11 @@ $voucher_type_filter = isset($_GET['voucher_type']) && $_GET['voucher_type'] !==
 $rawQ = (string) ($_GET['q'] ?? '');
 $q = filterInput($rawQ);
 $invalidSearch = (trim($rawQ) !== '' && $q === '');
+$tableFilter = voucher_table_filter_parse();
+[$tableDateSql, $tableDateParams] = voucher_table_filter_date_sql('datetime_action', $tableFilter, 'varch');
+$tableOrderSql = voucher_table_filter_order_sql('datetime_action', 'processing_no', $tableFilter);
 
-function build_archives_page_url(int $page, string $voucherType, string $rawSearch = '', int $rowsPerPage = 50): string
+function build_archives_page_url(int $page, string $voucherType, string $rawSearch = '', int $rowsPerPage = 50, array $tableFilter = []): string
 {
     $params = ['page' => $page, 'rowsPerPage' => $rowsPerPage];
     if ($voucherType !== 'all') {
@@ -28,6 +32,18 @@ function build_archives_page_url(int $page, string $voucherType, string $rawSear
     }
     if ($rawSearch !== '') {
         $params['q'] = $rawSearch;
+    }
+    if (!empty($tableFilter['year'])) {
+        $params['year'] = (int) $tableFilter['year'];
+        if (!empty($tableFilter['month'])) {
+            $params['month'] = $tableFilter['month_value'];
+            if (!empty($tableFilter['day'])) {
+                $params['day'] = $tableFilter['day_value'];
+            }
+        }
+    }
+    if (($tableFilter['sort'] ?? 'asc') === 'desc') {
+        $params['sort'] = 'desc';
     }
 
     return '?' . http_build_query($params);
@@ -91,7 +107,7 @@ if ($invalidSearch) {
     if ($voucher_type_filter !== 'all') {
         $archives_voucher_data_queryCount .= ' AND voucher_type = :voucher_type';
     }
-    $archives_voucher_data_queryCount .= $searchSql;
+    $archives_voucher_data_queryCount .= $searchSql . $tableDateSql;
     $archives_voucher_data_statementCount = $pdo->prepare($archives_voucher_data_queryCount);
     $archives_voucher_data_statementCount->bindParam(':office_to', $_SESSION['logged_user_office']);
     if ($voucher_type_filter !== 'all') {
@@ -99,6 +115,9 @@ if ($invalidSearch) {
     }
     foreach ($searchParams as $key => $pair) {
         $archives_voucher_data_statementCount->bindValue($key, $pair[0], $pair[1]);
+    }
+    foreach ($tableDateParams as $key => $value) {
+        $archives_voucher_data_statementCount->bindValue($key, $value, PDO::PARAM_INT);
     }
     $archives_voucher_data_statementCount->execute();
     $dbCount = (int) $archives_voucher_data_statementCount->fetch(PDO::FETCH_ASSOC)['total'];
@@ -116,7 +135,7 @@ $fetch_voucher_archives_data_query = 'SELECT * FROM voucher_archives WHERE offic
 if ($voucher_type_filter !== 'all') {
     $fetch_voucher_archives_data_query .= ' AND voucher_type = :voucher_type';
 }
-$fetch_voucher_archives_data_query .= $searchSql . ' ORDER BY datetime_action DESC LIMIT :lim OFFSET :off';
+$fetch_voucher_archives_data_query .= $searchSql . $tableDateSql . ' ORDER BY ' . $tableOrderSql . ' LIMIT :lim OFFSET :off';
 $fetch_voucher_archives_data = $pdo->prepare($fetch_voucher_archives_data_query);
 $fetch_voucher_archives_data->bindParam(':office_to', $_SESSION['logged_user_office']);
 if ($voucher_type_filter !== 'all') {
@@ -124,6 +143,9 @@ if ($voucher_type_filter !== 'all') {
 }
 foreach ($searchParams as $key => $pair) {
     $fetch_voucher_archives_data->bindValue($key, $pair[0], $pair[1]);
+}
+foreach ($tableDateParams as $key => $value) {
+    $fetch_voucher_archives_data->bindValue($key, $value, PDO::PARAM_INT);
 }
 $fetch_voucher_archives_data->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_archives_data->bindValue(':off', $offset, PDO::PARAM_INT);
@@ -477,8 +499,9 @@ $c2 = 0;
                             </div>
                         </label>
                     </div>
+                    <?php voucher_table_filter_render_controls($tableFilter); ?>
                     <div class="filter-search">
-                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="search" autocomplete="off">
+                        <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
                 </form>
             </div>
@@ -839,7 +862,7 @@ $c2 = 0;
                             <div class="pagination_pages pagination_pages--modern"></div>
                             <button class="pagination_btn_modern" type="button" disabled>Next</button>
                         <?php elseif ($currentPage > 1): ?>
-                            <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_archives_page_url($currentPage - 1, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8'); ?>">Previous</a>
+                            <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_archives_page_url($currentPage - 1, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8'); ?>">Previous</a>
                         <?php else: ?>
                             <button class="pagination_btn_modern" type="button" disabled>Previous</button>
                         <?php endif; ?>
@@ -857,27 +880,27 @@ $c2 = 0;
                                 if ($totalPages <= 7) {
                                     for ($i = 1; $i <= $totalPages; $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_archives_page_url($i, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_archives_page_url($i, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
                                     }
                                 } else {
-                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_archives_page_url(1, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8') . '">1</a>';
+                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_archives_page_url(1, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8') . '">1</a>';
                                     if ($startPage > 2) {
                                         echo '<span class="pagination_ellipsis">...</span>';
                                     }
                                     for ($i = max(2, $startPage); $i <= min($totalPages - 1, $endPage); $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_archives_page_url($i, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_archives_page_url($i, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
                                     }
                                     if ($endPage < $totalPages - 1) {
                                         echo '<span class="pagination_ellipsis">...</span>';
                                     }
-                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_archives_page_url($totalPages, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8') . '">' . $totalPages . '</a>';
+                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_archives_page_url($totalPages, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8') . '">' . $totalPages . '</a>';
                                 }
                                 ?>
                             </div>
 
                             <?php if ($currentPage < $totalPages): ?>
-                                <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_archives_page_url($currentPage + 1, $voucher_type_filter, $rawQ, $rowsPerPage), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
+                                <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_archives_page_url($currentPage + 1, $voucher_type_filter, $rawQ, $rowsPerPage, $tableFilter), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Next</button>
                             <?php endif; ?>
@@ -1052,6 +1075,7 @@ $c2 = 0;
     })();
 </script>
 
+<script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
     (function() {
         var typeFilter = document.getElementById('filterInputType');
@@ -1103,6 +1127,18 @@ $c2 = 0;
             });
         }
 
+        if (typeof bindVoucherTableSequentialFilters === 'function') {
+            bindVoucherTableSequentialFilters({
+                onChange: function() {
+                    if (form) {
+                        form.querySelectorAll('select[disabled]').forEach(function(el) {
+                            el.disabled = false;
+                        });
+                        form.submit();
+                    }
+                }
+            });
+        }
         var inp = document.getElementById('filterInput');
         if (!inp) return;
         var initial = String(inp.value || '');
