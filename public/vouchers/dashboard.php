@@ -23,6 +23,7 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
     $yearDate = isset($_GET['yearDate']) && $_GET['yearDate'] !== 'all' ? (int) $_GET['yearDate'] : null;
     $search = trim((string) ($_GET['search'] ?? ''));
     $calculationMode = isset($_GET['calculation']) && (string) $_GET['calculation'] === '1';
+    $calculationDetailPn = $calculationMode ? trim((string) ($_GET['processing_no'] ?? '')) : '';
 
     if ($calculationMode && !AccessControl::canAccessCalculationBreakdown()) {
         header('Content-Type: application/json; charset=UTF-8');
@@ -36,15 +37,19 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         $searchActive = $search !== '';
         $selectColumns = voucher_tracking_dashboard_fetch_columns_sql();
 
-        if ($calculationMode && $searchActive) {
-            // Full-database search for calculation breakdown (ignores type/office/date filters).
-            $query = 'SELECT ' . $selectColumns . ' FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+        $calculationOrderSql = ' ORDER BY COALESCE(NULLIF(vt.datetime_status, \'\'), vt.voucher_date, vt.datetime_encoded) DESC';
+        $query = 'SELECT ' . $selectColumns . ' FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
+
+        if ($calculationMode && $calculationDetailPn !== '') {
+            $query .= ' AND vt.processing_no = :processing_no';
+            $params[':processing_no'] = $calculationDetailPn;
+            $query .= ' LIMIT 1';
+        } elseif ($calculationMode && $searchActive) {
             $query .= voucher_tracking_dashboard_search_sql('vt');
             voucher_tracking_dashboard_bind_search_params($params, $search);
-            $query .= ' ORDER BY COALESCE(NULLIF(vt.datetime_status, \'\'), vt.voucher_date, vt.datetime_encoded) DESC';
+            $query .= $calculationOrderSql;
+            $query .= ' LIMIT ' . voucher_tracking_dashboard_calculation_search_limit();
         } else {
-            $query = 'SELECT ' . $selectColumns . ' FROM voucher_tracking vt WHERE 1=1' . voucher_tracking_counts_include_sql('vt');
-
             if ($voucher_type !== null && $voucher_type !== '') {
                 $query .= ' AND vt.voucher_type = :voucher_type';
                 $params[':voucher_type'] = $voucher_type;
@@ -72,7 +77,12 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
                 $params[':yearDate'] = $yearDate;
             }
 
-            $query .= ' ORDER BY vt.voucher_date DESC';
+            if ($calculationMode) {
+                $query .= $calculationOrderSql;
+                $query .= ' LIMIT ' . voucher_tracking_dashboard_calculation_recent_limit();
+            } else {
+                $query .= ' ORDER BY vt.voucher_date DESC';
+            }
         }
 
         $stmt = $pdo->prepare($query);
@@ -84,16 +94,20 @@ if (isset($_GET['fetch']) && $_GET['fetch'] === 'voucher_tracking') {
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $breakdownLimit = null;
         if ($calculationMode) {
-            $breakdownLimit = $searchActive
-                ? min(count($rows), voucher_tracking_dashboard_calculation_search_limit())
-                : voucher_tracking_dashboard_calculation_recent_limit();
+            $breakdownLimit = $calculationDetailPn !== ''
+                ? 1
+                : ($searchActive
+                    ? voucher_tracking_dashboard_calculation_search_limit()
+                    : voucher_tracking_dashboard_calculation_recent_limit());
         }
         $sectionTiming = voucher_tracking_build_section_timing_report(
             $pdo,
             $rows,
             voucher_tracking_dashboard_breakdown_sections(),
             $breakdownLimit,
-            $calculationMode
+            $calculationMode,
+            !$calculationMode && AccessControl::hasRole('System Admin'),
+            $calculationMode && $calculationDetailPn !== ''
         );
 
         $payload = [
@@ -148,6 +162,7 @@ if ($scriptName !== '') {
     $processing_calendar_api_url = rtrim(dirname($scriptName), '/') . '/../../protected/handler/processing_calendar_module/processing_calendar_handler.php';
 }
 $can_edit_processing_calendar = AccessControl::hasRole('System Admin');
+$can_view_tpt_formula = AccessControl::hasRole('System Admin');
 $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_token() : (string) ($_SESSION['token'] ?? '');
 ?>
 <style>
@@ -1021,7 +1036,9 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
             <nav class="analytics-tabs" aria-label="Dashboard views">
                 <button type="button" class="analytics-tab-btn dashboard-tab-btn is-active" data-dashboard-tab="analytics">Analytics</button>
                 <button type="button" class="analytics-tab-btn dashboard-tab-btn" data-dashboard-tab="processing">Processing Times</button>
-                <button type="button" class="analytics-tab-btn dashboard-tab-btn" data-dashboard-tab="formula">TPT Formula</button>
+                <?php if ($can_view_tpt_formula): ?>
+                    <button type="button" class="analytics-tab-btn dashboard-tab-btn" data-dashboard-tab="formula">TPT Formula</button>
+                <?php endif; ?>
                 <button type="button" class="analytics-tab-btn dashboard-tab-btn" data-dashboard-tab="calendar">Calendar</button>
             </nav>
         </div>
@@ -1096,6 +1113,7 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
         </section>
     </div>
 
+    <?php if ($can_view_tpt_formula): ?>
     <div class="analytics-tab-panel dashboard-tab-panel" id="dashboardTabFormula">
         <section class="analytics-grid analytics-grid--full">
             <article class="analytics-card">
@@ -1110,6 +1128,7 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
             </article>
         </section>
     </div>
+    <?php endif; ?>
 
     <div class="analytics-tab-panel dashboard-tab-panel" id="dashboardTabCalendar">
         <section class="analytics-grid analytics-grid--full">
@@ -1282,7 +1301,11 @@ $processing_calendar_csrf = function_exists('vtrams_csrf_token') ? vtrams_csrf_t
                 formula: document.getElementById('dashboardTabFormula'),
                 calendar: document.getElementById('dashboardTabCalendar'),
             };
-            const staticDashboardTabs = { calendar: true, formula: true };
+            const canViewTptFormula = <?= $can_view_tpt_formula ? 'true' : 'false' ?>;
+            const staticDashboardTabs = { calendar: true };
+            if (canViewTptFormula) {
+                staticDashboardTabs.formula = true;
+            }
             const analyticsFilterBar = document.getElementById('analyticsFilterBar');
             let activeDashboardTab = 'analytics';
 

@@ -103,7 +103,7 @@ if ($scriptName !== '') {
             <div class="content-wrapper content-wrapper--padded">
                 <p class="calc-meta">Sources: <code>voucher_action_logs</code>, <code>voucher_tracking</code>, Calendar, <code>user_group</code>.</p>
                 <ol id="calculationRulesList" class="calc-rules-list"></ol>
-                <p class="calc-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Search looks up any voucher system-wide.</p>
+                <p class="calc-meta" id="calculationListMeta">Latest 10 vouchers for the current filters. Search looks up any voucher system-wide (up to 25 matches). Open a row to load its trace.</p>
                 <div class="section-table-scroll">
                     <table id="calculationBreakdownTable">
                         <thead>
@@ -204,10 +204,10 @@ if ($scriptName !== '') {
             const applyBtn = document.getElementById('applyFiltersBtn');
             const refreshStatusEl = document.getElementById('dashboardRefreshStatus');
             const listMetaEl = document.getElementById('calculationListMeta');
-            const REFRESH_INTERVAL_MS = 60000;
-            let refreshTimer = null;
-            let fetchInFlight = false;
+            let listFetchInFlight = false;
             let selectedCalculationPn = null;
+            let detailRequestPn = '';
+            const traceCache = Object.create(null);
 
             if (typeof bindVoucherTableSequentialFilters === 'function') {
                 bindVoucherTableSequentialFilters({
@@ -260,6 +260,21 @@ if ($scriptName !== '') {
                 detailTitle.textContent = voucherRow.processing_no || 'Applied formula';
 
                 const calc = voucherRow.calculation || {};
+                if (calc.loading) {
+                    if (totalMeta) {
+                        totalMeta.textContent = 'Loading action-log trace…';
+                    }
+                    if (paptMeta) {
+                        paptMeta.textContent = '';
+                    }
+                    eventsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Loading…</td></tr>';
+                    const calendarBodyLoading = document.querySelector('#calculationCalendarTable tbody');
+                    if (calendarBodyLoading) {
+                        calendarBodyLoading.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Loading…</td></tr>';
+                    }
+                    segmentsBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Loading…</td></tr>';
+                    return;
+                }
                 const total = calc.total || null;
                 const papt = calc.papt || null;
                 if (totalMeta) {
@@ -391,15 +406,13 @@ if ($scriptName !== '') {
                         <td style="text-align:right;">${escapeHtml((row.total_processing_time || '').trim() || '—')}</td>
                         <td style="text-align:right;">${escapeHtml((row.papt || '').trim() || '—')}</td>
                         <td><button type="button" class="calculation-trace-btn">View trace</button></td>`;
-                    tr.querySelector('button')?.addEventListener('click', () => renderCalculationDetail(row));
+                    tr.querySelector('button')?.addEventListener('click', () => openCalculationDetail(row));
                     tbody.appendChild(tr);
                 });
 
                 const selectedRow = vouchers.find(row => row.processing_no === selectedCalculationPn);
                 if (selectedRow) {
-                    renderCalculationDetail(selectedRow);
-                } else if (vouchers.length > 0 && !selectedCalculationPn) {
-                    renderCalculationDetail(vouchers[0]);
+                    openCalculationDetail(selectedRow);
                 }
             }
 
@@ -427,20 +440,20 @@ if ($scriptName !== '') {
                 if (Array.isArray(data) || data === null) {
                     console.error('Calculation breakdown fetch failed or returned invalid payload', data);
                     updateCalculationBreakdown(null);
-                    setRefreshStatus('Update failed · retrying…');
+                    setRefreshStatus('Update failed');
                     return;
                 }
                 if (data && (data.section_timing || Array.isArray(data.rows) || data.ok)) {
                     updateCalculationBreakdown(data.section_timing || null);
-                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · auto-refresh every 1 min');
+                    setRefreshStatus('Updated ' + new Date().toLocaleTimeString() + ' · traces load when you view a voucher');
                     return;
                 }
                 if (data && typeof data.error === 'string') {
                     console.error('Voucher data API error:', data.detail || data.error);
-                    setRefreshStatus('Update failed · retrying…');
+                    setRefreshStatus('Update failed');
                 } else {
                     console.error('Invalid data format received:', data);
-                    setRefreshStatus('Update failed · retrying…');
+                    setRefreshStatus('Update failed');
                 }
                 updateCalculationBreakdown(null);
             }
@@ -461,10 +474,11 @@ if ($scriptName !== '') {
             }
 
             function fetchFilteredData() {
-                if (fetchInFlight) {
+                if (listFetchInFlight) {
                     return;
                 }
-                fetchInFlight = true;
+                listFetchInFlight = true;
+                setRefreshStatus('Loading voucher list…');
                 fetch(buildFetchUrl(), { credentials: 'same-origin', cache: 'no-store' })
                     .then(res => parseFetchResponse(res))
                     .then(data => applyVoucherData(data))
@@ -473,35 +487,66 @@ if ($scriptName !== '') {
                         applyVoucherData(null);
                     })
                     .finally(() => {
-                        fetchInFlight = false;
+                        listFetchInFlight = false;
                     });
             }
 
-            function startAutoRefresh() {
-                if (refreshTimer) {
-                    clearInterval(refreshTimer);
-                }
-                refreshTimer = setInterval(fetchFilteredData, REFRESH_INTERVAL_MS);
-            }
-
-            function stopAutoRefresh() {
-                if (refreshTimer) {
-                    clearInterval(refreshTimer);
-                    refreshTimer = null;
-                }
-            }
-
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    stopAutoRefresh();
+            function openCalculationDetail(row) {
+                const pn = String(row?.processing_no || '').trim();
+                if (pn === '') {
                     return;
                 }
-                fetchFilteredData();
-                startAutoRefresh();
-            });
+                selectedCalculationPn = pn;
+                document.querySelectorAll('#calculationBreakdownTable tbody tr').forEach(tr => {
+                    const cell = tr.querySelector('td');
+                    tr.style.backgroundColor = (cell && cell.textContent === pn) ? '#f1f5ff' : '';
+                });
+                const cached = traceCache[pn];
+                if (cached) {
+                    renderCalculationDetail(cached);
+                    return;
+                }
+                if (row.calculation && row.calculation.section_trace) {
+                    traceCache[pn] = row;
+                    renderCalculationDetail(row);
+                    return;
+                }
+                renderCalculationDetail({ processing_no: pn, calculation: { loading: true } });
+                detailRequestPn = pn;
+                const params = new URLSearchParams({
+                    processing_no: pn,
+                    _: String(Date.now())
+                });
+                const joiner = FETCH_VOUCHER_DATA.includes('?') ? '&' : '?';
+                fetch(FETCH_VOUCHER_DATA + joiner + params.toString(), { credentials: 'same-origin', cache: 'no-store' })
+                    .then(res => parseFetchResponse(res))
+                    .then(data => {
+                        const vouchers = data?.section_timing?.calculation_breakdown?.vouchers;
+                        const detail = Array.isArray(vouchers) ? vouchers.find(item => item.processing_no === pn) : null;
+                        if (!detail) {
+                            throw new Error('Trace not found');
+                        }
+                        traceCache[pn] = detail;
+                        if (detailRequestPn === pn) {
+                            renderCalculationDetail(detail);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error fetching calculation trace:', err);
+                        if (detailRequestPn === pn) {
+                            renderCalculationDetail({
+                                processing_no: pn,
+                                calculation: { section_trace: { events: [], segments: [] } }
+                            });
+                            const totalMeta = document.getElementById('calculationTotalMeta');
+                            if (totalMeta) {
+                                totalMeta.textContent = 'Unable to load this voucher’s trace. Try again.';
+                            }
+                        }
+                    });
+            }
 
             fetchFilteredData();
-            startAutoRefresh();
             applyBtn.addEventListener('click', () => {
                 if (searchInput) {
                     searchInput.value = '';
@@ -523,9 +568,6 @@ if ($scriptName !== '') {
                 searchInput.addEventListener('keydown', (event) => {
                     if (event.key === 'Enter') {
                         event.preventDefault();
-                        if (searchDebounceTimer) {
-                            clearTimeout(searchDebounceTimer);
-                        }
                         runDatabaseSearch();
                     }
                 });

@@ -169,7 +169,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
         </div>
     </div>
 
-    <div class="voucher-card status-report-stats-card no-print" style="margin-bottom: 16px;">
+    <div class="voucher-card status-report-stats-card no-print">
         <div class="status-report-stats">
             <div class="status-report-stat">
                 <span class="status-report-stat__label">Total tracked</span>
@@ -264,6 +264,43 @@ $statusReportRowMetaLabel = $isDefaultPreview
             </div>
         </div>
         <style>
+            .main.main--voucher-dashboard {
+                height: calc(100dvh - 4rem);
+                max-height: calc(100dvh - 4rem);
+                overflow: hidden;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                gap: 0.85rem;
+            }
+
+            .main--voucher-dashboard > .voucher-dashboard-header,
+            .main--voucher-dashboard > .status-report-stats-card,
+            .main--voucher-dashboard > .status-report-filter-bar {
+                flex-shrink: 0;
+            }
+
+            .status-report-table-card {
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .status-report-table-head,
+            .status-report-select-bar,
+            .status-report-pager {
+                flex-shrink: 0;
+            }
+
+            .main--voucher-dashboard .status-report-table-card .status-report-table-wrap {
+                flex: 1 1 auto;
+                min-height: 0;
+                height: auto;
+                overflow: auto;
+                max-height: none;
+            }
+
             .status-report-stats {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -311,7 +348,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 padding: 16px 20px;
                 border-radius: 8px;
                 box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-                margin-bottom: 20px;
+                margin-bottom: 0;
                 color: rgb(75 85 99 / 0.9);
             }
 
@@ -694,7 +731,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
 
             .status-report-table-wrap {
                 overflow: auto;
-                max-height: 70vh;
+                max-height: none;
             }
 
             @media (max-width: 840px) {

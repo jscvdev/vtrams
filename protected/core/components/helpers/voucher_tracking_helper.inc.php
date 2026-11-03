@@ -3547,7 +3547,7 @@ function voucher_tracking_dashboard_calculation_recent_limit(): int
 /** Max vouchers returned from a full-database calculation breakdown search. */
 function voucher_tracking_dashboard_calculation_search_limit(): int
 {
-    return 500;
+    return 25;
 }
 
 /**
@@ -4907,7 +4907,9 @@ function voucher_tracking_build_section_timing_report(
     array $voucherRows,
     ?array $breakdownSections = null,
     ?int $recentVoucherLimit = null,
-    bool $includeCalculationBreakdown = false
+    bool $includeCalculationBreakdown = false,
+    bool $includeFormulaSample = false,
+    bool $includeCalculationTraces = false
 ): array {
     $processingNos = [];
     $rowByPn = [];
@@ -4938,16 +4940,19 @@ function voucher_tracking_build_section_timing_report(
             $openEndTs = $statusTs;
         }
 
-        $calculationTrace = $includeCalculationBreakdown ? [] : null;
-        $durations = voucher_tracking_section_durations_from_actions(
-            $logsByPn[$pn] ?? [],
-            $openEndTs,
-            $pdo,
-            $userCache,
-            trim((string) ($trackingRow['status'] ?? '')),
-            trim((string) ($trackingRow['total_processing_time'] ?? '')),
-            $calculationTrace
-        );
+        $calculationTrace = $includeCalculationTraces ? [] : null;
+        $durations = [];
+        if (!$includeCalculationBreakdown || $includeCalculationTraces) {
+            $durations = voucher_tracking_section_durations_from_actions(
+                $logsByPn[$pn] ?? [],
+                $openEndTs,
+                $pdo,
+                $userCache,
+                trim((string) ($trackingRow['status'] ?? '')),
+                trim((string) ($trackingRow['total_processing_time'] ?? '')),
+                $calculationTrace
+            );
+        }
         $labels = [];
         foreach ($durations as $section => $seconds) {
             if ($seconds <= 0 || !isset($sectionLookup[$section])) {
@@ -5006,13 +5011,10 @@ function voucher_tracking_build_section_timing_report(
             'papt' => $paptLabel,
             'sections' => array_intersect_key($durations, $sectionLookup),
             'sections_label' => $labels,
-            'last_processed_ts' => voucher_tracking_voucher_last_processed_ts(
-                $trackingRow,
-                $logsByPn[$pn] ?? [],
-                $pdo
-            ),
+            'last_processed_ts' => $openEndTs
+                ?? (strtotime((string) ($trackingRow['datetime_encoded'] ?? '')) ?: 0),
         ];
-        if ($includeCalculationBreakdown) {
+        if ($includeCalculationTraces) {
             $voucherEntry['calculation'] = [
                 'section_trace' => is_array($calculationTrace) ? $calculationTrace : ['events' => [], 'segments' => []],
                 'total' => $isPaid
@@ -5089,21 +5091,23 @@ function voucher_tracking_build_section_timing_report(
         'by_voucher_limit' => $recentLimit,
     ];
 
-    $sampleCandidates = $byVoucher;
-    usort(
-        $sampleCandidates,
-        static fn(array $a, array $b): int => strcmp(
-            (string) ($a['processing_no'] ?? ''),
-            (string) ($b['processing_no'] ?? '')
-        )
-    );
-    $samplePn = trim((string) (($sampleCandidates[0]['processing_no'] ?? '')));
-    if ($samplePn !== '' && isset($rowByPn[$samplePn])) {
-        $result['formula_sample'] = voucher_tracking_build_formula_sample(
-            $pdo,
-            $rowByPn[$samplePn],
-            $logsByPn[$samplePn] ?? []
+    if ($includeFormulaSample) {
+        $sampleCandidates = $byVoucher;
+        usort(
+            $sampleCandidates,
+            static fn(array $a, array $b): int => strcmp(
+                (string) ($a['processing_no'] ?? ''),
+                (string) ($b['processing_no'] ?? '')
+            )
         );
+        $samplePn = trim((string) (($sampleCandidates[0]['processing_no'] ?? '')));
+        if ($samplePn !== '' && isset($rowByPn[$samplePn])) {
+            $result['formula_sample'] = voucher_tracking_build_formula_sample(
+                $pdo,
+                $rowByPn[$samplePn],
+                $logsByPn[$samplePn] ?? []
+            );
+        }
     }
 
     if ($includeCalculationBreakdown) {
