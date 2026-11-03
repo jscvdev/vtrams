@@ -286,6 +286,14 @@
         flex-direction: column;
         gap: 1rem;
         min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .util-premium-page.calc-page > .voucher-card,
+    .util-premium-page.calc-page > .voucher-card--filter {
+        flex: 0 0 auto;
     }
 
     .util-premium-page .calc-workspace {
@@ -294,11 +302,25 @@
         gap: 1rem;
         align-items: start;
         min-width: 0;
+        flex: 0 0 auto;
     }
 
     .util-premium-page .calc-workspace__list,
     .util-premium-page .calc-workspace__detail {
         min-width: 0;
+    }
+
+    .util-premium-page.calc-page .voucher-card--table {
+        flex: none;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+    }
+
+    .util-premium-page.calc-page .voucher-card--table .content-wrapper {
+        flex: none;
+        min-height: auto;
+        overflow: visible;
     }
 
     .util-premium-page .calc-formula-result {
