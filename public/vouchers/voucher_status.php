@@ -34,11 +34,16 @@ $searchParams = [];
 $searchSql = '';
 if (!$invalidSearch && $q !== '') {
     $pat = '%' . $q . '%';
-    $cols = ['processing_no', 'ors_no', 'dv_no', 'ada_check_no', 'payee', 'office_from', 'office_to', 'address', 'particulars', 'voucher_type', 'voucher_status', 'status', 'remarks', 'datetime_encoded', 'datetime_status', 'total_processing_time'];
+    $searchCols = [
+        '`vt`.`processing_no`',
+        '`vt`.`payee`',
+        '`vt`.`office_from`',
+        '`vt`.`office_to`',
+    ];
     $parts = [];
-    foreach ($cols as $i => $col) {
+    foreach ($searchCols as $i => $col) {
         $ph = ':sq' . $i;
-        $parts[] = '`' . $col . '` LIKE ' . $ph;
+        $parts[] = $col . ' LIKE ' . $ph;
         $searchParams[$ph] = [$pat, PDO::PARAM_STR];
     }
     $searchSql = ' AND (' . implode(' OR ', $parts) . ')';
@@ -50,11 +55,7 @@ $activeOnlySql = voucher_tracking_counts_include_sql('vt');
 if ($invalidSearch) {
     $dbCount = 0;
 } else {
-    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking vt WHERE 1=1' . $officeSql . $activeOnlySql . $tableDateSql . str_replace(
-        ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`office_from`', '`office_to`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
-        ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`office_from`', '`vt`.`office_to`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
-        $searchSql
-    );
+    $document_status_queryCount = 'SELECT COUNT(*) AS total FROM voucher_tracking vt WHERE 1=1' . $officeSql . $activeOnlySql . $tableDateSql . $searchSql;
     $document_status_statementCount = $pdo->prepare($document_status_queryCount);
     foreach ($officeParams as $key => $value) {
         $document_status_statementCount->bindValue($key, $value, PDO::PARAM_STR);
@@ -84,11 +85,7 @@ $fetch_voucher_status_log_query = 'SELECT vt.*,
     v.voucher_date AS v_voucher_date
     FROM voucher_tracking vt
     LEFT JOIN vouchers v ON v.processing_no = vt.processing_no
-    WHERE 1=1' . $officeSql . $activeOnlySql . str_replace(
-    ['`processing_no`', '`ors_no`', '`dv_no`', '`ada_check_no`', '`payee`', '`office_from`', '`office_to`', '`address`', '`particulars`', '`voucher_type`', '`voucher_status`', '`status`', '`remarks`', '`datetime_encoded`', '`datetime_status`', '`total_processing_time`'],
-    ['`vt`.`processing_no`', '`vt`.`ors_no`', '`vt`.`dv_no`', '`vt`.`ada_check_no`', '`vt`.`payee`', '`vt`.`office_from`', '`vt`.`office_to`', '`vt`.`address`', '`vt`.`particulars`', '`vt`.`voucher_type`', '`vt`.`voucher_status`', '`vt`.`status`', '`vt`.`remarks`', '`vt`.`datetime_encoded`', '`vt`.`datetime_status`', '`vt`.`total_processing_time`'],
-    $searchSql
-) . $tableDateSql . ' ORDER BY ' . $tableOrderSql . ' LIMIT :lim OFFSET :off';
+    WHERE 1=1' . $officeSql . $activeOnlySql . $searchSql . $tableDateSql . ' ORDER BY ' . $tableOrderSql . ' LIMIT :lim OFFSET :off';
 $fetch_voucher_status_log = $pdo->prepare($fetch_voucher_status_log_query);
 foreach ($officeParams as $key => $value) {
     $fetch_voucher_status_log->bindValue($key, $value, PDO::PARAM_STR);
