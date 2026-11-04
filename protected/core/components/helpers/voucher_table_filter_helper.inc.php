@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Sequential table filters: Year → Month → Day, then Ascending / Descending by processing_no.
+ * Sequential table filters: Year → Month → Day, then processing_no or recent/latest.
  *
  * @return array{
  *   year: ?int,
  *   month: ?int,
  *   day: ?int,
- *   sort: 'asc'|'desc',
+ *   sort: 'asc'|'desc'|'recent',
  *   year_value: string,
  *   month_value: string,
  *   day_value: string,
@@ -125,8 +125,8 @@ function voucher_table_filter_date_sql(string $expr, array $parsed, string $pref
 function voucher_table_filter_normalize_sort(string $sort): string
 {
     $sort = strtolower(trim($sort));
-    if ($sort === 'recent') {
-        return 'asc';
+    if ($sort === 'recent' || $sort === 'latest') {
+        return 'recent';
     }
 
     return $sort === 'desc' ? 'desc' : 'asc';
@@ -134,15 +134,31 @@ function voucher_table_filter_normalize_sort(string $sort): string
 
 function voucher_table_filter_order_sql(string $recentExpr, string $keyExpr, array $parsed): string
 {
-    $dir = voucher_table_filter_normalize_sort((string) ($parsed['sort'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+    $sort = voucher_table_filter_normalize_sort((string) ($parsed['sort'] ?? 'asc'));
+    $processingParts = [
+        'CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', 2), \'-\', -1) AS UNSIGNED)',
+        'CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', 3), \'-\', -1) AS UNSIGNED)',
+        'CAST(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', -1) AS UNSIGNED)',
+        $keyExpr,
+    ];
 
-    return implode(', ', [
-        'CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', 2), \'-\', -1) AS UNSIGNED) ' . $dir,
-        'CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', 3), \'-\', -1) AS UNSIGNED) ' . $dir,
-        'CAST(SUBSTRING_INDEX(' . $keyExpr . ', \'-\', -1) AS UNSIGNED) ' . $dir,
-        $keyExpr . ' ' . $dir,
-        $recentExpr . ' ' . $dir,
-    ]);
+    if ($sort === 'recent') {
+        $parts = [$recentExpr . ' DESC'];
+        foreach ($processingParts as $expr) {
+            $parts[] = $expr . ' DESC';
+        }
+
+        return implode(', ', $parts);
+    }
+
+    $dir = $sort === 'desc' ? 'DESC' : 'ASC';
+    $parts = [];
+    foreach ($processingParts as $expr) {
+        $parts[] = $expr . ' ' . $dir;
+    }
+    $parts[] = $recentExpr . ' ' . $dir;
+
+    return implode(', ', $parts);
 }
 
 /**
@@ -156,6 +172,7 @@ function voucher_table_filter_render_controls(array $parsed, array $opts = []): 
     $sortId = (string) ($opts['sort_id'] ?? 'tableSortFilter');
     $fieldClass = (string) ($opts['field_class'] ?? 'filter-ymd-select');
     $includeSort = ($opts['include_sort'] ?? true) !== false;
+    $includeRecentSort = !empty($opts['include_recent_sort']);
     $visibleLabels = !empty($opts['visible_labels']);
     $labelClass = $visibleLabels ? '' : 'hidden';
     $currentYear = (int) date('Y');
@@ -202,8 +219,14 @@ function voucher_table_filter_render_controls(array $parsed, array $opts = []): 
     <div class="<?= htmlspecialchars($fieldClass, ENT_QUOTES, 'UTF-8') ?> filter-ymd-select--sort">
         <label class="<?= htmlspecialchars($labelClass, ENT_QUOTES, 'UTF-8') ?>" for="<?= htmlspecialchars($sortId, ENT_QUOTES, 'UTF-8') ?>">Sort</label>
         <select id="<?= htmlspecialchars($sortId, ENT_QUOTES, 'UTF-8') ?>" name="sort" aria-label="Sort order">
-            <option value="asc"<?= $parsed['sort'] !== 'desc' ? ' selected' : '' ?>>Ascending</option>
-            <option value="desc"<?= $parsed['sort'] === 'desc' ? ' selected' : '' ?>>Descending</option>
+            <?php if ($includeRecentSort): ?>
+                <option value="asc"<?= $parsed['sort'] === 'asc' ? ' selected' : '' ?>>Processing No. (Asc)</option>
+                <option value="desc"<?= $parsed['sort'] === 'desc' ? ' selected' : '' ?>>Processing No. (Desc)</option>
+                <option value="recent"<?= $parsed['sort'] === 'recent' ? ' selected' : '' ?>>Recent / Latest</option>
+            <?php else: ?>
+                <option value="asc"<?= $parsed['sort'] !== 'desc' ? ' selected' : '' ?>>Ascending</option>
+                <option value="desc"<?= $parsed['sort'] === 'desc' ? ' selected' : '' ?>>Descending</option>
+            <?php endif; ?>
         </select>
     </div>
     <?php endif;

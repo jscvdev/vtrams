@@ -14,6 +14,7 @@ require_once __DIR__ . '/checklist_config.php';
 require_once __DIR__ . '/../../protected/core/components/security/filter_input.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/cursor_pagination_helper.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_portal_query_helper.php';
+require_once __DIR__ . '/../../protected/core/components/helpers/voucher_table_filter_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/utilities_return_previous_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/voucher_tracking_helper.inc.php';
 require_once __DIR__ . '/../../protected/core/components/helpers/amount_helper.inc.php';
@@ -27,6 +28,14 @@ $maxBrowse = 100;
 $rawQ = (string) ($_GET['q'] ?? '');
 $q = filterInput($rawQ);
 $invalidSearch = (trim($rawQ) !== '' && $q === '');
+$tableFilterSrc = $_GET;
+if (!isset($tableFilterSrc['sort']) || trim((string) $tableFilterSrc['sort']) === '') {
+    $tableFilterSrc['sort'] = 'desc';
+}
+$tableFilter = voucher_table_filter_parse($tableFilterSrc);
+$incomingDateExpr = 'COALESCE(NULLIF(TRIM(datetime_forwarded), \'\'), datetime_encoded)';
+[$tableDateSql, $tableDateParams] = voucher_table_filter_date_sql($incomingDateExpr, $tableFilter, 'vinc');
+$tableOrderSql = voucher_table_filter_order_sql($incomingDateExpr, 'processing_no', $tableFilter);
 
 $incomingSearchCols = [
     'processing_no',
@@ -72,7 +81,7 @@ if ($invalidSearch) {
     if ($voucher_type_filter !== 'all') {
         $countSql .= ' AND voucher_type = :voucher_type';
     }
-    $countSql .= $searchSql;
+    $countSql .= $searchSql . $tableDateSql;
     $stmtCount = $pdo->prepare($countSql);
     $stmtCount->bindValue(':udc', $udc_param, PDO::PARAM_STR);
     $stmtCount->bindValue(':office_to', $_SESSION['logged_user_office'], PDO::PARAM_STR);
@@ -81,6 +90,9 @@ if ($invalidSearch) {
     }
     foreach ($searchParams as $key => $pair) {
         $stmtCount->bindValue($key, $pair[0], $pair[1]);
+    }
+    foreach ($tableDateParams as $key => $value) {
+        $stmtCount->bindValue($key, $value, PDO::PARAM_INT);
     }
     $stmtCount->execute();
     $dbCount = (int) $stmtCount->fetch(PDO::FETCH_ASSOC)['total'];
@@ -97,7 +109,7 @@ $dataSql = 'SELECT * FROM voucher_incoming WHERE receiver_udc LIKE :udc AND offi
 if ($voucher_type_filter !== 'all') {
     $dataSql .= ' AND voucher_type = :voucher_type';
 }
-$dataSql .= $searchSql . ' ORDER BY processing_no DESC LIMIT :lim OFFSET :off';
+$dataSql .= $searchSql . $tableDateSql . ' ORDER BY ' . $tableOrderSql . ' LIMIT :lim OFFSET :off';
 $fetch_voucher_incoming_data = $pdo->prepare($dataSql);
 $fetch_voucher_incoming_data->bindValue(':udc', $udc_param, PDO::PARAM_STR);
 $fetch_voucher_incoming_data->bindValue(':office_to', $_SESSION['logged_user_office'], PDO::PARAM_STR);
@@ -106,6 +118,9 @@ if ($voucher_type_filter !== 'all') {
 }
 foreach ($searchParams as $key => $pair) {
     $fetch_voucher_incoming_data->bindValue($key, $pair[0], $pair[1]);
+}
+foreach ($tableDateParams as $key => $value) {
+    $fetch_voucher_incoming_data->bindValue($key, $value, PDO::PARAM_INT);
 }
 $fetch_voucher_incoming_data->bindValue(':lim', $fetchLimit, PDO::PARAM_INT);
 $fetch_voucher_incoming_data->bindValue(':off', $offset, PDO::PARAM_INT);
@@ -117,6 +132,10 @@ $incomingHistoryMap = voucher_tracking_fetch_display_history_map(
 );
 
 $totalRows = $displayTotal;
+$incomingPageUrl = static function (int $page) use ($rowsPerPage, $voucher_type_filter, $rawQ, $tableFilter): string {
+    return build_voucher_portal_page_url($page, $rowsPerPage, $voucher_type_filter, $rawQ)
+        . voucher_table_filter_query_suffix($tableFilter);
+};
 
 $target = array_values(array_filter(array_map(
     'trim',
@@ -140,9 +159,13 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
         #incomingFilterForm {
             display: flex;
             align-items: center;
-            flex-wrap: nowrap !important;
+            flex-wrap: wrap;
             width: 100%;
             gap: 10px;
+        }
+
+        #incomingFilterForm .filter-ymd-select--sort {
+            min-width: 11.5rem;
         }
 
         #incomingFilterForm .filter-chips {
@@ -469,7 +492,9 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             </div>
                         </label>
                     </div>
-
+                    <?php voucher_table_filter_render_controls($tableFilter, [
+                        'include_recent_sort' => true,
+                    ]); ?>
                     <div class="filter-search">
                         <input type="text" id="filterInput" name="q" value="<?php echo htmlspecialchars($rawQ, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Payee, office, or processing no." autocomplete="off">
                     </div>
@@ -1062,7 +1087,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                             <div class="pagination_pages pagination_pages--modern"></div>
                             <button class="pagination_btn_modern" type="button" disabled>Next</button>
                         <?php elseif ($currentPage > 1): ?>
-                            <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_voucher_portal_page_url($currentPage - 1, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8'); ?>">Previous</a>
+                            <a class="pagination_btn_modern" href="<?php echo htmlspecialchars($incomingPageUrl($currentPage - 1), ENT_QUOTES, 'UTF-8'); ?>">Previous</a>
                         <?php else: ?>
                             <button class="pagination_btn_modern" type="button" disabled>Previous</button>
                         <?php endif; ?>
@@ -1080,27 +1105,27 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                 if ($totalPages <= 7) {
                                     for ($i = 1; $i <= $totalPages; $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_voucher_portal_page_url($i, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars($incomingPageUrl($i), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
                                     }
                                 } else {
-                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_voucher_portal_page_url(1, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8') . '">1</a>';
+                                    echo '<a class="pagination_page_num' . (1 == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars($incomingPageUrl(1), ENT_QUOTES, 'UTF-8') . '">1</a>';
                                     if ($startPage > 2) {
                                         echo '<span class="pagination_ellipsis">...</span>';
                                     }
                                     for ($i = max(2, $startPage); $i <= min($totalPages - 1, $endPage); $i++) {
                                         $active = ($i == $currentPage) ? ' active' : '';
-                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars(build_voucher_portal_page_url($i, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
+                                        echo '<a class="pagination_page_num' . $active . '" href="' . htmlspecialchars($incomingPageUrl($i), ENT_QUOTES, 'UTF-8') . '">' . $i . '</a>';
                                     }
                                     if ($endPage < $totalPages - 1) {
                                         echo '<span class="pagination_ellipsis">...</span>';
                                     }
-                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars(build_voucher_portal_page_url($totalPages, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8') . '">' . $totalPages . '</a>';
+                                    echo '<a class="pagination_page_num' . ($totalPages == $currentPage ? ' active' : '') . '" href="' . htmlspecialchars($incomingPageUrl($totalPages), ENT_QUOTES, 'UTF-8') . '">' . $totalPages . '</a>';
                                 }
                                 ?>
                             </div>
 
                             <?php if ($currentPage < $totalPages): ?>
-                                <a class="pagination_btn_modern" href="<?php echo htmlspecialchars(build_voucher_portal_page_url($currentPage + 1, $rowsPerPage, $voucher_type_filter, $rawQ), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
+                                <a class="pagination_btn_modern" href="<?php echo htmlspecialchars($incomingPageUrl($currentPage + 1), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
                             <?php else: ?>
                                 <button class="pagination_btn_modern" type="button" disabled>Next</button>
                             <?php endif; ?>
@@ -1117,6 +1142,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
 </div>
 
 <script src="../../protected/js/qr_scanner_search.js"></script>
+<script src="<?= htmlspecialchars(voucher_table_filter_script_url(), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
     (function() {
         var inp = document.getElementById('filterInput');
@@ -1160,6 +1186,18 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
         var dropdown = document.getElementById('filterTypeDropdown');
         var trigger = document.getElementById('filterTypeTrigger');
         var menu = document.getElementById('filterTypeMenu');
+        if (typeof bindVoucherTableSequentialFilters === 'function') {
+            bindVoucherTableSequentialFilters({
+                onChange: function() {
+                    if (form) {
+                        form.querySelectorAll('select[disabled]').forEach(function(el) {
+                            el.disabled = false;
+                        });
+                        form.submit();
+                    }
+                }
+            });
+        }
         if (!typeFilter || !form || !dropdown || !trigger || !menu) return;
 
         function closeDropdown() {
@@ -1188,6 +1226,9 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                 });
                 this.classList.add('is-active');
                 closeDropdown();
+                form.querySelectorAll('select[disabled]').forEach(function(el) {
+                    el.disabled = false;
+                });
                 form.submit();
             });
         });
