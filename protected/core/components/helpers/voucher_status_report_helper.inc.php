@@ -432,14 +432,12 @@ function voucher_status_report_append_filter_sql(string $sql, array $filters, st
             OR {$alias}.office_from LIKE :q_like_office ESCAPE '\\\\'
             OR {$alias}.dv_no LIKE :q_like_dv ESCAPE '\\\\'
             OR {$alias}.ors_no LIKE :q_like_ors ESCAPE '\\\\'
-            OR {$alias}.voucher_status LIKE :q_like_status ESCAPE '\\\\'
         )";
         $params[':q_like_pn'] = $like;
         $params[':q_like_payee'] = $like;
         $params[':q_like_office'] = $like;
         $params[':q_like_dv'] = $like;
         $params[':q_like_ors'] = $like;
-        $params[':q_like_status'] = $like;
     }
 
     return [$sql, $params];
