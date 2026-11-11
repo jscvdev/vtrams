@@ -274,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $trackingHistory = (string) ($tracking_row['process_history'] ?? '');
                     $loggedForwarderName = trim((string) ($_SESSION['logged_user_emp_name'] ?? ''));
                     $needsReturnForward = voucher_tracking_is_pending_return_reply($tracking_row);
+                    $reroutedReturnedVoucher = false;
                     if ($needsReturnForward) {
                         $returnTarget = voucher_tracking_return_forward_target(
                             $pdo,
@@ -281,27 +282,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $trackingHistory,
                             $loggedForwarderName
                         );
-                        $resolved = voucher_forward_receiver_for_return_target(
-                            $pdo,
-                            $trackingStatus,
+                        $selectedIsReturner = voucher_forward_destination_matches_return_target(
                             (string) $document_to,
-                            $office_to,
-                            $sender_udc,
-                            $trackingHistory,
-                            $loggedForwarderName
+                            $returnTarget
                         );
-                        $receiver_udc = $resolved['receiver_udc'];
-                        if ($resolved['forwarded_to'] !== '') {
-                            $document_to = $resolved['forwarded_to'];
-                        } elseif (($returnTarget['label'] ?? '') !== '') {
-                            $document_to = (string) $returnTarget['label'];
-                        }
-                        $returnOffice = trim((string) ($returnTarget['office'] ?? ''));
-                        if ($returnOffice !== '') {
-                            $office_to = $returnOffice;
-                        }
-                        if ($resolved['temp_errors']) {
-                            $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                        $canRerouteReturned = !$selectedIsReturner
+                            && voucher_tracking_user_is_process_participant(
+                                $pdo,
+                                voucher_logged_user_designations(),
+                                $loggedForwarderName,
+                                $trackingHistory
+                            );
+                        if ($canRerouteReturned) {
+                            $reroutedReturnedVoucher = true;
+                            require_once __DIR__ . '/../../core/components/helpers/utilities_unit_forward_options_helper.inc.php';
+                            if (
+                                !utilities_unit_forward_option_is_allowed(
+                                    $pdo,
+                                    voucher_logged_user_designations(),
+                                    (string) $document_to,
+                                    (string) ($_SESSION['logged_user_udc'] ?? '')
+                                )
+                            ) {
+                                $temp_dump['invalid_route'] = 'Select a Forward To destination configured for your unit in Routing (Unit forward options).';
+                            } else {
+                                $receiver_udc = voucher_resolve_receiver_udc_for_destination(
+                                    $pdo,
+                                    (string) $document_to,
+                                    $office_to,
+                                    $sender_udc
+                                );
+                                if ($receiver_udc === '') {
+                                    $temp_dump['unassigned_udc'] = 'No user is assigned to accept';
+                                }
+                            }
+                        } else {
+                            $resolved = voucher_forward_receiver_for_return_target(
+                                $pdo,
+                                $trackingStatus,
+                                (string) $document_to,
+                                $office_to,
+                                $sender_udc,
+                                $trackingHistory,
+                                $loggedForwarderName
+                            );
+                            $receiver_udc = $resolved['receiver_udc'];
+                            if ($resolved['forwarded_to'] !== '') {
+                                $document_to = $resolved['forwarded_to'];
+                            } elseif (($returnTarget['label'] ?? '') !== '') {
+                                $document_to = (string) $returnTarget['label'];
+                            }
+                            $returnOffice = trim((string) ($returnTarget['office'] ?? ''));
+                            if ($returnOffice !== '') {
+                                $office_to = $returnOffice;
+                            }
+                            if ($resolved['temp_errors']) {
+                                $temp_dump = array_merge($temp_dump, $resolved['temp_errors']);
+                            }
                         }
                     } elseif (voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
                         $document_to = 'ICU';
@@ -328,7 +365,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $temp_dump['self_send'] = 'Cannot forward this document to yourself';
                     }
 
-                    if (!$needsReturnForward && !voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
+                    if (!$needsReturnForward && !$reroutedReturnedVoucher && !voucher_user_has_designation(voucher_logged_user_designations(), 'Liaison Officer')) {
                         require_once __DIR__ . '/../../core/components/helpers/utilities_unit_forward_options_helper.inc.php';
                         if (
                             !utilities_unit_forward_option_is_allowed(
@@ -383,7 +420,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $x = explode(',', $_SESSION['logged_user_designation']);
 
-                    if (!$needsReturnForward && in_array($document_to, $x)) {
+                    if ((!$needsReturnForward || $reroutedReturnedVoucher) && in_array($document_to, $x)) {
                         $temp_dump["self_send"] = "Cannot forward this document to yourself";
                     }
 

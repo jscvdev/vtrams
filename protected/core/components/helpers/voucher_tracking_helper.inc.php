@@ -731,6 +731,122 @@ function voucher_tracking_return_forward_target(
 }
 
 /**
+ * Processing-unit roles that may reroute a returned voucher (not liaison-only).
+ *
+ * @param list<string> $designations
+ */
+function voucher_tracking_user_has_workflow_process_role(array $designations): bool
+{
+    $roles = [
+        'Processor',
+        'Accounting Unit',
+        'Accountant III',
+        'Budget Unit',
+        'Budget Officer',
+        'Planning Section',
+        'Planning Section Chief',
+        'Cashiers Unit',
+        'Cashier',
+        'ICU',
+        'Conservation & Development Section',
+        'Office of the PENRO',
+        'PENR Officer',
+    ];
+    foreach ($roles as $role) {
+        if (voucher_user_has_designation($designations, $role)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * True when this user is a processing-unit actor on the voucher (name or unit in history).
+ *
+ * @param list<string> $user_designations
+ */
+function voucher_tracking_user_is_process_participant(
+    object $pdo,
+    array $user_designations,
+    string $user_name,
+    string $process_history
+): bool {
+    if (!voucher_tracking_user_has_workflow_process_role($user_designations)) {
+        return false;
+    }
+
+    $user_name = trim($user_name);
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    if ($lines === []) {
+        return false;
+    }
+
+    $aliases = voucher_processing_office_route_role_aliases();
+    $unitLabels = [];
+    foreach ($user_designations as $designation) {
+        $designation = trim((string) $designation);
+        if ($designation === '') {
+            continue;
+        }
+        $normalized = voucher_tracking_normalize_section_label($designation);
+        $unitLabels[strtolower($designation)] = true;
+        if ($normalized !== '') {
+            $unitLabels[strtolower($normalized)] = true;
+        }
+        $mapped = (string) ($aliases[$designation] ?? '');
+        if ($mapped !== '') {
+            $unitLabels[strtolower($mapped)] = true;
+            $mappedNorm = voucher_tracking_normalize_section_label($mapped);
+            if ($mappedNorm !== '') {
+                $unitLabels[strtolower($mappedNorm)] = true;
+            }
+        }
+    }
+
+    foreach ($lines as $line) {
+        $kind = voucher_tracking_action_kind((string) ($line['action'] ?? ''));
+        if (!in_array($kind, ['receive', 'forward', 'process', 'return'], true)) {
+            continue;
+        }
+        $actor = trim((string) ($line['name'] ?? ''));
+        if ($user_name !== '' && $actor !== '' && strcasecmp($actor, $user_name) === 0) {
+            return true;
+        }
+        $section = voucher_tracking_normalize_section_label((string) ($line['section'] ?? ''));
+        $rawSection = trim((string) ($line['section'] ?? ''));
+        if ($section !== '' && isset($unitLabels[strtolower($section)])) {
+            return true;
+        }
+        if ($rawSection !== '' && isset($unitLabels[strtolower($rawSection)])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param array{designation?: string, label?: string, returned_by?: string, udc?: string} $returnTarget
+ */
+function voucher_forward_destination_matches_return_target(string $document_to, array $returnTarget): bool
+{
+    $document_to = trim($document_to);
+    if ($document_to === '') {
+        return false;
+    }
+
+    foreach (['designation', 'label', 'returned_by', 'udc'] as $key) {
+        $candidate = trim((string) ($returnTarget[$key] ?? ''));
+        if ($candidate !== '' && strcasecmp($candidate, $document_to) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Map a section/unit label (e.g. Planning Section) to a forward designation.
  *
  * @return array{designation: string, label: string, returned_by: string}

@@ -1290,6 +1290,19 @@ if ($showCashierArchiveCol) {
                             $loggedForwarderName
                         );
                         $needsReturnForwardRow = voucher_tracking_is_pending_return_reply($rowTracking);
+                        $historyForParticipant = trim((string) ($rowTracking['process_history'] ?? ''));
+                        if ($historyForParticipant === '') {
+                            $historyForParticipant = $forwarding_process_history;
+                        } elseif (trim($forwarding_process_history) !== '' && strcasecmp($historyForParticipant, trim($forwarding_process_history)) !== 0) {
+                            $historyForParticipant .= "\n" . $forwarding_process_history;
+                        }
+                        $canRerouteReturnedRow = $needsReturnForwardRow
+                            && voucher_tracking_user_is_process_participant(
+                                $pdo,
+                                $target,
+                                $loggedForwarderName,
+                                $historyForParticipant
+                            );
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -1523,8 +1536,10 @@ if ($showCashierArchiveCol) {
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount']) : ''; ?></td>
                             <td data-label="needs_return_forward" class="hidden"><?php echo $needsReturnForwardRow ? '1' : '0'; ?></td>
+                            <td data-label="return_forward_can_reroute" class="hidden"><?php echo $canRerouteReturnedRow ? '1' : '0'; ?></td>
                             <td data-label="return_forward_label" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="return_forward_designation" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['designation'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="return_forward_name" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['returned_by'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php
                     }
@@ -2149,6 +2164,16 @@ if ($showCashierArchiveCol) {
         });
     }
 
+    function clearReturnForwardConfirmState() {
+        if (!docToSelect) {
+            return;
+        }
+        delete docToSelect.dataset.needsReturnConfirm;
+        delete docToSelect.dataset.returnForwardValue;
+        delete docToSelect.dataset.returnForwardLabel;
+        delete docToSelect.dataset.returnForwardName;
+    }
+
     function restoreForwardDestinationOptions() {
         if (!docToSelect || !docToOriginalHtml) {
             return;
@@ -2156,6 +2181,7 @@ if ($showCashierArchiveCol) {
         docToSelect.innerHTML = docToOriginalHtml;
         hideOwnDesignationOptions(docToSelect);
         docToSelect.disabled = false;
+        clearReturnForwardConfirmState();
     }
 
     function lockForwardToReturner(label, designation) {
@@ -2176,6 +2202,72 @@ if ($showCashierArchiveCol) {
         docToSelect.appendChild(opt);
         docToSelect.required = true;
         docToSelect.disabled = false;
+        clearReturnForwardConfirmState();
+    }
+
+    function selectedForwardIsReturner() {
+        if (!docToSelect) {
+            return false;
+        }
+        var selected = String(docToSelect.value || '').trim();
+        var selectedText = '';
+        if (docToSelect.selectedIndex >= 0 && docToSelect.options[docToSelect.selectedIndex]) {
+            selectedText = String(docToSelect.options[docToSelect.selectedIndex].textContent || '').trim();
+        }
+        var candidates = [
+            docToSelect.dataset.returnForwardValue,
+            docToSelect.dataset.returnForwardLabel,
+            docToSelect.dataset.returnForwardName
+        ].map(function(value) {
+            return String(value || '').trim();
+        }).filter(Boolean);
+        return candidates.some(function(candidate) {
+            return candidate.localeCompare(selected, undefined, { sensitivity: 'accent' }) === 0
+                || candidate.localeCompare(selectedText, undefined, { sensitivity: 'accent' }) === 0;
+        });
+    }
+
+    function applyReturnForwardOptionsForProcessUser(label, designation, returnedBy) {
+        restoreForwardDestinationOptions();
+        if (!docToSelect) {
+            return;
+        }
+        var value = String(designation || label || '').trim();
+        var text = String(label || designation || '').trim() || value;
+        if (!value) {
+            return;
+        }
+        var returnerOption = Array.from(docToSelect.options).find(function(option) {
+            var optionValue = String(option.value || '').trim();
+            var optionText = String(option.textContent || '').trim();
+            return optionValue !== '' && (
+                optionValue.localeCompare(value, undefined, { sensitivity: 'accent' }) === 0
+                || optionText.localeCompare(text, undefined, { sensitivity: 'accent' }) === 0
+            );
+        });
+        if (returnerOption) {
+            returnerOption.textContent = text;
+        } else {
+            returnerOption = document.createElement('option');
+            returnerOption.value = value;
+            returnerOption.textContent = text;
+            if (docToSelect.options.length && String(docToSelect.options[0].value || '') === '') {
+                docToSelect.insertBefore(returnerOption, docToSelect.options[1] || null);
+            } else {
+                docToSelect.insertBefore(returnerOption, docToSelect.firstChild);
+            }
+        }
+        returnerOption.classList.remove('hidden');
+        returnerOption.style.display = '';
+        Array.from(docToSelect.options).forEach(function(option) {
+            option.selected = option === returnerOption;
+        });
+        docToSelect.required = true;
+        docToSelect.disabled = false;
+        docToSelect.dataset.needsReturnConfirm = '1';
+        docToSelect.dataset.returnForwardValue = value;
+        docToSelect.dataset.returnForwardLabel = text;
+        docToSelect.dataset.returnForwardName = String(returnedBy || '').trim();
     }
 
     function normalizeForwardingHistorySection(section) {
@@ -2302,6 +2394,20 @@ if ($showCashierArchiveCol) {
             const isBudgetRole = targetArray2.includes("Budget Unit") || targetArray2.includes("Budget Officer");
             const actionButton = document.querySelector(".btn-dynamic");
             const actionName = actionButton ? actionButton.getAttribute("name") : "";
+
+            if (actionName === "forward_voucher" && docToSelect && docToSelect.dataset.needsReturnConfirm === '1' && !selectedForwardIsReturner()) {
+                var selectedLabel = '';
+                if (docToSelect.selectedIndex >= 0 && docToSelect.options[docToSelect.selectedIndex]) {
+                    selectedLabel = String(docToSelect.options[docToSelect.selectedIndex].textContent || '').trim()
+                        || String(docToSelect.value || '').trim();
+                }
+                var returnerLabel = String(docToSelect.dataset.returnForwardLabel || docToSelect.dataset.returnForwardName || 'the person who returned it').trim();
+                var confirmMsg = 'This voucher was returned by ' + returnerLabel + '. Forward to ' + (selectedLabel || 'the selected destination') + ' instead?';
+                if (!window.confirm(confirmMsg)) {
+                    e.preventDefault();
+                    return;
+                }
+            }
 
             if (isBudgetRole && actionName === "forward_voucher") {
                 const orsInput = document.getElementById("ors_no");
@@ -2745,12 +2851,18 @@ if ($showCashierArchiveCol) {
                 restoreForwardDestinationOptions();
                 var docToForward = document.getElementById("document_to");
                 var needsReturnForward = (row.querySelector('[data-label="needs_return_forward"]')?.textContent || '').trim() === '1';
+                var canRerouteReturned = (row.querySelector('[data-label="return_forward_can_reroute"]')?.textContent || '').trim() === '1';
                 var returnForwardLabel = (row.querySelector('[data-label="return_forward_label"]')?.textContent || '').trim();
                 var returnForwardDesignation = (row.querySelector('[data-label="return_forward_designation"]')?.textContent || '').trim();
+                var returnForwardName = (row.querySelector('[data-label="return_forward_name"]')?.textContent || '').trim();
                 if (docToForward) {
                     docToForward.required = true;
                     if (needsReturnForward && (returnForwardLabel || returnForwardDesignation)) {
-                        lockForwardToReturner(returnForwardLabel, returnForwardDesignation);
+                        if (canRerouteReturned) {
+                            applyReturnForwardOptionsForProcessUser(returnForwardLabel, returnForwardDesignation, returnForwardName);
+                        } else {
+                            lockForwardToReturner(returnForwardLabel, returnForwardDesignation);
+                        }
                     } else if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {
