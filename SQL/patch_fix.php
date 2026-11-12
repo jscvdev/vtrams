@@ -16,16 +16,18 @@
  * 5) Clear empty "Name:" / "Name: , Name:" remarks in voucher_action_logs and
  *    voucher tables (persist empty string), then rebuild remaining combined
  *    remarks from action logs that still have real text.
+ * 6) Remove consecutive duplicate "Received by" lines (same person) in
+ *    process_history and action logs, and drop orphan Received by lines after
+ *    Processed/Paid/Archived (e.g. PN-26-06-0067 trailing Sol Opena receive).
  *
  * Usage (CLI):
  *   c:\xampp\php\php.exe SQL/patch_fix.php           # dry-run
  *   c:\xampp\php\php.exe SQL/patch_fix.php --apply   # commit
  *   c:\xampp\php\php.exe SQL/patch_fix.php --only=receive --apply
+ *   c:\xampp\php\php.exe SQL/patch_fix.php --only=dup_receive --apply
  *
- * Browser:
- *   http://localhost/vtrams/SQL/patch_fix.php
- *   http://localhost/vtrams/SQL/patch_fix.php?apply=1
- *   http://localhost/vtrams/SQL/patch_fix.php?only=receive&apply=1
+ * Browser UI:
+ *   http://localhost/vtrams/SQL/patch_fix_ui.php
  */
 
 declare(strict_types=1);
@@ -40,6 +42,7 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 $isCli = PHP_SAPI === 'cli';
+$embed = !$isCli && (string) ($_GET['embed'] ?? '') === '1';
 $apply = $isCli
     ? in_array('--apply', $argv ?? [], true)
     : isset($_GET['apply']) && (string) $_GET['apply'] === '1';
@@ -58,8 +61,13 @@ if ($isCli) {
 } else {
     $only = strtolower(trim((string) ($_GET['only'] ?? '')));
 }
-if (!in_array($only, ['', 'all', 'processed', 'receive', 'offices', 'amounts', 'remarks'], true)) {
+if (!in_array($only, ['', 'all', 'processed', 'receive', 'dup_receive', 'offices', 'amounts', 'remarks'], true)) {
     $only = '';
+}
+
+if (!$isCli && !$embed && $_GET === []) {
+    header('Location: patch_fix_ui.php');
+    exit;
 }
 
 @ini_set('zlib.output_compression', '0');
@@ -78,8 +86,8 @@ while (ob_get_level() > 0) {
 
 function out(string $message): void
 {
-    global $isCli;
-    echo $message . ($isCli ? "\n" : "<br>\n");
+    global $isCli, $embed;
+    echo $message . (($isCli || !empty($embed)) ? "\n" : "<br>\n");
     if (ob_get_level() > 0) {
         ob_flush();
     }
@@ -1499,6 +1507,325 @@ function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
     ];
 }
 
+function patch_history_strip_duplicate_receives(string $history): string
+{
+    $rawLines = preg_split('/\n/', normalize_process_history($history)) ?: [];
+    $out = [];
+    $lastReceiveName = '';
+
+    foreach ($rawLines as $raw) {
+        $line = trim($raw);
+        if ($line === '') {
+            continue;
+        }
+        if (strpos($line, '|') === false) {
+            $out[] = $raw;
+            $lastReceiveName = '';
+            continue;
+        }
+
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        $name = trim((string) ($parts[0] ?? ''));
+        $action = trim((string) ($parts[1] ?? ''));
+        $kind = patch_action_kind($action);
+
+        if ($kind === 'receive') {
+            if ($lastReceiveName !== '' && patch_names_match($lastReceiveName, $name)) {
+                continue;
+            }
+            $lastReceiveName = $name;
+            $out[] = $raw;
+            continue;
+        }
+
+        $lastReceiveName = '';
+        $out[] = $raw;
+    }
+
+    $trimmed = $out;
+    while ($trimmed !== []) {
+        $last = trim((string) $trimmed[count($trimmed) - 1]);
+        if ($last === '' || strpos($last, '|') === false) {
+            break;
+        }
+        $parts = preg_split('/\s*\|\s*/', $last, 4);
+        $kind = patch_action_kind(trim((string) ($parts[1] ?? '')));
+        $hasEarlierTerminal = false;
+        foreach ($trimmed as $candidate) {
+            $cand = trim((string) $candidate);
+            if ($cand === '' || strpos($cand, '|') === false) {
+                continue;
+            }
+            $candParts = preg_split('/\s*\|\s*/', $cand, 4);
+            $candKind = patch_action_kind(trim((string) ($candParts[1] ?? '')));
+            $candAction = trim((string) ($candParts[1] ?? ''));
+            if ($candKind === 'archive' || preg_match('/\bpaid\b/i', $candAction)) {
+                $hasEarlierTerminal = true;
+                break;
+            }
+        }
+        if ($kind === 'receive' && $hasEarlierTerminal) {
+            array_pop($trimmed);
+            continue;
+        }
+        break;
+    }
+
+    return trim(implode("\n", $trimmed));
+}
+
+/**
+ * @param list<array<string, mixed>> $logs
+ */
+function patch_build_history_from_logs(PDO $pdo, array $logs): string
+{
+    $out = [];
+    $lastReceiveName = '';
+
+    foreach ($logs as $log) {
+        $name = trim((string) ($log['action_by'] ?? ''));
+        $action = trim((string) ($log['action'] ?? ''));
+        if ($name === '' || $action === '') {
+            continue;
+        }
+
+        $kind = patch_action_kind($action);
+        if ($kind === 'receive' && $lastReceiveName !== '' && patch_names_match($lastReceiveName, $name)) {
+            continue;
+        }
+        $lastReceiveName = $kind === 'receive' ? $name : '';
+
+        $section = trim((string) ($log['action_from'] ?? ''));
+        $officeFrom = trim((string) ($log['office_from'] ?? ''));
+        $officeTo = trim((string) ($log['office_to'] ?? ''));
+        $office = $officeTo !== '' ? $officeTo : $officeFrom;
+
+        $out[] = build_history_line(
+            $name,
+            $action,
+            $section !== '' ? $section : 'TBD',
+            $office !== '' ? $office : 'TBD'
+        );
+    }
+
+    return trim(implode("\n", $out));
+}
+
+/**
+ * @param list<array<string, mixed>> $logs
+ * @return list<int>
+ */
+function patch_count_history_receives(string $history): int
+{
+    $count = 0;
+    foreach (preg_split('/\n/', normalize_process_history($history)) ?: [] as $raw) {
+        $line = trim($raw);
+        if ($line === '' || strpos($line, '|') === false) {
+            continue;
+        }
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        if (patch_action_kind(trim((string) ($parts[1] ?? ''))) === 'receive') {
+            $count++;
+        }
+    }
+
+    return $count;
+}
+
+/**
+ * @param list<array<string, mixed>> $logs
+ */
+function patch_count_log_receives(array $logs): int
+{
+    $count = 0;
+    $lastReceiveName = '';
+    foreach ($logs as $log) {
+        $kind = patch_action_kind((string) ($log['action'] ?? ''));
+        if ($kind === 'other') {
+            continue;
+        }
+        if ($kind !== 'receive') {
+            $lastReceiveName = '';
+            continue;
+        }
+        $actor = trim((string) ($log['action_by'] ?? ''));
+        if ($actor !== '' && $lastReceiveName !== '' && patch_names_match($lastReceiveName, $actor)) {
+            continue;
+        }
+        $lastReceiveName = $actor;
+        $count++;
+    }
+
+    return $count;
+}
+
+function patch_duplicate_consecutive_receive_log_ids(array $logs): array
+{
+    $deleteIds = [];
+    $lastReceiveName = '';
+    foreach ($logs as $log) {
+        $kind = patch_action_kind((string) ($log['action'] ?? ''));
+        if ($kind === 'other') {
+            continue;
+        }
+        if ($kind !== 'receive') {
+            $lastReceiveName = '';
+            continue;
+        }
+
+        $actor = trim((string) ($log['action_by'] ?? ''));
+        $id = (int) ($log['id'] ?? 0);
+        if ($actor !== '' && $lastReceiveName !== '' && patch_names_match($lastReceiveName, $actor) && $id > 0) {
+            $deleteIds[] = $id;
+            continue;
+        }
+        $lastReceiveName = $actor;
+    }
+
+    return $deleteIds;
+}
+
+/**
+ * @return array{deleted_logs: int, updated_vouchers: int, updated_rows: int}
+ */
+function fix_duplicate_consecutive_receives(PDO $pdo, bool $apply): array
+{
+    $deletedLogs = 0;
+    $updatedVouchers = 0;
+    $updatedRows = 0;
+
+    $fromLogs = $pdo->query(
+        "SELECT DISTINCT processing_no
+         FROM voucher_action_logs
+         WHERE TRIM(COALESCE(processing_no, '')) <> ''
+           AND action LIKE 'Received%'"
+    )?->fetchAll(PDO::FETCH_COLUMN) ?? [];
+    $fromHistory = $pdo->query(
+        "SELECT DISTINCT processing_no
+         FROM voucher_tracking
+         WHERE TRIM(COALESCE(processing_no, '')) <> ''
+           AND process_history LIKE '%Received by%'"
+    )?->fetchAll(PDO::FETCH_COLUMN) ?? [];
+
+    $processingNos = [];
+    foreach (array_merge($fromLogs, $fromHistory) as $pn) {
+        $pn = trim((string) $pn);
+        if ($pn !== '') {
+            $processingNos[$pn] = $pn;
+        }
+    }
+    $processingNos = array_values($processingNos);
+    if (!empty($GLOBALS['PATCH_FIX_ONLY_PN'])) {
+        $onlyPn = trim((string) $GLOBALS['PATCH_FIX_ONLY_PN']);
+        $processingNos = $onlyPn !== '' ? [$onlyPn] : [];
+    }
+    $totalPn = count($processingNos);
+    out("Scanning {$totalPn} processing_no(s) for duplicate consecutive Received by...");
+    if ($processingNos === []) {
+        return [
+            'deleted_logs' => 0,
+            'updated_vouchers' => 0,
+            'updated_rows' => 0,
+        ];
+    }
+
+    try {
+        $pdo->exec('SET SESSION innodb_lock_wait_timeout = 180');
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    $deleteStmt = $pdo->prepare('DELETE FROM voucher_action_logs WHERE id = :id');
+    $logsByPn = [];
+    $trackingHistory = [];
+    foreach (patch_chunks($processingNos, 250) as $chunkIndex => $chunk) {
+        out('  loading chunk ' . ($chunkIndex + 1) . ' (' . count($chunk) . ' processing_no)...');
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $logStmt = $pdo->prepare(
+            "SELECT id, processing_no, action, action_by, action_from, datetime_action, office_from, office_to
+             FROM voucher_action_logs
+             WHERE processing_no IN ({$placeholders})
+             ORDER BY processing_no ASC, datetime_action ASC, id ASC"
+        );
+        foreach ($chunk as $index => $processingNoBind) {
+            $logStmt->bindValue($index + 1, $processingNoBind, PDO::PARAM_STR);
+        }
+        $logStmt->execute();
+        while ($row = $logStmt->fetch(PDO::FETCH_ASSOC)) {
+            $pn = trim((string) ($row['processing_no'] ?? ''));
+            if ($pn !== '') {
+                $logsByPn[$pn][] = $row;
+            }
+        }
+
+        $histStmt = $pdo->prepare(
+            "SELECT processing_no, process_history
+             FROM voucher_tracking
+             WHERE processing_no IN ({$placeholders})"
+        );
+        foreach ($chunk as $index => $processingNoBind) {
+            $histStmt->bindValue($index + 1, $processingNoBind, PDO::PARAM_STR);
+        }
+        $histStmt->execute();
+        while ($row = $histStmt->fetch(PDO::FETCH_ASSOC)) {
+            $pn = trim((string) ($row['processing_no'] ?? ''));
+            if ($pn !== '') {
+                $trackingHistory[$pn] = normalize_process_history((string) ($row['process_history'] ?? ''));
+            }
+        }
+    }
+
+    foreach ($processingNos as $pnIndex => $processingNo) {
+        if (($pnIndex + 1) % 200 === 0) {
+            out('  ... scanned ' . ($pnIndex + 1) . "/{$totalPn}");
+        }
+
+        $logs = $logsByPn[$processingNo] ?? [];
+        $deleteIds = patch_duplicate_consecutive_receive_log_ids($logs);
+        $history = $trackingHistory[$processingNo] ?? '';
+        $stripped = patch_history_strip_duplicate_receives($history);
+        $logReceiveCount = patch_count_log_receives($logs);
+        $histReceiveCount = patch_count_history_receives($history);
+        $newHistory = $history;
+        $needsHistory = false;
+        if ($histReceiveCount < $logReceiveCount) {
+            $rebuilt = patch_build_history_from_logs($pdo, $logs);
+            $newHistory = patch_history_strip_duplicate_receives($rebuilt !== '' ? $rebuilt : $history);
+            $needsHistory = $newHistory !== $history;
+        } elseif ($stripped !== $history) {
+            $newHistory = $stripped;
+            $needsHistory = true;
+        }
+
+        if ($deleteIds === [] && !$needsHistory) {
+            continue;
+        }
+
+        $updatedVouchers++;
+        foreach ($deleteIds as $id) {
+            out("  {$processingNo}: delete duplicate consecutive Received by log id {$id}");
+            if ($apply) {
+                $deleteStmt->bindValue(':id', $id, PDO::PARAM_INT);
+                $deleteStmt->execute();
+            }
+            $deletedLogs++;
+        }
+        if ($needsHistory) {
+            $reason = $histReceiveCount < $logReceiveCount
+                ? 'rebuild process_history from action logs (missing Received by lines)'
+                : 'strip duplicate/orphan Received by lines from process_history';
+            out("  {$processingNo}: {$reason}");
+            $updatedRows += patch_history_update_tables($pdo, $processingNo, $newHistory, $apply);
+        }
+    }
+
+    return [
+        'deleted_logs' => $deletedLogs,
+        'updated_vouchers' => $updatedVouchers,
+        'updated_rows' => $updatedRows,
+    ];
+}
+
 function processed_log_exists(PDO $pdo, string $processingNo, string $actionBy): bool
 {
     $stmt = $pdo->prepare("
@@ -1516,9 +1843,19 @@ function processed_log_exists(PDO $pdo, string $processingNo, string $actionBy):
     return (bool) $stmt->fetchColumn();
 }
 
+if (!empty($GLOBALS['PATCH_FIX_LIBRARY'])) {
+    return;
+}
+
 if (!$isCli) {
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<pre style="font-family:monospace">';
+    if (!empty($embed)) {
+        header('Content-Type: text/plain; charset=utf-8');
+        header('X-Accel-Buffering: no');
+        header('Cache-Control: no-store');
+    } else {
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<pre style="font-family:monospace">';
+    }
 }
 
 out('Maintenance patch: Processed by logs + missing receive-after-return logs + process_history offices + amount decimals + combined remarks');
@@ -1544,6 +1881,9 @@ $receiveConvertedReturns = 0;
 $receiveInsertedForwards = 0;
 $receiveHistoryVouchersFixed = 0;
 $receiveHistoryRowsFixed = 0;
+$dupReceiveLogsDeleted = 0;
+$dupReceiveHistoryVouchersFixed = 0;
+$dupReceiveHistoryRowsFixed = 0;
 
 try {
     $archives = [];
@@ -1685,6 +2025,9 @@ try {
         &$receiveInsertedForwards,
         &$receiveHistoryVouchersFixed,
         &$receiveHistoryRowsFixed,
+        &$dupReceiveLogsDeleted,
+        &$dupReceiveHistoryVouchersFixed,
+        &$dupReceiveHistoryRowsFixed,
         $archives,
         $insertStmt,
         $trackingStmt,
@@ -1853,6 +2196,15 @@ try {
         $receiveHistoryRowsFixed = $receiveFix['updated_rows'];
     }
 
+    if (patch_should_run('dup_receive')) {
+        out(str_repeat('-', 72));
+        out('Phase 2b: duplicate consecutive Received by (same person) + orphan receive after Processed');
+        $dupReceiveFix = fix_duplicate_consecutive_receives($pdo, $apply);
+        $dupReceiveLogsDeleted = $dupReceiveFix['deleted_logs'];
+        $dupReceiveHistoryVouchersFixed = $dupReceiveFix['updated_vouchers'];
+        $dupReceiveHistoryRowsFixed = $dupReceiveFix['updated_rows'];
+    }
+
     if (patch_should_run('offices')) {
         out(str_repeat('-', 72));
         out('Phase 3: process_history office labels from user_group');
@@ -1883,7 +2235,7 @@ try {
 
     if (!$tx['ok']) {
         out('Migration failed: ' . ($tx['error']?->getMessage() ?? 'Unknown error'));
-        if (!$isCli) {
+        if (!$isCli && empty($embed)) {
             echo '</pre>';
         }
         exit(1);
@@ -1891,19 +2243,19 @@ try {
 
     out(str_repeat('-', 72));
     if (!$apply || $dryRun) {
-        out("Preview complete. Would insert {$insertedLogs} processed log(s), insert {$receiveLogsInserted} receive-after-return log(s), convert {$receiveConvertedReturns} mistaken Return log(s) to Receive and insert {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fix {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
+        out("Preview complete. Would insert {$insertedLogs} processed log(s), insert {$receiveLogsInserted} receive-after-return log(s), convert {$receiveConvertedReturns} mistaken Return log(s) to Receive and insert {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), delete {$dupReceiveLogsDeleted} duplicate Received by log(s) and fix {$dupReceiveHistoryVouchersFixed} voucher(s) / {$dupReceiveHistoryRowsFixed} history row(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fix {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
         out('Re-run with --apply (CLI) or ?apply=1 (browser) to save. Use --dry-run to execute then roll back.');
     } else {
-        out("Done. Inserted {$insertedLogs} processed log(s), inserted {$receiveLogsInserted} receive-after-return log(s), converted {$receiveConvertedReturns} mistaken Return log(s) to Receive and inserted {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fixed {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
+        out("Done. Inserted {$insertedLogs} processed log(s), inserted {$receiveLogsInserted} receive-after-return log(s), converted {$receiveConvertedReturns} mistaken Return log(s) to Receive and inserted {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), deleted {$dupReceiveLogsDeleted} duplicate Received by log(s) and fixed {$dupReceiveHistoryVouchersFixed} voucher(s) / {$dupReceiveHistoryRowsFixed} history row(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fixed {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
     }
 } catch (Throwable $e) {
     out('Migration failed: ' . $e->getMessage());
-    if (!$isCli) {
+    if (!$isCli && empty($embed)) {
         echo '</pre>';
     }
     exit(1);
 }
 
-if (!$isCli) {
+if (!$isCli && empty($embed)) {
     echo '</pre>';
 }
