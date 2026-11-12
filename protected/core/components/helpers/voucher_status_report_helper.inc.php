@@ -1007,10 +1007,16 @@ function voucher_status_report_users_for_location(
     PDO $pdo,
     array $resolvedUsers,
     string $unit,
-    string $office
+    string $office,
+    bool $restrictToResolved = false
 ): array {
     $unit = trim($unit);
     $office = trim($office);
+    $names = voucher_status_report_user_display_names($resolvedUsers);
+    if ($restrictToResolved) {
+        return $names;
+    }
+
     $isSpecificProcessor = count($resolvedUsers) === 1
         && voucher_tracking_user_has_designation($resolvedUsers[0], 'Processor');
     $isIcuTarget = !$isSpecificProcessor && (
@@ -1021,7 +1027,6 @@ function voucher_status_report_users_for_location(
         $unit = 'ICU';
     }
 
-    $names = voucher_status_report_user_display_names($resolvedUsers);
     if ($isSpecificProcessor) {
         return $names;
     }
@@ -1032,6 +1037,67 @@ function voucher_status_report_users_for_location(
     $unitNames = voucher_status_report_receiver_names_for_unit($pdo, $unit, $office);
 
     return $unitNames !== [] ? $unitNames : $names;
+}
+
+/**
+ * Unique UDCs from a comma-separated receiver_udc value.
+ *
+ * @return list<string>
+ */
+function voucher_status_report_parse_udcs(string $udcList): array
+{
+    return array_values(array_unique(array_filter(
+        array_map('trim', explode(',', $udcList)),
+        static fn(string $udc): bool => $udc !== ''
+    )));
+}
+
+/**
+ * Previous-process person a returned voucher is waiting on (not the returner).
+ *
+ * @param list<array{action?: string, name?: string}> $lines
+ * @param list<array{display_name?: string}> $destUsers
+ */
+function voucher_status_report_previous_process_target_name(
+    array $lines,
+    string $returnerName,
+    array $destUsers = []
+): string {
+    $returnerName = voucher_status_report_person_name($returnerName);
+    $destKeys = [];
+    foreach (voucher_status_report_user_display_names($destUsers) as $name) {
+        $destKeys[strtolower($name)] = true;
+    }
+
+    $pastReturn = false;
+    $fallback = '';
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $kind = voucher_tracking_action_kind((string) ($lines[$i]['action'] ?? ''));
+        $name = voucher_status_report_person_name((string) ($lines[$i]['name'] ?? ''));
+        if (!$pastReturn) {
+            if ($kind === 'return') {
+                $pastReturn = true;
+                if ($returnerName === '' && $name !== '') {
+                    $returnerName = $name;
+                }
+            }
+            continue;
+        }
+        if (!in_array($kind, ['receive', 'process', 'forward', 'encode'], true)) {
+            continue;
+        }
+        if ($name === '' || strcasecmp($name, $returnerName) === 0) {
+            continue;
+        }
+        if ($destKeys === [] || isset($destKeys[strtolower($name)])) {
+            return $name;
+        }
+        if ($fallback === '') {
+            $fallback = $name;
+        }
+    }
+
+    return $fallback;
 }
 
 /**
@@ -1224,11 +1290,29 @@ function voucher_status_report_resolve_location(
         }
     } elseif ($incomingRow !== [] || ($lastKind === 'forward' && $pendingRow !== [])) {
         $queue = $incomingRow !== [] ? $incomingRow : $pendingRow;
-        $destUsers = voucher_status_report_users_from_udc_list($pdo, (string) ($queue['receiver_udc'] ?? ''));
+        $destUdcList = (string) ($queue['receiver_udc'] ?? '');
+        $destUdcs = voucher_status_report_parse_udcs($destUdcList);
+        $destUsers = voucher_status_report_users_from_udc_list($pdo, $destUdcList);
         $destUser = $destUsers[0] ?? null;
+        $isReturnedUnreceived = !empty($entry['is_returned']) && $receivingRow === [];
+        $singleReturnTarget = '';
+        if ($isReturnedUnreceived) {
+            if (count($destUdcs) === 1) {
+                $singleReturnTarget = voucher_status_report_person_name((string) ($destUser['display_name'] ?? ''));
+            }
+            if ($singleReturnTarget === '') {
+                $singleReturnTarget = voucher_status_report_previous_process_target_name(
+                    $lines,
+                    (string) ($lastHeld['user'] ?? ''),
+                    $destUsers
+                );
+            }
+        }
         $isSpecificProcessor = count($destUsers) === 1
             && voucher_tracking_user_has_designation($destUser, 'Processor');
-        $isIcuTarget = !$isSpecificProcessor && voucher_status_report_is_icu_user_set($destUsers);
+        $isIcuTarget = $singleReturnTarget === ''
+            && !$isSpecificProcessor
+            && voucher_status_report_is_icu_user_set($destUsers);
         $forwardedTo = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($destUser);
         $forwardedOffice = trim((string) ($queue['office_to'] ?? ''));
         if ($forwardedOffice === '' && $destUser !== null) {
@@ -1238,13 +1322,34 @@ function voucher_status_report_resolve_location(
             $forwardedTo = $forwardedOffice;
             $forwardedOffice = '';
         }
-        $forwardedUsers = voucher_status_report_users_for_location(
-            $pdo,
-            $destUsers,
-            $forwardedTo,
-            $forwardedOffice
-        );
-        if ($currentSection === '' && $currentOffice === '') {
+        $forwardedUsers = $singleReturnTarget !== ''
+            ? [$singleReturnTarget]
+            : voucher_status_report_users_for_location(
+                $pdo,
+                $destUsers,
+                $forwardedTo,
+                $forwardedOffice,
+                $isReturnedUnreceived && count($destUdcs) === 1
+            );
+        if ($isReturnedUnreceived) {
+            if ($forwardedTo !== '') {
+                $currentSection = $forwardedTo;
+            } elseif ($currentSection === '') {
+                $currentSection = 'Returned';
+            }
+            if ($forwardedOffice !== '') {
+                $currentOffice = $forwardedOffice;
+            }
+            $pendingNames = $forwardedUsers !== []
+                ? $forwardedUsers
+                : voucher_status_report_user_display_names($destUsers);
+            $currentUsers = [];
+            foreach ($pendingNames as $pendingName) {
+                $currentUsers[] = $pendingName . ' (Not yet received)';
+            }
+            $currentUser = $currentUsers[0] ?? '';
+            $locationUsersLocked = true;
+        } elseif ($currentSection === '' && $currentOffice === '') {
             $currentSection = 'In transit';
         }
     } elseif ($receivingRow !== []) {
