@@ -4520,16 +4520,34 @@ function voucher_tracking_parse_combined_remark_segments(string $raw): array
     if (preg_match_all($pattern, $raw, $matches) && !empty($matches[0])) {
         $segments = [];
         foreach ($matches[0] as $index => $_) {
-            $segment = trim((string) ($matches[1][$index] ?? '') . ': ' . (string) ($matches[2][$index] ?? ''));
-            if ($segment !== '' && $segment !== ':') {
-                $segments[] = $segment;
+            $name = trim((string) ($matches[1][$index] ?? ''));
+            $body = trim((string) ($matches[2][$index] ?? ''));
+            if ($name === '' || $body === '' || strcasecmp($body, 'N/A') === 0) {
+                continue;
             }
+            $segments[] = $name . ': ' . $body;
         }
 
         return $segments;
     }
 
     return [$raw];
+}
+
+/** Drop "Name:" segments with no remark text from a combined-remarks string. */
+function voucher_tracking_strip_empty_combined_remark_segments(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '' || strcasecmp($raw, 'N/A') === 0) {
+        return $raw === '' ? '' : $raw;
+    }
+
+    $segments = voucher_tracking_parse_combined_remark_segments($raw);
+    if ($segments === []) {
+        return '';
+    }
+
+    return implode(', ', $segments);
 }
 
 /** Latest "Name: text" segment from combined remarks (for badge display). */

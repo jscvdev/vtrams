@@ -190,26 +190,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $action_by  = $_SESSION['logged_user_emp_name'];
                     $action_from = $_SESSION['logged_user_section'];
 
-                    if (!empty($combined_remarks) && $combined_remarks != "N/A") {
-                        // Prepare the text to remove, handling the optional comma
-                        $remove_text = trim($sender_remarks);
-                        if (!empty($remove_text)) {
-                            // Create a pattern to match with or without a preceding comma
-                            $pattern = '/(?:, )?' . preg_quote($remove_text, '/') . '/';
+                    $remarks = trim((string) ($remarks ?? ''));
+                    if ($remarks !== '') {
+                        if (!empty($combined_remarks) && $combined_remarks != "N/A") {
+                            // Prepare the text to remove, handling the optional comma
+                            $remove_text = trim((string) ($sender_remarks ?? ''));
+                            if (!empty($remove_text)) {
+                                // Create a pattern to match with or without a preceding comma
+                                $pattern = '/(?:, )?' . preg_quote($remove_text, '/') . '/';
 
-                            // Remove the text from $combined_remarks
-                            $combined_remarks = preg_replace($pattern, '', $combined_remarks);
+                                // Remove the text from $combined_remarks
+                                $combined_remarks = preg_replace($pattern, '', $combined_remarks);
 
-                            // Add the new remark only if the $combined_remarks is not empty
-                            if (!empty($combined_remarks)) {
-                                $combined_remarks .= ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                                // Add the new remark only if the $combined_remarks is not empty
+                                if (!empty($combined_remarks)) {
+                                    $combined_remarks .= ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                                } else {
+                                    // If $combined_remarks is empty after removal, just set it
+                                    $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                                }
                             } else {
-                                // If $combined_remarks is empty after removal, just set it
-                                $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                                $combined_remarks .= ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
                             }
+                        } else {
+                            $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
                         }
-                    } else {
-                        $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
                     }
 
                     $variables_to_check = [

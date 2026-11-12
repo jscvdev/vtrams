@@ -10,7 +10,8 @@
  * 3) Correct process_history office labels using user_group (actor's registered office).
  * 4) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
  *    voucher tables.
- * 5) Rebuild combined remarks on voucher tables from voucher_action_logs.remarks.
+ * 5) Strip empty "Name:" combined-remark segments, then rebuild combined remarks
+ *    on voucher tables from voucher_action_logs.remarks.
  *
  * Usage (CLI):
  *   c:\xampp\php\php.exe SQL/patch_fix.php           # dry-run
@@ -479,6 +480,131 @@ const REMARKS_SYNC_TABLES = [
     'voucher_sent',
     'voucher_temp',
 ];
+
+/** @var list<string> */
+const EMPTY_REMARKS_STRIP_TABLES = [
+    'voucher_action_logs',
+    'voucher_tracking',
+    'voucher_archives',
+    'voucher_incoming',
+    'voucher_receiving',
+    'voucher_sent',
+    'voucher_temp',
+    'vouchers',
+];
+
+/**
+ * Remove "Name:" combined-remark segments with no text from remarks columns.
+ *
+ * @return array{updated_vouchers: int, updated_rows: int}
+ */
+function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
+{
+    $updatedVouchers = 0;
+    $updatedRows = 0;
+    $touchedProcessingNos = [];
+
+    foreach (EMPTY_REMARKS_STRIP_TABLES as $table) {
+        $columns = patch_table_columns($pdo, $table);
+        if ($columns === null) {
+            out("Skip {$table}: table not found.");
+            continue;
+        }
+
+        $remarkColumns = [];
+        foreach (['remarks', 'sender_remarks'] as $column) {
+            if (isset($columns[$column])) {
+                $remarkColumns[] = $column;
+            }
+        }
+        if ($remarkColumns === []) {
+            out("Skip {$table}: no remarks column(s).");
+            continue;
+        }
+
+        $idCol = isset($columns['id']) ? 'id' : null;
+        $hasProcessingNo = isset($columns['processing_no']);
+        $selectCols = array_values(array_unique(array_filter(array_merge(
+            $idCol !== null ? [$idCol] : [],
+            $hasProcessingNo ? ['processing_no'] : [],
+            $remarkColumns
+        ))));
+
+        $whereParts = [];
+        foreach ($remarkColumns as $column) {
+            $whereParts[] = "TRIM(COALESCE(`{$column}`, '')) <> ''"
+                . " AND TRIM(COALESCE(`{$column}`, '')) <> 'N/A'"
+                . " AND `{$column}` LIKE '%:%'";
+        }
+
+        $selectSql = 'SELECT ' . implode(', ', array_map(
+            static fn (string $column): string => '`' . $column . '`',
+            $selectCols
+        )) . " FROM `{$table}` WHERE " . implode(' OR ', $whereParts);
+        $rows = $pdo->query($selectSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
+
+        out('Scanning ' . count($rows) . " row(s) in {$table} for empty combined remarks...");
+
+        foreach ($rows as $row) {
+            $rowUpdates = [];
+            foreach ($remarkColumns as $column) {
+                $current = trim((string) ($row[$column] ?? ''));
+                if ($current === '' || strcasecmp($current, 'N/A') === 0) {
+                    continue;
+                }
+
+                $stripped = voucher_tracking_strip_empty_combined_remark_segments($current);
+                if ($stripped === $current) {
+                    continue;
+                }
+
+                $rowUpdates[$column] = $stripped;
+            }
+
+            if ($rowUpdates === []) {
+                continue;
+            }
+
+            $processingNo = $hasProcessingNo ? trim((string) ($row['processing_no'] ?? '')) : '';
+            $label = $processingNo !== ''
+                ? $processingNo
+                : ($idCol !== null ? (string) ($row[$idCol] ?? '') : $table);
+            if ($label === '') {
+                $label = 'unknown';
+            }
+
+            foreach ($rowUpdates as $column => $stripped) {
+                $current = trim((string) ($row[$column] ?? ''));
+                $preview = $stripped === '' ? '(empty)' : $stripped;
+                out("  {$table} {$label}: {$column} stripped empty remark(s) → {$preview}");
+                if ($apply) {
+                    if ($idCol !== null) {
+                        $updateStmt = $pdo->prepare("UPDATE `{$table}` SET `{$column}` = :remarks WHERE `{$idCol}` = :id");
+                        $updateStmt->bindValue(':remarks', $stripped, PDO::PARAM_STR);
+                        $updateStmt->bindValue(':id', $row[$idCol], PDO::PARAM_STR);
+                        $updateStmt->execute();
+                    } elseif ($hasProcessingNo) {
+                        $updateStmt = $pdo->prepare("UPDATE `{$table}` SET `{$column}` = :remarks WHERE `processing_no` = :processing_no");
+                        $updateStmt->bindValue(':remarks', $stripped, PDO::PARAM_STR);
+                        $updateStmt->bindValue(':processing_no', $row['processing_no'], PDO::PARAM_STR);
+                        $updateStmt->execute();
+                    }
+                }
+            }
+
+            if ($processingNo !== '' && !isset($touchedProcessingNos[$processingNo])) {
+                $touchedProcessingNos[$processingNo] = true;
+                $updatedVouchers++;
+            }
+            $updatedRows++;
+        }
+    }
+
+    return [
+        'updated_vouchers' => $updatedVouchers,
+        'updated_rows' => $updatedRows,
+    ];
+}
 
 /**
  * @return array{updated_vouchers: int, updated_rows: int}
@@ -1369,10 +1495,11 @@ try {
 
     if (patch_should_run('remarks')) {
         out(str_repeat('-', 72));
-        out('Phase 5: combined remarks from voucher_action_logs');
+        out('Phase 5: strip empty combined remarks, then rebuild from voucher_action_logs');
+        $emptyRemarksFix = fix_empty_combined_remark_segments($pdo, $apply);
         $remarksFix = fix_combined_remarks_from_action_logs($pdo, $apply);
-        $remarksVouchersFixed = $remarksFix['updated_vouchers'];
-        $remarksRowsFixed = $remarksFix['updated_rows'];
+        $remarksVouchersFixed = $emptyRemarksFix['updated_vouchers'] + $remarksFix['updated_vouchers'];
+        $remarksRowsFixed = $emptyRemarksFix['updated_rows'] + $remarksFix['updated_rows'];
     }
     };
 

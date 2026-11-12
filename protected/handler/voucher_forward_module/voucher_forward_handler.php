@@ -127,12 +127,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $action_from = voucher_post_string($_SESSION['logged_user_section'] ?? '');
                     $sender_udc = trim((string) ($_SESSION['logged_user_udc'] ?? ''));
 
-                    //REMARKS
-                    if (!empty($remarks)) {
-                        $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                    //REMARKS — skip concat when the new remark is empty
+                    $remarks = trim((string) ($remarks ?? ''));
+                    if ($remarks !== '') {
+                        if (!empty($combined_remarks) && strcasecmp((string) $combined_remarks, 'N/A') !== 0) {
+                            $combined_remarks = $combined_remarks . ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                        } else {
+                            $combined_remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
+                        }
                         $remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
-                    } else {
-                        $combined_remarks = "N/A";
                     }
 
                     // Resolve encoder office for routing (designation_limit uses office names, not sections).

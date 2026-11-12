@@ -1198,14 +1198,19 @@ $statusReportRowMetaLabel = $isDefaultPreview
                 return [{ text: text, isLatest: true }];
             }
 
-            return matches.map(function(match, index) {
+            const segments = [];
+            matches.forEach(function(match) {
                 const name = String(match[1] || '').trim();
                 const body = String(match[2] || '').trim();
-                return {
-                    text: (name + ': ' + body).trim(),
-                    isLatest: index === matches.length - 1
-                };
+                if (name === '' || body === '' || body.toLowerCase() === 'n/a') {
+                    return;
+                }
+                segments.push({ text: (name + ': ' + body).trim(), isLatest: false });
             });
+            if (segments.length > 0) {
+                segments[segments.length - 1].isLatest = true;
+            }
+            return segments;
         }
 
         function renderCombinedRemarks(raw) {

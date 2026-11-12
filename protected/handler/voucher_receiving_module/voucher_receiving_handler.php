@@ -257,8 +257,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $action_from = $_SESSION['logged_user_section'];
                     $sender_udc = $_SESSION['logged_user_udc'];
 
-                    //REMARKS
-                    if (!empty($remarks)) {
+                    //REMARKS — skip concat when the new remark is empty
+                    $remarks = trim((string) ($remarks ?? ''));
+                    if ($remarks !== '') {
                         if ($combined_remarks != "N/A") {
                             $combined_remarks = $combined_remarks . ", " . $_SESSION['logged_user_emp_name'] . ": " . $remarks;
                             $remarks = $_SESSION['logged_user_emp_name'] . ": " . $remarks;
