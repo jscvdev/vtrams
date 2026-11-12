@@ -1432,20 +1432,13 @@ $statusReportRowMetaLabel = $isDefaultPreview
 
         function openBreakdown(entry) {
             if (!entry || !modal || !overlay) return;
-            if (entryHasDetailPayload(entry)) {
-                renderBreakdown(entry);
-                return;
-            }
             const pn = String(entry.processing_no || '').trim();
-            document.getElementById('statusReportModalTitle').textContent = 'Loading…';
-            modal.style.display = 'block';
-            overlay.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+            renderBreakdown(entry);
             fetchEntryDetail(pn).then(function(full) {
-                renderBreakdown(full || entry);
-            }).catch(function() {
-                renderBreakdown(entry);
-            });
+                if (full) {
+                    renderBreakdown(full);
+                }
+            }).catch(function() {});
         }
 
         function renderBreakdown(entry) {
@@ -1469,27 +1462,45 @@ $statusReportRowMetaLabel = $isDefaultPreview
             document.getElementById('sr_dv_no').textContent = formatBreakdownIdentifier(entry.dv_no);
             const currentLocEl = document.getElementById('sr_current_location');
             const currentLoc = String(entry.current_location || entry.current_section || '').trim();
-            const currentUser = String(entry.current_user || '').trim();
+            let currentUsers = Array.isArray(entry.current_users) ? entry.current_users.slice() : [];
+            if (currentUsers.length === 0 && String(entry.current_user || '').trim() !== '') {
+                currentUsers = [entry.current_user];
+            }
             if (currentLocEl) {
-                if (currentLoc === '' && currentUser === '') {
+                if (currentLoc === '' && currentUsers.length === 0) {
                     currentLocEl.textContent = '—';
-                } else if (currentUser === '' || currentLoc.toLowerCase().indexOf(currentUser.toLowerCase()) !== -1) {
-                    currentLocEl.textContent = currentLoc || '—';
                 } else {
-                    currentLocEl.innerHTML = escapeHtml(currentLoc || '—')
-                        + '<div class="status-breakdown-user"><i class="ri-user-3-line" aria-hidden="true"></i>'
-                        + escapeHtml(currentUser) + '</div>';
+                    let html = currentLoc !== '' ? escapeHtml(currentLoc) : '';
+                    currentUsers.forEach(function(name) {
+                        const person = String(name || '').trim();
+                        if (person === '') {
+                            return;
+                        }
+                        html += '<div class="status-breakdown-user"><i class="ri-user-3-line" aria-hidden="true"></i>'
+                            + escapeHtml(person) + '</div>';
+                    });
+                    currentLocEl.innerHTML = html !== '' ? html : '—';
                 }
             }
             const forwardedCard = document.getElementById('sr_forwarded_to_card');
             const forwardedEl = document.getElementById('sr_forwarded_to');
             const forwardedLabel = String(entry.forwarded_to_label || entry.forwarded_to || '').trim();
+            const forwardedUsers = Array.isArray(entry.forwarded_to_users) ? entry.forwarded_to_users : [];
             if (forwardedCard && forwardedEl) {
-                if (forwardedLabel !== '') {
-                    forwardedEl.textContent = forwardedLabel;
+                if (forwardedLabel !== '' || forwardedUsers.length > 0) {
+                    let html = forwardedLabel !== '' ? escapeHtml(forwardedLabel) : '';
+                    forwardedUsers.forEach(function(name) {
+                        const person = String(name || '').trim();
+                        if (person === '') {
+                            return;
+                        }
+                        html += '<div class="status-breakdown-user"><i class="ri-user-3-line" aria-hidden="true"></i>'
+                            + escapeHtml(person) + '</div>';
+                    });
+                    forwardedEl.innerHTML = html;
                     forwardedCard.style.display = '';
                 } else {
-                    forwardedEl.textContent = '';
+                    forwardedEl.innerHTML = '';
                     forwardedCard.style.display = 'none';
                 }
             }

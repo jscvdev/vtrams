@@ -522,9 +522,11 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'current_office' => '',
         'current_location' => '',
         'current_user' => '',
+        'current_users' => [],
         'forwarded_to' => '',
         'forwarded_to_office' => '',
         'forwarded_to_label' => '',
+        'forwarded_to_users' => [],
     ];
 }
 
@@ -776,12 +778,299 @@ function voucher_status_report_user_from_udc_list(PDO $pdo, string $udcList): ?a
 }
 
 /**
+ * @return list<array{udc: string, designation: string, section: string, office: string, display_name: string}>
+ */
+function voucher_status_report_users_from_udc_list(PDO $pdo, string $udcList): array
+{
+    $udcs = array_values(array_unique(array_filter(
+        array_map('trim', explode(',', $udcList)),
+        static fn(string $udc): bool => $udc !== ''
+    )));
+    if ($udcs === []) {
+        return [];
+    }
+
+    $users = [];
+    $stmt = $pdo->prepare(
+        'SELECT udc, designation, section, office, COALESCE(is_blocked, 0) AS is_blocked,
+            TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) AS display_name
+         FROM user_group
+         WHERE udc = :udc
+         LIMIT 1'
+    );
+    foreach ($udcs as $udc) {
+        $stmt->bindValue(':udc', $udc, PDO::PARAM_STR);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row || voucher_status_report_user_row_is_blocked($row)) {
+            continue;
+        }
+        $name = voucher_status_report_person_name(trim((string) ($row['display_name'] ?? '')));
+        $users[] = [
+            'udc' => trim((string) ($row['udc'] ?? '')),
+            'designation' => trim((string) ($row['designation'] ?? '')),
+            'section' => trim((string) ($row['section'] ?? '')),
+            'office' => trim((string) ($row['office'] ?? '')),
+            'display_name' => $name,
+        ];
+    }
+
+    return $users;
+}
+
+function voucher_status_report_user_row_is_blocked(array $row): bool
+{
+    return (int) ($row['is_blocked'] ?? 0) === 1;
+}
+
+/**
+ * @param list<array{designation?: string}> $users
+ */
+function voucher_status_report_is_icu_user_set(array $users): bool
+{
+    if ($users === []) {
+        return false;
+    }
+
+    foreach ($users as $user) {
+        if (!voucher_tracking_user_is_icu_role($user)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Accounting staff who receive unit-wide hops (ICU is listed separately).
+ *
+ * @return list<string>
+ */
+function voucher_status_report_accounting_receiver_designations(): array
+{
+    return ['Accounting Unit', 'Processor', 'Accountant III'];
+}
+
+/**
+ * Users who can receive at a unit/section (Accounting, Budget, etc.).
+ *
+ * @return list<string>
+ */
+function voucher_status_report_receiver_names_for_unit(PDO $pdo, string $unit, string $office): array
+{
+    $unit = trim($unit);
+    if ($unit === '') {
+        return [];
+    }
+
+    $office = trim($office);
+    if (strcasecmp($unit, 'ICU') === 0) {
+        return voucher_status_report_icu_receiver_names($pdo, $office);
+    }
+
+    $candidates = array_values(array_unique(array_filter([
+        $unit,
+        voucher_tracking_normalize_section_label($unit),
+        voucher_tracking_dashboard_section_label($unit),
+    ])));
+    if (strcasecmp($unit, 'Accounting Unit') === 0 || strcasecmp($unit, 'Accounting') === 0) {
+        $candidates = array_merge($candidates, voucher_status_report_accounting_receiver_designations());
+    }
+    $candidates = array_values(array_unique(array_filter(array_map('trim', $candidates))));
+    if ($candidates === []) {
+        return [];
+    }
+
+    $sql = 'SELECT TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) AS display_name
+            FROM user_group
+            WHERE TRIM(udc) <> \'\'
+              AND COALESCE(is_blocked, 0) = 0';
+    if ($office !== '') {
+        $sql .= ' AND office = :office';
+    }
+    $sql .= ' AND (
+                section = :unit
+                OR FIND_IN_SET(:unit_desig, REPLACE(designation, \', \', \',\')) > 0
+            )';
+
+    $stmt = $pdo->prepare($sql);
+    $names = [];
+    $seen = [];
+    foreach ($candidates as $candidate) {
+        if ($office !== '') {
+            $stmt->bindValue(':office', $office, PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':unit', $candidate, PDO::PARAM_STR);
+        $stmt->bindValue(':unit_desig', $candidate, PDO::PARAM_STR);
+        $stmt->execute();
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $name = voucher_status_report_person_name(trim((string) ($row['display_name'] ?? '')));
+            $key = strtolower($name);
+            if ($name === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $names[] = $name;
+        }
+    }
+    natcasesort($names);
+
+    return array_values($names);
+}
+
+/**
+ * ICU plus designated-limit ICU (alternate ICU). Blocked accounts are omitted.
+ *
+ * @return list<string>
+ */
+function voucher_status_report_icu_receiver_names(PDO $pdo, string $office): array
+{
+    $office = trim($office);
+    $users = [];
+    if ($office !== '') {
+        $limitUdcs = voucher_designation_limit_receiver_udcs_for_office($pdo, 'ICU', $office);
+        $users = voucher_status_report_users_from_udc_list($pdo, $limitUdcs);
+    }
+
+    $sql = 'SELECT udc, designation, section, office, COALESCE(is_blocked, 0) AS is_blocked,
+                TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) AS display_name
+            FROM user_group
+            WHERE TRIM(udc) <> \'\'
+              AND COALESCE(is_blocked, 0) = 0
+              AND FIND_IN_SET(\'ICU\', REPLACE(designation, \', \', \',\')) > 0';
+    if ($office !== '') {
+        $sql .= ' AND office = :office';
+    }
+    $stmt = $pdo->prepare($sql);
+    if ($office !== '') {
+        $stmt->bindValue(':office', $office, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        if (voucher_status_report_user_row_is_blocked($row)) {
+            continue;
+        }
+        $name = voucher_status_report_person_name(trim((string) ($row['display_name'] ?? '')));
+        $users[] = [
+            'udc' => trim((string) ($row['udc'] ?? '')),
+            'designation' => trim((string) ($row['designation'] ?? '')),
+            'section' => trim((string) ($row['section'] ?? '')),
+            'office' => trim((string) ($row['office'] ?? '')),
+            'display_name' => $name,
+        ];
+    }
+
+    return voucher_status_report_user_display_names($users);
+}
+
+/**
+ * @param list<array{designation?: string, display_name?: string}> $resolvedUsers
+ * @return list<string>
+ */
+/**
+ * People currently holding the voucher. ICU expands to ICU + designated-limit
+ * (alternate ICU); other units keep the actual holder name(s).
+ *
+ * @param list<array{designation?: string, display_name?: string}> $resolvedUsers
+ * @return list<string>
+ */
+function voucher_status_report_current_holder_names(
+    PDO $pdo,
+    array $resolvedUsers,
+    string $unit,
+    string $office,
+    string $fallbackName = ''
+): array {
+    $isSpecificProcessor = count($resolvedUsers) === 1
+        && voucher_tracking_user_has_designation($resolvedUsers[0], 'Processor');
+    $isIcu = !$isSpecificProcessor && (
+        strcasecmp(trim($unit), 'ICU') === 0
+        || voucher_status_report_is_icu_user_set($resolvedUsers)
+    );
+    if ($isIcu) {
+        $icuNames = voucher_status_report_icu_receiver_names($pdo, $office);
+        if ($icuNames !== []) {
+            return $icuNames;
+        }
+    }
+
+    $names = voucher_status_report_user_display_names($resolvedUsers);
+    $fallbackName = voucher_status_report_person_name($fallbackName);
+    if ($names === [] && $fallbackName !== '') {
+        $names = [$fallbackName];
+    }
+
+    return $names;
+}
+
+function voucher_status_report_users_for_location(
+    PDO $pdo,
+    array $resolvedUsers,
+    string $unit,
+    string $office
+): array {
+    $unit = trim($unit);
+    $office = trim($office);
+    $isSpecificProcessor = count($resolvedUsers) === 1
+        && voucher_tracking_user_has_designation($resolvedUsers[0], 'Processor');
+    $isIcuTarget = !$isSpecificProcessor && (
+        strcasecmp($unit, 'ICU') === 0
+        || voucher_status_report_is_icu_user_set($resolvedUsers)
+    );
+    if ($isIcuTarget) {
+        $unit = 'ICU';
+    }
+
+    $names = voucher_status_report_user_display_names($resolvedUsers);
+    if ($isSpecificProcessor) {
+        return $names;
+    }
+    if ($unit === '') {
+        return $names;
+    }
+
+    $unitNames = voucher_status_report_receiver_names_for_unit($pdo, $unit, $office);
+
+    return $unitNames !== [] ? $unitNames : $names;
+}
+
+/**
+ * @param list<array{display_name?: string}> $users
+ * @return list<string>
+ */
+function voucher_status_report_user_display_names(array $users): array
+{
+    $names = [];
+    $seen = [];
+    foreach ($users as $user) {
+        $name = voucher_status_report_person_name(trim((string) ($user['display_name'] ?? '')));
+        $key = strtolower($name);
+        if ($name === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $names[] = $name;
+    }
+    natcasesort($names);
+
+    return array_values($names);
+}
+
+/**
  * @param array{designation?: string, section?: string}|null $user
  */
 function voucher_status_report_unit_label_from_user(?array $user): string
 {
     if ($user === null) {
         return '';
+    }
+
+    if (
+        voucher_tracking_user_is_icu_role($user)
+        && !voucher_tracking_user_has_designation($user, 'Processor')
+        && !voucher_tracking_user_has_designation($user, 'Accountant III')
+    ) {
+        return 'ICU';
     }
 
     $section = voucher_tracking_dashboard_section_from_user_role($user);
@@ -897,9 +1186,11 @@ function voucher_status_report_format_location_label(string $section, string $of
  *   current_office: string,
  *   current_location: string,
  *   current_user: string,
+ *   current_users: list<string>,
  *   forwarded_to: string,
  *   forwarded_to_office: string,
- *   forwarded_to_label: string
+ *   forwarded_to_label: string,
+ *   forwarded_to_users: list<string>
  * }
  */
 function voucher_status_report_resolve_location(
@@ -915,8 +1206,11 @@ function voucher_status_report_resolve_location(
     $currentSection = $lastHeld['section'];
     $currentOffice = $lastHeld['office'];
     $currentUser = voucher_status_report_person_name((string) ($lastHeld['user'] ?? ''));
+    $currentUsers = $currentUser !== '' ? [$currentUser] : [];
     $forwardedTo = '';
     $forwardedOffice = '';
+    $forwardedUsers = [];
+    $locationUsersLocked = false;
 
     $pendingRow = $incomingRow !== [] ? $incomingRow : (($receivingRow === [] && $sentRow !== []) ? $sentRow : []);
     $lastKind = '';
@@ -930,8 +1224,12 @@ function voucher_status_report_resolve_location(
         }
     } elseif ($incomingRow !== [] || ($lastKind === 'forward' && $pendingRow !== [])) {
         $queue = $incomingRow !== [] ? $incomingRow : $pendingRow;
-        $destUser = voucher_status_report_user_from_udc_list($pdo, (string) ($queue['receiver_udc'] ?? ''));
-        $forwardedTo = voucher_status_report_unit_label_from_user($destUser);
+        $destUsers = voucher_status_report_users_from_udc_list($pdo, (string) ($queue['receiver_udc'] ?? ''));
+        $destUser = $destUsers[0] ?? null;
+        $isSpecificProcessor = count($destUsers) === 1
+            && voucher_tracking_user_has_designation($destUser, 'Processor');
+        $isIcuTarget = !$isSpecificProcessor && voucher_status_report_is_icu_user_set($destUsers);
+        $forwardedTo = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($destUser);
         $forwardedOffice = trim((string) ($queue['office_to'] ?? ''));
         if ($forwardedOffice === '' && $destUser !== null) {
             $forwardedOffice = trim((string) ($destUser['office'] ?? ''));
@@ -940,13 +1238,22 @@ function voucher_status_report_resolve_location(
             $forwardedTo = $forwardedOffice;
             $forwardedOffice = '';
         }
+        $forwardedUsers = voucher_status_report_users_for_location(
+            $pdo,
+            $destUsers,
+            $forwardedTo,
+            $forwardedOffice
+        );
         if ($currentSection === '' && $currentOffice === '') {
             $currentSection = 'In transit';
         }
-        $currentUser = '';
     } elseif ($receivingRow !== []) {
-        $holder = voucher_status_report_user_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
-        $heldSection = voucher_status_report_unit_label_from_user($holder);
+        $holders = voucher_status_report_users_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
+        $holder = $holders[0] ?? null;
+        $isSpecificProcessor = count($holders) === 1
+            && voucher_tracking_user_has_designation($holder, 'Processor');
+        $isIcuTarget = !$isSpecificProcessor && voucher_status_report_is_icu_user_set($holders);
+        $heldSection = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($holder);
         if ($heldSection !== '') {
             $currentSection = $heldSection;
         }
@@ -957,16 +1264,52 @@ function voucher_status_report_resolve_location(
         if ($heldOffice !== '') {
             $currentOffice = $heldOffice;
         }
-        $holderName = $holder !== null
-            ? voucher_status_report_person_name((string) ($holder['display_name'] ?? ''))
-            : '';
-        if ($holderName !== '') {
-            $currentUser = $holderName;
+        if ($holders !== []) {
+            $currentUsers = voucher_status_report_current_holder_names(
+                $pdo,
+                $holders,
+                $currentSection,
+                $currentOffice,
+                $currentUser
+            );
+            $currentUser = $currentUsers[0] ?? $currentUser;
+            $locationUsersLocked = true;
         }
     } elseif (!empty($entry['is_returned'])) {
         if ($currentSection === '') {
             $currentSection = 'Returned';
         }
+    }
+
+    if (
+        !$locationUsersLocked
+        && empty($entry['is_paid'])
+        && strcasecmp($currentSection, 'Returned') !== 0
+        && strcasecmp($currentSection, 'In transit') !== 0
+    ) {
+        $heldUsers = [];
+        $heldName = $currentUser;
+        if ($heldName !== '') {
+            $held = voucher_tracking_lookup_user_by_display_name($pdo, $heldName);
+            if (is_array($held)) {
+                $heldUsers = [$held];
+                if (
+                    voucher_tracking_user_is_icu_role($held)
+                    && !voucher_tracking_user_has_designation($held, 'Processor')
+                    && !voucher_tracking_user_has_designation($held, 'Accountant III')
+                ) {
+                    $currentSection = 'ICU';
+                }
+            }
+        }
+        $currentUsers = voucher_status_report_current_holder_names(
+            $pdo,
+            $heldUsers,
+            $currentSection,
+            $currentOffice,
+            $heldName
+        );
+        $currentUser = $currentUsers[0] ?? $currentUser;
     }
 
     if ($currentUser !== '' && (
@@ -975,15 +1318,27 @@ function voucher_status_report_resolve_location(
     )) {
         $currentUser = '';
     }
+    $currentUsers = array_values(array_filter(
+        $currentUsers,
+        static function (string $name) use ($currentSection, $currentOffice): bool {
+            return strcasecmp($name, $currentSection) !== 0
+                && strcasecmp($name, $currentOffice) !== 0;
+        }
+    ));
+    if ($currentUser === '' && $currentUsers !== []) {
+        $currentUser = $currentUsers[0];
+    }
 
     return [
         'current_section' => $currentSection,
         'current_office' => $currentOffice,
         'current_location' => voucher_status_report_format_location_label($currentSection, $currentOffice),
         'current_user' => $currentUser,
+        'current_users' => $currentUsers,
         'forwarded_to' => $forwardedTo,
         'forwarded_to_office' => $forwardedOffice,
         'forwarded_to_label' => voucher_status_report_format_location_label($forwardedTo, $forwardedOffice),
+        'forwarded_to_users' => $forwardedUsers,
     ];
 }
 

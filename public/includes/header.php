@@ -401,7 +401,7 @@ $header_text = $pageTitleHelper->getHeaderText();
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($can_view_dashboard): ?>
-                                    <div class="sidebar-link-container">
+                                    <div class="sidebar-link-container new_label_tab">
                                         <a href="../vouchers/voucher_status_report.php" class="sidebar__link">
                                             <i class="ri-file-chart-line"></i>
                                             <span class="sidebar__link-name">Status Report</span>
