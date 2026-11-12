@@ -9,6 +9,8 @@ require __DIR__ . '/../../core/components/security/router.inc.php';
 require_once __DIR__ . '/../../core/components/helpers/voucher_status_report_helper.inc.php';
 
 header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 
 if (!class_exists('AccessControl') || !AccessControl::canAccessOverviewReports()) {
     http_response_code(403);

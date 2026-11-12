@@ -10,8 +10,9 @@
  * 3) Correct process_history office labels using user_group (actor's registered office).
  * 4) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
  *    voucher tables.
- * 5) Strip empty "Name:" combined-remark segments, then rebuild combined remarks
- *    on voucher tables from voucher_action_logs.remarks.
+ * 5) Clear empty "Name:" / "Name: , Name:" remarks in voucher_action_logs and
+ *    voucher tables (persist empty string), then rebuild remaining combined
+ *    remarks from action logs that still have real text.
  *
  * Usage (CLI):
  *   c:\xampp\php\php.exe SQL/patch_fix.php           # dry-run
@@ -491,10 +492,50 @@ const EMPTY_REMARKS_STRIP_TABLES = [
     'voucher_sent',
     'voucher_temp',
     'vouchers',
+    'document_tracking',
 ];
 
 /**
- * Remove "Name:" combined-remark segments with no text from remarks columns.
+ * @return list<string>
+ */
+function patch_discover_remark_tables(PDO $pdo): array
+{
+    $tables = $pdo->query('SHOW TABLES')?->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $found = [];
+    foreach ($tables as $table) {
+        $table = (string) $table;
+        $columns = patch_table_columns($pdo, $table);
+        if ($columns === null) {
+            continue;
+        }
+        if (isset($columns['remarks']) || isset($columns['sender_remarks'])) {
+            $found[] = $table;
+        }
+    }
+
+    return $found !== [] ? $found : EMPTY_REMARKS_STRIP_TABLES;
+}
+
+function patch_remarks_empty_segment_sql(string $column): string
+{
+    $quoted = '`' . $column . '`';
+
+    return "TRIM(COALESCE({$quoted}, '')) <> ''"
+        . " AND TRIM(COALESCE({$quoted}, '')) <> 'N/A'"
+        . " AND {$quoted} LIKE '%:%'";
+}
+
+function patch_remarks_name_only_sql(string $column): string
+{
+    $quoted = '`' . $column . '`';
+
+    return "TRIM(COALESCE({$quoted}, '')) <> ''"
+        . " AND TRIM(COALESCE({$quoted}, '')) <> 'N/A'"
+        . " AND TRIM({$quoted}) REGEXP '^([^,:]+:[[:space:]]*,[[:space:]]*)*[^,:]+:[[:space:]]*$'";
+}
+
+/**
+ * Remove "Name:" / "Name: , Name:" combined-remark segments with no text.
  *
  * @return array{updated_vouchers: int, updated_rows: int}
  */
@@ -503,8 +544,9 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
     $updatedVouchers = 0;
     $updatedRows = 0;
     $touchedProcessingNos = [];
+    $tables = patch_discover_remark_tables($pdo);
 
-    foreach (EMPTY_REMARKS_STRIP_TABLES as $table) {
+    foreach ($tables as $table) {
         $columns = patch_table_columns($pdo, $table);
         if ($columns === null) {
             out("Skip {$table}: table not found.");
@@ -522,6 +564,25 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
             continue;
         }
 
+        foreach ($remarkColumns as $column) {
+            $clearSql = "UPDATE `{$table}` SET `{$column}` = '' WHERE " . patch_remarks_name_only_sql($column);
+            try {
+                if ($apply) {
+                    $cleared = $pdo->exec($clearSql);
+                    $cleared = is_int($cleared) ? $cleared : 0;
+                } else {
+                    $countSql = "SELECT COUNT(*) FROM `{$table}` WHERE " . patch_remarks_name_only_sql($column);
+                    $cleared = (int) ($pdo->query($countSql)?->fetchColumn() ?: 0);
+                }
+            } catch (PDOException) {
+                $cleared = 0;
+            }
+            if ($cleared > 0) {
+                out("  {$table}.{$column}: cleared {$cleared} name-only empty remark row(s)");
+                $updatedRows += $cleared;
+            }
+        }
+
         $idCol = isset($columns['id']) ? 'id' : null;
         $hasProcessingNo = isset($columns['processing_no']);
         $selectCols = array_values(array_unique(array_filter(array_merge(
@@ -532,18 +593,30 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
 
         $whereParts = [];
         foreach ($remarkColumns as $column) {
-            $whereParts[] = "TRIM(COALESCE(`{$column}`, '')) <> ''"
-                . " AND TRIM(COALESCE(`{$column}`, '')) <> 'N/A'"
-                . " AND `{$column}` LIKE '%:%'";
+            $whereParts[] = patch_remarks_empty_segment_sql($column);
         }
 
         $selectSql = 'SELECT ' . implode(', ', array_map(
             static fn (string $column): string => '`' . $column . '`',
             $selectCols
         )) . " FROM `{$table}` WHERE " . implode(' OR ', $whereParts);
-        $rows = $pdo->query($selectSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
 
-        out('Scanning ' . count($rows) . " row(s) in {$table} for empty combined remarks...");
+        try {
+            $rows = $pdo->query($selectSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
+        } catch (PDOException) {
+            $fallbackParts = [];
+            foreach ($remarkColumns as $column) {
+                $fallbackParts[] = patch_remarks_empty_segment_sql($column);
+            }
+            $fallbackSql = 'SELECT ' . implode(', ', array_map(
+                static fn (string $column): string => '`' . $column . '`',
+                $selectCols
+            )) . " FROM `{$table}` WHERE " . implode(' OR ', $fallbackParts);
+            $rows = $pdo->query($fallbackSql)?->fetchAll(PDO::FETCH_ASSOC) ?? [];
+        }
+
+        out('Scanning ' . count($rows) . " candidate row(s) in {$table} for empty combined remarks...");
+        $exampleCount = 0;
 
         foreach ($rows as $row) {
             $rowUpdates = [];
@@ -558,7 +631,7 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
                     continue;
                 }
 
-                $rowUpdates[$column] = $stripped;
+                $rowUpdates[$column] = $stripped; // empty string clears Name-only concatenations
             }
 
             if ($rowUpdates === []) {
@@ -574,9 +647,11 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
             }
 
             foreach ($rowUpdates as $column => $stripped) {
-                $current = trim((string) ($row[$column] ?? ''));
                 $preview = $stripped === '' ? '(empty)' : $stripped;
-                out("  {$table} {$label}: {$column} stripped empty remark(s) → {$preview}");
+                if ($exampleCount < 20) {
+                    out("  {$table} {$label}: {$column} stripped empty remark(s) → {$preview}");
+                    $exampleCount++;
+                }
                 if ($apply) {
                     if ($idCol !== null) {
                         $updateStmt = $pdo->prepare("UPDATE `{$table}` SET `{$column}` = :remarks WHERE `{$idCol}` = :id");
@@ -597,6 +672,10 @@ function fix_empty_combined_remark_segments(PDO $pdo, bool $apply): array
                 $updatedVouchers++;
             }
             $updatedRows++;
+        }
+
+        if ($updatedRows > 0 && $exampleCount >= 20) {
+            out("  ... additional {$table} empty-remark row(s) omitted from log.");
         }
     }
 
@@ -638,7 +717,16 @@ function fix_combined_remarks_from_action_logs(PDO $pdo, bool $apply): array
             continue;
         }
 
+        $cleanedLogs = [];
+        foreach ($logs as $log) {
+            $rawLogRemarks = trim((string) ($log['remarks'] ?? ''));
+            $log['remarks'] = voucher_tracking_strip_empty_combined_remark_segments($rawLogRemarks);
+            $cleanedLogs[] = $log;
+        }
+        $logs = $cleanedLogs;
+
         $targetRemarks = voucher_tracking_build_combined_remarks_from_action_logs($logs);
+        $targetRemarks = voucher_tracking_strip_empty_combined_remark_segments($targetRemarks);
         if ($targetRemarks === '') {
             continue;
         }

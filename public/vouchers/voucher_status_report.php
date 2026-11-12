@@ -1186,26 +1186,43 @@ $statusReportRowMetaLabel = $isDefaultPreview
             customEl.disabled = !isCustom;
         }
 
+        function remarkBodyIsEmpty(body) {
+            let text = String(body || '').trim().replace(/^[,;]+|[,;]+$/g, '').trim();
+            if (text === '' || text.toLowerCase() === 'n/a') {
+                return true;
+            }
+            return /^(?:[^,]+?:\s*,\s*)*[^,]+?:\s*$/.test(text);
+        }
+
         function splitCombinedRemarks(raw) {
             const text = String(raw || '').trim();
             if (!text || text.toLowerCase() === 'n/a') {
                 return [];
             }
 
-            const pattern = /(?:^|,\s*)([^,]+?):\s*(.*?)(?=(?:,\s*[^,]+?:\s)|$)/gs;
-            const matches = Array.from(text.matchAll(pattern));
-            if (matches.length === 0) {
-                return [{ text: text, isLatest: true }];
+            const namePattern = /(?:^|,)\s*([^,]+?):/g;
+            const starts = [];
+            let match;
+            while ((match = namePattern.exec(text)) !== null) {
+                starts.push({
+                    name: String(match[1] || '').trim(),
+                    fullStart: match.index,
+                    bodyStart: match.index + match[0].length
+                });
+            }
+            if (starts.length === 0) {
+                return remarkBodyIsEmpty(text) ? [] : [{ text: text, isLatest: true }];
             }
 
             const segments = [];
-            matches.forEach(function(match) {
-                const name = String(match[1] || '').trim();
-                const body = String(match[2] || '').trim();
-                if (name === '' || body === '' || body.toLowerCase() === 'n/a') {
+            starts.forEach(function(start, index) {
+                const bodyEnd = index + 1 < starts.length ? starts[index + 1].fullStart : text.length;
+                let body = String(text.slice(start.bodyStart, bodyEnd)).replace(/(?:,\s*[^,]+?:\s*)+$/, '');
+                body = body.replace(/^[\s,;]+|[\s,;]+$/g, '').trim();
+                if (start.name === '' || remarkBodyIsEmpty(body)) {
                     return;
                 }
-                segments.push({ text: (name + ': ' + body).trim(), isLatest: false });
+                segments.push({ text: (start.name + ': ' + body).trim(), isLatest: false });
             });
             if (segments.length > 0) {
                 segments[segments.length - 1].isLatest = true;
@@ -1397,7 +1414,7 @@ $statusReportRowMetaLabel = $isDefaultPreview
             if (detailCache[pn]) {
                 return Promise.resolve(detailCache[pn]);
             }
-            return fetch(detailUrl + '?processing_no=' + encodeURIComponent(pn), {
+            return fetch(detailUrl + '?processing_no=' + encodeURIComponent(pn) + '&_=' + Date.now(), {
                 credentials: 'same-origin',
                 headers: { 'Accept': 'application/json' }
             }).then(function(res) {
@@ -1481,8 +1498,11 @@ $statusReportRowMetaLabel = $isDefaultPreview
             const remarksEl = document.getElementById('sr_latest_remarks');
             const remarks = String(entry.remarks || '').trim();
             if (remarksCard && remarksEl) {
-                if (remarks !== '' && remarks.toLowerCase() !== 'n/a') {
-                    remarksEl.innerHTML = renderCombinedRemarks(remarks);
+                const remarksHtml = (remarks !== '' && remarks.toLowerCase() !== 'n/a')
+                    ? renderCombinedRemarks(remarks)
+                    : '';
+                if (remarksHtml !== '') {
+                    remarksEl.innerHTML = remarksHtml;
                     remarksCard.style.display = '';
                 } else {
                     remarksEl.innerHTML = '';

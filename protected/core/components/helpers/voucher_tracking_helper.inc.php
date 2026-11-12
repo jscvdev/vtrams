@@ -4509,6 +4509,22 @@ function voucher_tracking_section_durations_from_actions(
  *
  * @return list<string>
  */
+function voucher_tracking_remark_body_is_empty(string $body): bool
+{
+    $body = trim($body);
+    $body = trim($body, " \t\n\r\0\x0B,;");
+    if ($body === '' || strcasecmp($body, 'N/A') === 0) {
+        return true;
+    }
+
+    // "JESSA F. BANJAWAN:" or "JESSA F. BANJAWAN:, JESSA F. BANJAWAN:"
+    if (preg_match('/^[^,]+?:\s*$/u', $body)) {
+        return true;
+    }
+
+    return (bool) preg_match('/^(?:[^,]+?:\s*,\s*)*[^,]+?:\s*$/u', $body);
+}
+
 function voucher_tracking_parse_combined_remark_segments(string $raw): array
 {
     $raw = trim($raw);
@@ -4516,25 +4532,31 @@ function voucher_tracking_parse_combined_remark_segments(string $raw): array
         return [];
     }
 
-    $pattern = '/(?:^|,\s*)([^,]+?):\s*(.*?)(?=(?:,\s*[^,]+?:\s)|$)/s';
-    if (preg_match_all($pattern, $raw, $matches) && !empty($matches[0])) {
-        $segments = [];
-        foreach ($matches[0] as $index => $_) {
-            $name = trim((string) ($matches[1][$index] ?? ''));
-            $body = trim((string) ($matches[2][$index] ?? ''));
-            if ($name === '' || $body === '' || strcasecmp($body, 'N/A') === 0) {
-                continue;
-            }
-            $segments[] = $name . ': ' . $body;
-        }
-
-        return $segments;
+    if (!preg_match_all('/(?:^|,\s*)([^,]+?):/', $raw, $matches, PREG_OFFSET_CAPTURE) || empty($matches[0])) {
+        return voucher_tracking_remark_body_is_empty($raw) ? [] : [$raw];
     }
 
-    return [$raw];
+    $segments = [];
+    $count = count($matches[0]);
+    for ($i = 0; $i < $count; $i++) {
+        $name = trim((string) ($matches[1][$i][0] ?? ''));
+        $full = (string) ($matches[0][$i][0] ?? '');
+        $fullStart = (int) ($matches[0][$i][1] ?? 0);
+        $bodyStart = $fullStart + strlen($full);
+        $bodyEnd = ($i + 1 < $count) ? (int) $matches[0][$i + 1][1] : strlen($raw);
+        $body = trim(substr($raw, $bodyStart, max(0, $bodyEnd - $bodyStart)));
+        $body = preg_replace('/(?:,\s*[^,]+?:\s*)+$/', '', $body) ?? $body;
+        $body = trim($body, " \t\n\r\0\x0B,;");
+        if ($name === '' || voucher_tracking_remark_body_is_empty($body)) {
+            continue;
+        }
+        $segments[] = $name . ': ' . $body;
+    }
+
+    return $segments;
 }
 
-/** Drop "Name:" segments with no remark text from a combined-remarks string. */
+/** Drop "Name:" / "Name: , Name:" segments with no remark text. */
 function voucher_tracking_strip_empty_combined_remark_segments(string $raw): string
 {
     $raw = trim($raw);
@@ -4613,15 +4635,15 @@ function voucher_tracking_resolve_combined_remarks(string $trackingRemarks, arra
     $fromLogs = voucher_tracking_build_combined_remarks_from_action_logs($logs);
 
     if ($fromLogs === '') {
-        return $trackingRemarks;
+        return voucher_tracking_strip_empty_combined_remark_segments($trackingRemarks);
     }
 
     if ($trackingRemarks === '' || strcasecmp($trackingRemarks, 'N/A') === 0) {
-        return $fromLogs;
+        return voucher_tracking_strip_empty_combined_remark_segments($fromLogs);
     }
 
     if (strcasecmp($trackingRemarks, 'Payment Processed') === 0) {
-        return $fromLogs;
+        return voucher_tracking_strip_empty_combined_remark_segments($fromLogs);
     }
 
     $merged = voucher_tracking_build_combined_remarks_from_action_logs(
@@ -4631,7 +4653,9 @@ function voucher_tracking_resolve_combined_remarks(string $trackingRemarks, arra
         )
     );
 
-    return $merged !== '' ? $merged : $trackingRemarks;
+    $resolved = $merged !== '' ? $merged : $trackingRemarks;
+
+    return voucher_tracking_strip_empty_combined_remark_segments($resolved);
 }
 
 /**
