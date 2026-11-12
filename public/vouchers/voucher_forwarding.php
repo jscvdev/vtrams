@@ -1296,13 +1296,7 @@ if ($showCashierArchiveCol) {
                         } elseif (trim($forwarding_process_history) !== '' && strcasecmp($historyForParticipant, trim($forwarding_process_history)) !== 0) {
                             $historyForParticipant .= "\n" . $forwarding_process_history;
                         }
-                        $canRerouteReturnedRow = $needsReturnForwardRow
-                            && voucher_tracking_user_is_process_participant(
-                                $pdo,
-                                $target,
-                                $loggedForwarderName,
-                                $historyForParticipant
-                            );
+                        $canRerouteReturnedRow = $needsReturnForwardRow;
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -1494,7 +1488,9 @@ if ($showCashierArchiveCol) {
                             ?>
                             <td class="voucher-table-actions-cell" data-label="actions">
                                 <div class="voucher-table-actions-group">
+                                    <?php if (!$needsReturnForwardRow) : ?>
                                     <button class="btn voucher-table-action-btn voucher-table-action-btn--return" name="btn-return" type="button" aria-label="Return" title="Return"><i class="ri-arrow-go-back-line" aria-hidden="true"></i><span>Return</span></button>
+                                    <?php endif; ?>
                                     <?php if ($showEditCol) : ?>
                                         <button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-edit_amount" type="button" aria-label="Edit" title="Edit"><i class="ri-edit-line" aria-hidden="true"></i><span>Edit</span></button>
                                     <?php endif; ?>
@@ -2802,6 +2798,11 @@ if ($showCashierArchiveCol) {
             setVoucherPortalViewMode(false);
 
             if (name === "btn-return") {
+                var needsReturnForwardOnReturn = (row.querySelector('[data-label="needs_return_forward"]')?.textContent || '').trim() === '1';
+                if (needsReturnForwardOnReturn) {
+                    showNotify('This returned voucher cannot be sent back with Return. Receive it if it is still incoming, then use Forward.', 'warning', 4200);
+                    return;
+                }
                 restoreForwardDestinationOptions();
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("document_to").required = false;
@@ -2851,18 +2852,13 @@ if ($showCashierArchiveCol) {
                 restoreForwardDestinationOptions();
                 var docToForward = document.getElementById("document_to");
                 var needsReturnForward = (row.querySelector('[data-label="needs_return_forward"]')?.textContent || '').trim() === '1';
-                var canRerouteReturned = (row.querySelector('[data-label="return_forward_can_reroute"]')?.textContent || '').trim() === '1';
                 var returnForwardLabel = (row.querySelector('[data-label="return_forward_label"]')?.textContent || '').trim();
                 var returnForwardDesignation = (row.querySelector('[data-label="return_forward_designation"]')?.textContent || '').trim();
                 var returnForwardName = (row.querySelector('[data-label="return_forward_name"]')?.textContent || '').trim();
                 if (docToForward) {
                     docToForward.required = true;
                     if (needsReturnForward && (returnForwardLabel || returnForwardDesignation)) {
-                        if (canRerouteReturned) {
-                            applyReturnForwardOptionsForProcessUser(returnForwardLabel, returnForwardDesignation, returnForwardName);
-                        } else {
-                            lockForwardToReturner(returnForwardLabel, returnForwardDesignation);
-                        }
+                        applyReturnForwardOptionsForProcessUser(returnForwardLabel, returnForwardDesignation, returnForwardName);
                     } else if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {

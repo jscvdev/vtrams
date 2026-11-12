@@ -254,6 +254,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $temp_dump['voucher_missing'] = 'Voucher not found in incoming queue.';
                     }
 
+                    $returnTrackingRow = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no);
+                    if (voucher_tracking_is_pending_return_reply($returnTrackingRow)) {
+                        $temp_dump['return_blocked'] = 'This returned voucher cannot be sent back with Return. Receive it if it is still incoming, then use Forward.';
+                    }
+
                     if ($return_previous_validation_error !== '') {
                         $temp_dump['return_destination'] = $return_previous_validation_error;
                     }

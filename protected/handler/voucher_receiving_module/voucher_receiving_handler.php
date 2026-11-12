@@ -287,14 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             (string) $document_to,
                             $returnTarget
                         );
-                        $canRerouteReturned = !$selectedIsReturner
-                            && voucher_tracking_user_is_process_participant(
-                                $pdo,
-                                voucher_logged_user_designations(),
-                                $loggedForwarderName,
-                                $trackingHistory
-                            );
-                        if ($canRerouteReturned) {
+                        if (!$selectedIsReturner) {
                             $reroutedReturnedVoucher = true;
                             require_once __DIR__ . '/../../core/components/helpers/utilities_unit_forward_options_helper.inc.php';
                             if (

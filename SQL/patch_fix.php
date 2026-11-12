@@ -6,7 +6,10 @@
  *    total_processing_time from first receive at Planning/CDS through cashier Processed by.
  * 2) Insert missing "Received by" action logs (and process_history lines) after
  *    "Returned by" when the return target's next hop is Forwarded by (back to the
- *    returner or onward reroute) and there was no receive in between.
+ *    returner or onward reroute) and there was no receive in between. When the
+ *    next hop is another "Returned by" from a different person (they used Return
+ *    instead of Receive + Forward), convert that log to Received by and insert
+ *    Forwarded by.
  * 3) Correct process_history office labels using user_group (actor's registered office).
  * 4) Normalize stored amounts that are whole numbers (e.g. 15000 → 15000.00) across
  *    voucher tables.
@@ -845,6 +848,136 @@ function patch_next_return_reply(array $logs, int $returnIndex): ?array
     return null;
 }
 
+/**
+ * Return → Return by a different person (used Return to send it back instead of Receive + Forward).
+ *
+ * @param list<array<string, mixed>> $logs
+ * @return array{index: int, log: array<string, mixed>}|null
+ */
+function patch_next_mistaken_return_reply(array $logs, int $returnIndex): ?array
+{
+    $returner = trim((string) ($logs[$returnIndex]['action_by'] ?? ''));
+    for ($j = $returnIndex + 1, $count = count($logs); $j < $count; $j++) {
+        $kind = patch_action_kind((string) ($logs[$j]['action'] ?? ''));
+        if ($kind === 'other') {
+            continue;
+        }
+        if ($kind !== 'return') {
+            return null;
+        }
+
+        $actor = trim((string) ($logs[$j]['action_by'] ?? ''));
+        if ($actor === '' || patch_names_match($actor, $returner)) {
+            return null;
+        }
+
+        return [
+            'index' => $j,
+            'log' => $logs[$j],
+        ];
+    }
+
+    return null;
+}
+
+function patch_forward_log_exists(
+    array $logs,
+    int $fromIndex,
+    int $untilIndex,
+    string $actor
+): bool {
+    for ($j = $fromIndex + 1; $j < $untilIndex; $j++) {
+        if (patch_action_kind((string) ($logs[$j]['action'] ?? '')) !== 'forward') {
+            continue;
+        }
+        if (patch_names_match(trim((string) ($logs[$j]['action_by'] ?? '')), $actor)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function patch_forward_datetime(string $receiveAt, string $nextAt): string
+{
+    $receiveTs = strtotime($receiveAt);
+    if ($receiveTs === false) {
+        return $receiveAt !== '' ? $receiveAt : date('Y-m-d H:i:s');
+    }
+
+    $nextTs = strtotime($nextAt);
+    if ($nextTs !== false && $nextTs > $receiveTs + 1) {
+        return date('Y-m-d H:i:s', $receiveTs + 1);
+    }
+
+    return date('Y-m-d H:i:s', $receiveTs);
+}
+
+function patch_history_convert_nth_actor_return_to_receive_forward(
+    string $history,
+    string $actor,
+    int $occurrence,
+    string $receiveLine,
+    string $forwardLine
+): string {
+    $rawLines = preg_split('/\n/', normalize_process_history($history)) ?: [];
+    $seen = 0;
+    $out = [];
+    $converted = false;
+
+    foreach ($rawLines as $index => $raw) {
+        if ($converted) {
+            $out[] = $raw;
+            continue;
+        }
+
+        $line = trim($raw);
+        if ($line === '' || strpos($line, '|') === false) {
+            $out[] = $raw;
+            continue;
+        }
+
+        $parts = preg_split('/\s*\|\s*/', $line, 4);
+        $name = trim((string) ($parts[0] ?? ''));
+        $action = trim((string) ($parts[1] ?? ''));
+        if (!preg_match('/returned\s+by/i', $action) || !patch_names_match($name, $actor)) {
+            $out[] = $raw;
+            continue;
+        }
+        if ($seen !== $occurrence) {
+            $seen++;
+            $out[] = $raw;
+            continue;
+        }
+        $seen++;
+        $converted = true;
+
+        $nextRaw = '';
+        for ($k = $index + 1, $total = count($rawLines); $k < $total; $k++) {
+            $candidate = trim((string) $rawLines[$k]);
+            if ($candidate !== '') {
+                $nextRaw = $candidate;
+                break;
+            }
+        }
+        $nextName = '';
+        $nextAction = '';
+        if ($nextRaw !== '' && strpos($nextRaw, '|') !== false) {
+            $nextParts = preg_split('/\s*\|\s*/', $nextRaw, 4);
+            $nextName = trim((string) ($nextParts[0] ?? ''));
+            $nextAction = trim((string) ($nextParts[1] ?? ''));
+        }
+        $alreadyForward = preg_match('/forwarded\s+by/i', $nextAction) && patch_names_match($nextName, $actor);
+
+        $out[] = $receiveLine;
+        if (!$alreadyForward && $forwardLine !== '') {
+            $out[] = $forwardLine;
+        }
+    }
+
+    return trim(implode("\n", $out));
+}
+
 function patch_receive_log_exists(
     array $logs,
     int $returnIndex,
@@ -932,11 +1065,13 @@ function patch_history_insert_receive_after_nth_return(
 }
 
 /**
- * @return array{inserted_logs: int, updated_vouchers: int, updated_rows: int}
+ * @return array{inserted_logs: int, converted_returns: int, inserted_forwards: int, updated_vouchers: int, updated_rows: int}
  */
 function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
 {
     $insertedLogs = 0;
+    $convertedReturns = 0;
+    $insertedForwards = 0;
     $updatedVouchers = 0;
     $updatedRows = 0;
 
@@ -956,6 +1091,8 @@ function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
     if ($processingNos === []) {
         return [
             'inserted_logs' => 0,
+            'converted_returns' => 0,
+            'inserted_forwards' => 0,
             'updated_vouchers' => 0,
             'updated_rows' => 0,
         ];
@@ -1070,6 +1207,9 @@ function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
             :coa_subsection
         )
     ");
+    $updateActionStmt = $pdo->prepare(
+        'UPDATE voucher_action_logs SET action = :action WHERE id = :id'
+    );
 
     $officeCache = [];
     foreach ($processingNos as $pnIndex => $processingNo) {
@@ -1108,6 +1248,146 @@ function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
 
             $reply = patch_next_return_reply($logs, (int) $returnIndex);
             if ($reply === null) {
+                $mistaken = patch_next_mistaken_return_reply($logs, (int) $returnIndex);
+                if ($mistaken === null) {
+                    continue;
+                }
+
+                $mistakenLog = $mistaken['log'];
+                $mistakenIndex = (int) $mistaken['index'];
+                $actor = trim((string) ($mistakenLog['action_by'] ?? ''));
+                if ($actor === '') {
+                    continue;
+                }
+
+                $untilIndex = count($logs);
+                for ($k = $mistakenIndex + 1, $logCount = count($logs); $k < $logCount; $k++) {
+                    $kind = patch_action_kind((string) ($logs[$k]['action'] ?? ''));
+                    if ($kind !== 'other') {
+                        $untilIndex = $k;
+                        break;
+                    }
+                }
+
+                $actorReturnOccurrence = 0;
+                for ($k = 0; $k < $mistakenIndex; $k++) {
+                    if (
+                        patch_is_returned_action((string) ($logs[$k]['action'] ?? ''))
+                        && patch_names_match(trim((string) ($logs[$k]['action_by'] ?? '')), $actor)
+                    ) {
+                        $actorReturnOccurrence++;
+                    }
+                }
+
+                $actionFrom = trim((string) ($mistakenLog['action_from'] ?? ''));
+                if ($actionFrom === '') {
+                    $actionFrom = trim((string) ($returnLog['action_from'] ?? ''));
+                }
+                $officeFrom = trim((string) ($mistakenLog['office_from'] ?? ''));
+                if ($officeFrom === '') {
+                    $officeFrom = trim((string) ($returnLog['office_to'] ?? ''));
+                }
+                $officeTo = trim((string) ($mistakenLog['office_to'] ?? ''));
+                if ($officeTo === '') {
+                    $officeTo = trim((string) ($returnLog['office_from'] ?? ''));
+                }
+                $officeKey = strtolower($actor) . '|' . $officeFrom . '|' . $officeTo;
+                if (!isset($officeCache[$officeKey])) {
+                    $officeCache[$officeKey] = voucher_tracking_resolve_office_for_history(
+                        $pdo,
+                        $actor,
+                        $officeFrom,
+                        $officeTo
+                    );
+                }
+                $historyOffice = $officeCache[$officeKey];
+                $historyOffice = $historyOffice !== '' ? $historyOffice : ($officeFrom !== '' ? $officeFrom : $officeTo);
+                $receiveAction = 'Received by: ' . $actor;
+                $forwardAction = 'Forwarded by: ' . $actor;
+                $receiveLine = build_history_line(
+                    $actor,
+                    $receiveAction,
+                    $actionFrom !== '' ? $actionFrom : 'TBD',
+                    $historyOffice
+                );
+                $forwardLine = build_history_line(
+                    $actor,
+                    $forwardAction,
+                    $actionFrom !== '' ? $actionFrom : 'TBD',
+                    $historyOffice
+                );
+                $newHistory = patch_history_convert_nth_actor_return_to_receive_forward(
+                    $history,
+                    $actor,
+                    $actorReturnOccurrence,
+                    $receiveLine,
+                    $forwardLine
+                );
+                $needsHistory = $newHistory !== $history;
+                $needsReceiveConvert = patch_is_returned_action((string) ($mistakenLog['action'] ?? ''));
+                $needsForwardLog = !patch_forward_log_exists($logs, $mistakenIndex, $untilIndex, $actor);
+
+                if (!$needsReceiveConvert && !$needsForwardLog && !$needsHistory) {
+                    continue;
+                }
+
+                if (!$voucherLogged) {
+                    $voucherLogged = true;
+                    $updatedVouchers++;
+                }
+
+                $logId = (int) ($mistakenLog['id'] ?? 0);
+                if ($needsReceiveConvert) {
+                    out("  {$processingNo}: convert Returned by {$actor} → Received by {$actor}");
+                    if ($apply && $logId > 0) {
+                        $updateActionStmt->bindValue(':action', $receiveAction, PDO::PARAM_STR);
+                        $updateActionStmt->bindValue(':id', $logId, PDO::PARAM_INT);
+                        $updateActionStmt->execute();
+                    }
+                    $logs[$mistakenIndex]['action'] = $receiveAction;
+                    $convertedReturns++;
+                }
+
+                if ($needsForwardLog) {
+                    $nextAt = (string) ($logs[$untilIndex]['datetime_action'] ?? '');
+                    $forwardAt = patch_forward_datetime((string) ($mistakenLog['datetime_action'] ?? ''), $nextAt);
+                    out("  {$processingNo}: insert Forwarded by {$actor} after Received by {$actor}");
+                    if ($apply) {
+                        $source = $mistakenLog;
+                        $insertStmt->execute([
+                            ':processing_no' => $processingNo,
+                            ':ors_no' => (string) ($source['ors_no'] ?? $returnLog['ors_no'] ?? 'TBD'),
+                            ':ada_check_no' => (string) ($source['ada_check_no'] ?? $returnLog['ada_check_no'] ?? 'TBD'),
+                            ':dv_no' => (string) ($source['dv_no'] ?? $returnLog['dv_no'] ?? 'TBD'),
+                            ':payee' => (string) ($source['payee'] ?? $returnLog['payee'] ?? ''),
+                            ':address' => (string) ($source['address'] ?? $returnLog['address'] ?? ''),
+                            ':tin_employee_no' => (string) ($source['tin_employee_no'] ?? $returnLog['tin_employee_no'] ?? ''),
+                            ':particulars' => (string) ($source['particulars'] ?? $returnLog['particulars'] ?? ''),
+                            ':amount' => ensure_amount_two_decimals((string) ($source['amount'] ?? $returnLog['amount'] ?? '0')),
+                            ':voucher_type' => (string) ($source['voucher_type'] ?? $returnLog['voucher_type'] ?? ''),
+                            ':voucher_date' => (string) ($source['voucher_date'] ?? $returnLog['voucher_date'] ?? ''),
+                            ':remarks' => '',
+                            ':encoded_by' => (string) ($source['encoded_by'] ?? $returnLog['encoded_by'] ?? ''),
+                            ':action' => $forwardAction,
+                            ':action_by' => $actor,
+                            ':action_from' => $actionFrom,
+                            ':datetime_action' => $forwardAt,
+                            ':office_from' => $officeFrom,
+                            ':office_to' => $officeTo !== '' ? $officeTo : $officeFrom,
+                            ':coa_options' => $source['coa_options'] ?? $returnLog['coa_options'] ?? null,
+                            ':coa_category' => $source['coa_category'] ?? $returnLog['coa_category'] ?? null,
+                            ':coa_subsection' => $source['coa_subsection'] ?? $returnLog['coa_subsection'] ?? null,
+                        ]);
+                    }
+                    $insertedForwards++;
+                }
+
+                if ($needsHistory) {
+                    out("  {$processingNo}: convert process_history Returned by {$actor} to Received by + Forwarded by");
+                    $history = $newHistory;
+                    $historyChanged = true;
+                }
+
                 continue;
             }
 
@@ -1212,6 +1492,8 @@ function fix_missing_receive_after_return(PDO $pdo, bool $apply): array
 
     return [
         'inserted_logs' => $insertedLogs,
+        'converted_returns' => $convertedReturns,
+        'inserted_forwards' => $insertedForwards,
         'updated_vouchers' => $updatedVouchers,
         'updated_rows' => $updatedRows,
     ];
@@ -1258,6 +1540,8 @@ $historyOfficeRowsFixed = 0;
 $remarksVouchersFixed = 0;
 $remarksRowsFixed = 0;
 $receiveLogsInserted = 0;
+$receiveConvertedReturns = 0;
+$receiveInsertedForwards = 0;
 $receiveHistoryVouchersFixed = 0;
 $receiveHistoryRowsFixed = 0;
 
@@ -1397,6 +1681,8 @@ try {
         &$remarksVouchersFixed,
         &$remarksRowsFixed,
         &$receiveLogsInserted,
+        &$receiveConvertedReturns,
+        &$receiveInsertedForwards,
         &$receiveHistoryVouchersFixed,
         &$receiveHistoryRowsFixed,
         $archives,
@@ -1558,9 +1844,11 @@ try {
 
     if (patch_should_run('receive')) {
         out(str_repeat('-', 72));
-        out('Phase 2: missing Received by logs after Returned by');
+        out('Phase 2: missing Received by logs after Returned by (and Return-after-Return → Receive + Forward)');
         $receiveFix = fix_missing_receive_after_return($pdo, $apply);
         $receiveLogsInserted = $receiveFix['inserted_logs'];
+        $receiveConvertedReturns = $receiveFix['converted_returns'];
+        $receiveInsertedForwards = $receiveFix['inserted_forwards'];
         $receiveHistoryVouchersFixed = $receiveFix['updated_vouchers'];
         $receiveHistoryRowsFixed = $receiveFix['updated_rows'];
     }
@@ -1603,10 +1891,10 @@ try {
 
     out(str_repeat('-', 72));
     if (!$apply || $dryRun) {
-        out("Preview complete. Would insert {$insertedLogs} processed log(s), insert {$receiveLogsInserted} receive-after-return log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fix {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
+        out("Preview complete. Would insert {$insertedLogs} processed log(s), insert {$receiveLogsInserted} receive-after-return log(s), convert {$receiveConvertedReturns} mistaken Return log(s) to Receive and insert {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), update {$updatedArchives} archive history row(s), update {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fix {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fix {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fix {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
         out('Re-run with --apply (CLI) or ?apply=1 (browser) to save. Use --dry-run to execute then roll back.');
     } else {
-        out("Done. Inserted {$insertedLogs} processed log(s), inserted {$receiveLogsInserted} receive-after-return log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fixed {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
+        out("Done. Inserted {$insertedLogs} processed log(s), inserted {$receiveLogsInserted} receive-after-return log(s), converted {$receiveConvertedReturns} mistaken Return log(s) to Receive and inserted {$receiveInsertedForwards} Forward log(s) for {$receiveHistoryVouchersFixed} voucher(s) / {$receiveHistoryRowsFixed} history row(s), updated {$updatedArchives} archive history row(s), updated {$updatedTracking} tracking row(s) ({$updatedProcessingTime} with total_processing_time), fixed {$historyOfficeVouchersFixed} voucher(s) / {$historyOfficeRowsFixed} row(s) with process_history office labels, fixed {$amountRowsFixed} amount row(s) ({$amountColumnsFixed} column value(s)), fixed {$remarksVouchersFixed} voucher(s) / {$remarksRowsFixed} row(s) with combined remarks, skipped {$skipped}.");
     }
 } catch (Throwable $e) {
     out('Migration failed: ' . $e->getMessage());
