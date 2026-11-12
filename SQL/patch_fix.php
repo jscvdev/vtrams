@@ -87,7 +87,11 @@ while (ob_get_level() > 0) {
 function out(string $message): void
 {
     global $isCli, $embed;
-    echo $message . (($isCli || !empty($embed)) ? "\n" : "<br>\n");
+    if (!empty($embed)) {
+        echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . "\n";
+    } else {
+        echo $message . ($isCli ? "\n" : "<br>\n");
+    }
     if (ob_get_level() > 0) {
         ob_flush();
     }
@@ -1849,9 +1853,12 @@ if (!empty($GLOBALS['PATCH_FIX_LIBRARY'])) {
 
 if (!$isCli) {
     if (!empty($embed)) {
-        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Type: text/html; charset=utf-8');
         header('X-Accel-Buffering: no');
         header('Cache-Control: no-store');
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+            html,body{margin:0;background:#020617;color:#ffffff;font:12px/1.5 ui-monospace,Consolas,monospace;padding:14px;white-space:pre-wrap;color-scheme:dark;}
+        </style></head><body>';
     } else {
         header('Content-Type: text/html; charset=utf-8');
         echo '<pre style="font-family:monospace">';
@@ -2237,6 +2244,8 @@ try {
         out('Migration failed: ' . ($tx['error']?->getMessage() ?? 'Unknown error'));
         if (!$isCli && empty($embed)) {
             echo '</pre>';
+        } elseif (!empty($embed)) {
+            echo '</body></html>';
         }
         exit(1);
     }
@@ -2252,10 +2261,14 @@ try {
     out('Migration failed: ' . $e->getMessage());
     if (!$isCli && empty($embed)) {
         echo '</pre>';
+    } elseif (!empty($embed)) {
+        echo '</body></html>';
     }
     exit(1);
 }
 
 if (!$isCli && empty($embed)) {
     echo '</pre>';
+} elseif (!empty($embed)) {
+    echo '</body></html>';
 }
