@@ -11,86 +11,94 @@
     cursor: pointer;
     display: flex;
     justify-content: center;
+}
 
-    &.transparent {
-        font-weight: 900;
-    }
-    &.btn-pad {
-        padding: .6rem .9rem;
-    }
-    &.btn-flex {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 5%;
-        width: fit-content;
-    }
-    &.btn-nowrap {
-        white-space: nowrap;
-    }
+.btn.transparent {
+    font-weight: 900;
+}
 
-    &.primary {
-        background: #0B5ED7;
-        color: #fff;
+.btn.btn-pad {
+    padding: .6rem .9rem;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #0B5ED7;
-            color: #0B5ED7;
-        }
-    }
-    &.danger {
-        background: #BB2D3B;
-        color: #fff;
+.btn.btn-flex {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5%;
+    width: fit-content;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #BB2D3B;
-            color: #BB2D3B;
-        }
-    }
-    &.warning {
-        background: #FF7043;
-        color: #fff;
+.btn.btn-nowrap {
+    white-space: nowrap;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #FF7043;
-            color: #FF7043;
-        }
-    }
-    &.secondary {
-        background: #5C636A;
-        color: #fff;
+.btn.primary {
+    background: #0B5ED7;
+    color: #fff;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #5C636A;
-            color: #5C636A;
-        }
-    }    
-    &.success {
-        background: #157347;
-        color: #fff;
+.btn.primary.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #0B5ED7;
+    color: #0B5ED7;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #157347;
-            color: #157347;
-        }
-    }
-    &.tertiary {
-        background: #5D3FD3;
-        color: #fff;
+.btn.danger {
+    background: #BB2D3B;
+    color: #fff;
+}
 
-        &.transparent {
-            background: rgba(255, 255, 255, 0);
-            border: thin solid #5D3FD3;
-            color: #5D3FD3;
-        }
-    }
+.btn.danger.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #BB2D3B;
+    color: #BB2D3B;
+}
 
-    img {
-        max-height: 15px;
-    }
+.btn.warning {
+    background: #FF7043;
+    color: #fff;
+}
+
+.btn.warning.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #FF7043;
+    color: #FF7043;
+}
+
+.btn.secondary {
+    background: #5C636A;
+    color: #fff;
+}
+
+.btn.secondary.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #5C636A;
+    color: #5C636A;
+}
+
+.btn.success {
+    background: #157347;
+    color: #fff;
+}
+
+.btn.success.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #157347;
+    color: #157347;
+}
+
+.btn.tertiary {
+    background: #5D3FD3;
+    color: #fff;
+}
+
+.btn.tertiary.transparent {
+    background: rgba(255, 255, 255, 0);
+    border: thin solid #5D3FD3;
+    color: #5D3FD3;
+}
+
+.btn img {
+    max-height: 15px;
 }
