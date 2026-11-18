@@ -21,4 +21,6 @@ TRUNCATE TABLE voucher_sent;
 TRUNCATE TABLE voucher_temp;
 TRUNCATE TABLE voucher_tracking;
 TRUNCATE encoded_voucher_no;
+TRUNCATE voucher_retract_requests;
+
 TRUNCATE files;

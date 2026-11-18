@@ -102,7 +102,8 @@ require_once __DIR__ . '/alert_settings.inc.php';
             border: 1px solid lightslategrey;
             position: fixed;
             width: 400px;
-            height: 150px;
+            height: auto;
+            min-height: 150px;
             left: 50%;
             top: 10%;
             transform: translate(-50%, -10%);
@@ -130,6 +131,9 @@ require_once __DIR__ . '/alert_settings.inc.php';
         #confirm .message {
             text-align: center;
             font-size: 14px;
+            white-space: pre-line;
+            display: block;
+            padding: 8px 16px;
         }
 
         .top_custom_alert-box {

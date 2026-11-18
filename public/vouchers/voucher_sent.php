@@ -1182,6 +1182,11 @@ $sentPageUrl = static function (int $page) use ($rowsPerPage, $voucher_type_filt
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/voucher_process_history_display.js"></script>
 <script src="../../protected/js/popscript.js"></script>
+<?php
+$voucherActionConfirmJsPath = __DIR__ . '/../../protected/js/voucher_action_confirm.js';
+$voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemtime($voucherActionConfirmJsPath) : time();
+?>
+<script src="../../protected/js/voucher_action_confirm.js?v=<?= $voucherActionConfirmJsVer ?>"></script>
 <script>
     function escapeHtml(s) {
         if (s == null) return '';
@@ -1381,6 +1386,45 @@ $sentPageUrl = static function (int $page) use ($rowsPerPage, $voucher_type_filt
 
         });
     });
+
+    (function() {
+        var form = document.getElementById('myIncomingForm');
+        if (!form) return;
+        var loggedUser = <?php echo json_encode((string) ($_SESSION['logged_user_emp_name'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+        var loggedSection = <?php echo json_encode((string) ($_SESSION['logged_user_section'] ?? ''), JSON_UNESCAPED_UNICODE); ?>;
+        var sentReturnConfirmed = false;
+        form.addEventListener('submit', function(e) {
+            var submitter = e.submitter || document.activeElement;
+            var actionName = submitter && submitter.getAttribute ? (submitter.getAttribute('name') || '') : '';
+            if (actionName !== 'return_voucher') return;
+            if (sentReturnConfirmed) return;
+            e.preventDefault();
+            var processingNo = String((document.getElementById('processing_no') || {}).value || '').trim();
+            if (typeof showVoucherActionConfirm !== 'function') {
+                if (typeof showNotify === 'function') {
+                    showNotify('Unable to confirm this action. Please refresh the page.', 'error', 3000);
+                }
+                return;
+            }
+            showVoucherActionConfirm({
+                title: 'Confirm Return',
+                lead: 'Return this voucher from Sent.',
+                processingNo: processingNo,
+                user: loggedUser,
+                unit: loggedSection,
+                confirmLabel: 'Return',
+                onConfirm: function() {
+                    sentReturnConfirmed = true;
+                    var returnBtn = form.querySelector('button[name="return_voucher"]');
+                    if (returnBtn) {
+                        returnBtn.click();
+                    } else {
+                        form.submit();
+                    }
+                }
+            });
+        });
+    })();
 </script>
 <script>
     (function() {

@@ -813,7 +813,7 @@ if ($showCashierArchiveCol) {
                                 </div>
                             </div>
                             <div class="label-input__container">
-                                <label for="return_remarks_popup">Remarks (optional)</label>
+                                <label for="return_remarks_popup" id="return_remarks_popup_label">Remarks (optional)</label>
                                 <textarea id="return_remarks_popup" class="form-custom-multi-input" rows="3" placeholder="Enter remarks for returning this voucher (optional)"></textarea>
                             </div>
                         </div>
@@ -2426,6 +2426,11 @@ if ($showCashierArchiveCol) {
 <script src="../../protected/js/voucher.js"></script>
 <script src="../../protected/js/voucher_process_history_display.js"></script>
 <script src="../../protected/js/popscript.js"></script>
+<?php
+$voucherActionConfirmJsPath = __DIR__ . '/../../protected/js/voucher_action_confirm.js';
+$voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemtime($voucherActionConfirmJsPath) : time();
+?>
+<script src="../../protected/js/voucher_action_confirm.js?v=<?= $voucherActionConfirmJsVer ?>"></script>
 <script>
     function escapeHtml(s) {
         if (s == null) return '';
@@ -4337,6 +4342,7 @@ if ($showCashierArchiveCol) {
         const closeBtn = document.getElementById('close_return_options');
         const cancelBtn = document.getElementById('cancel_return_options');
         const confirmBtn = document.getElementById('confirm_return_options');
+        var lastReturnCtx = { processingNo: '', processHistory: '', encodedFrom: '', encodedBy: '', lastUserByOffice: {} };
 
         var currentUserName = '<?php echo htmlspecialchars($_SESSION["logged_user_emp_name"] ?? "", ENT_QUOTES); ?>';
         var returnPreviousAllowedUnits = <?php echo json_encode(array_values($return_previous_allowed_units), JSON_UNESCAPED_UNICODE); ?>;
@@ -4470,9 +4476,17 @@ if ($showCashierArchiveCol) {
         }
 
         function parseProcessHistory(processHistory, encodedBy) {
+            var collected = collectReturnOffices(processHistory, encodedBy);
+            return collected.offices;
+        }
+
+        function collectReturnOffices(processHistory, encodedBy) {
             var offices = [],
-                seen = {};
-            if (!processHistory || !processHistory.trim()) return offices;
+                seen = {},
+                lastUserByOffice = {};
+            if (!processHistory || !processHistory.trim()) {
+                return { offices: offices, lastUserByOffice: lastUserByOffice };
+            }
             var normalized = String(processHistory).replace(/\\n/g, '\n');
             var lines = normalized.split(/\r\n|\r|\n/);
             for (var i = 0; i < lines.length; i++) {
@@ -4482,12 +4496,16 @@ if ($showCashierArchiveCol) {
                 if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
                 if (!parsed.section) continue;
                 var mapped = normalizeUnitLabel(parsed.section);
-                if (mapped && !seen[mapped]) {
+                if (!mapped) continue;
+                if (parsed.user) {
+                    lastUserByOffice[mapped] = parsed.user;
+                }
+                if (!seen[mapped]) {
                     seen[mapped] = true;
                     offices.push(mapped);
                 }
             }
-            return offices;
+            return { offices: offices, lastUserByOffice: lastUserByOffice };
         }
 
         function loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy) {
@@ -4499,8 +4517,9 @@ if ($showCashierArchiveCol) {
             if (containerEl) containerEl.style.display = 'none';
 
             // Same unit is allowed, including the current processor's own prior step.
-            var offices = parseProcessHistory(processHistory || '', encodedBy);
-            offices = offices.filter(function(office) {
+            var collected = collectReturnOffices(processHistory || '', encodedBy);
+            lastReturnCtx.lastUserByOffice = collected.lastUserByOffice || {};
+            var offices = collected.offices.filter(function(office) {
                 return isReturnPreviousUnitAllowed(office);
             });
             if (offices.length === 0 && officeFrom) {
@@ -4518,7 +4537,9 @@ if ($showCashierArchiveCol) {
             offices.forEach(function(office) {
                 var opt = document.createElement('option');
                 opt.value = office;
-                opt.textContent = office;
+                var lastUser = lastReturnCtx.lastUserByOffice[office] || '';
+                opt.textContent = lastUser ? (office + ' — ' + lastUser) : office;
+                if (lastUser) opt.setAttribute('data-last-user', lastUser);
                 selectEl.appendChild(opt);
             });
         }
@@ -4527,9 +4548,65 @@ if ($showCashierArchiveCol) {
             var selected = document.querySelector('input[name="return_destination_popup"]:checked');
             if (!confirmBtn) return;
             confirmBtn.textContent = selected && selected.value === 'retract' ? 'Retract' : 'Return';
+            var remarksLabel = document.getElementById('return_remarks_popup_label');
+            var remarksField = document.getElementById('return_remarks_popup');
+            if (selected && selected.value === 'retract') {
+                if (remarksLabel) remarksLabel.textContent = 'Remarks (required)';
+                if (remarksField) remarksField.placeholder = 'Enter remarks for retracting this voucher';
+            } else {
+                if (remarksLabel) remarksLabel.textContent = 'Remarks (optional)';
+                if (remarksField) remarksField.placeholder = 'Enter remarks for returning this voucher (optional)';
+            }
+        }
+
+        function lastUserForOffice(office) {
+            var selectEl = document.getElementById('return_office_select');
+            if (selectEl && selectEl.selectedIndex >= 0) {
+                var opt = selectEl.options[selectEl.selectedIndex];
+                var fromOption = opt ? String(opt.getAttribute('data-last-user') || '').trim() : '';
+                if (fromOption) return fromOption;
+            }
+            var mapped = normalizeUnitLabel(office);
+            return lastReturnCtx.lastUserByOffice[mapped] || lastReturnCtx.lastUserByOffice[office] || '';
+        }
+
+        function buildReturnConfirmDetails(destinationValue, office) {
+            var user = '';
+            var unit = '';
+            var lead = 'Return this voucher?';
+            var title = 'Confirm Return';
+            var confirmLabel = 'Return';
+            if (destinationValue === 'encoder') {
+                lead = 'Return this voucher to the encoder.';
+                user = lastReturnCtx.encodedBy;
+                unit = lastReturnCtx.encodedFrom;
+            } else if (destinationValue === 'previous_sender') {
+                lead = 'Return this voucher to the previous process.';
+                unit = office || '';
+                user = lastUserForOffice(unit);
+            } else if (destinationValue === 'retract') {
+                title = 'Confirm Retract';
+                confirmLabel = 'Retract';
+                lead = 'Retract this voucher and return it to the encoder for re-use.';
+                user = lastReturnCtx.encodedBy;
+                unit = lastReturnCtx.encodedFrom;
+            }
+            return {
+                title: title,
+                lead: lead,
+                processingNo: lastReturnCtx.processingNo || '',
+                user: user,
+                unit: unit,
+                confirmLabel: confirmLabel
+            };
         }
 
         function showPopup(processingNo, processHistory, officeFrom, encodedFrom, encodedBy) {
+            lastReturnCtx.processingNo = String(processingNo || '').trim();
+            lastReturnCtx.processHistory = String(processHistory || '');
+            lastReturnCtx.encodedFrom = String(encodedFrom || '').trim();
+            lastReturnCtx.encodedBy = String(encodedBy || '').trim();
+            lastReturnCtx.lastUserByOffice = {};
             if (popup) popup.style.display = 'block';
             if (overlay) overlay.style.display = 'block';
             loadReturnOffices(processHistory, officeFrom, encodedFrom, encodedBy);
@@ -4603,54 +4680,71 @@ if ($showCashierArchiveCol) {
                 var remarksInput = document.querySelector('#myForm_Forwarding .remarks');
                 var returnTargetEl = document.getElementById('return_target_section');
                 var form = document.getElementById('myForm_Forwarding');
+                var office = document.getElementById('return_office_select')?.value || '';
 
-                if (destinationValue === 'retract') {
+                if (destinationValue === 'retract' && remarksValue === '') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Please enter remarks before retracting this voucher.', 'error', 3000);
+                    }
+                    var remarksField = document.getElementById('return_remarks_popup');
+                    if (remarksField) remarksField.focus();
+                    return;
+                }
+                if (destinationValue === 'previous_sender' && !office) {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Please select the previous process to return to.', 'error', 3000);
+                    }
+                    return;
+                }
+                if (typeof showVoucherActionConfirm !== 'function') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Unable to confirm this action. Please refresh the page.', 'error', 3000);
+                    }
+                    return;
+                }
+
+                var confirmDetails = buildReturnConfirmDetails(destinationValue, office);
+                confirmDetails.onConfirm = function() {
+                    if (destinationValue === 'retract') {
+                        if (remarksInput) {
+                            remarksInput.value = remarksValue;
+                        }
+                        if (form) {
+                            form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                            var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
+                            if (hiddenRetractSubmit) {
+                                hiddenRetractSubmit.click();
+                            } else {
+                                form.submit();
+                            }
+                        }
+                        hidePopup();
+                        return;
+                    }
+
+                    if (destinationInput) destinationInput.value = destinationValue;
                     if (remarksInput) {
                         remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
                     }
+                    if (returnTargetEl) {
+                        returnTargetEl.value = '';
+                    }
+                    if (destinationValue === 'previous_sender' && returnTargetEl) {
+                        returnTargetEl.value = office;
+                    }
+
                     if (form) {
-                        form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
-                        var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
-                        if (hiddenRetractSubmit) {
-                            hiddenRetractSubmit.click();
+                        form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
+                        var hiddenReturnSubmit = document.getElementById('hidden_return_submit');
+                        if (hiddenReturnSubmit) {
+                            hiddenReturnSubmit.click();
                         } else {
                             form.submit();
                         }
                     }
                     hidePopup();
-                    return;
-                }
-
-                if (destinationInput) destinationInput.value = destinationValue;
-                if (remarksInput) {
-                    remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
-                }
-                if (returnTargetEl) {
-                    returnTargetEl.value = '';
-                }
-                if (destinationValue === 'previous_sender') {
-                    var office = document.getElementById('return_office_select')?.value || '';
-                    if (!office) {
-                        if (typeof showNotify === 'function') {
-                            showNotify('Please select the previous process to return to.', 'error', 3000);
-                        }
-                        return;
-                    }
-                    if (returnTargetEl) {
-                        returnTargetEl.value = office;
-                    }
-                }
-
-                if (form) {
-                    form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
-                    var hiddenReturnSubmit = document.getElementById('hidden_return_submit');
-                    if (hiddenReturnSubmit) {
-                        hiddenReturnSubmit.click();
-                    } else {
-                        form.submit();
-                    }
-                }
-                hidePopup();
+                };
+                showVoucherActionConfirm(confirmDetails);
             });
         }
     })();

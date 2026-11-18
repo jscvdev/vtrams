@@ -704,8 +704,8 @@ function session_contains_phrase($phrase)
                                 </div>
                             </div>
                             <div class="label-input__container">
-                                <label for="return_remarks_popup">Remarks (optional)</label>
-                                <textarea id="return_remarks_popup" class="form-custom-multi-input" rows="3" placeholder="Enter remarks for retracting this voucher (optional)"></textarea>
+                                <label for="return_remarks_popup">Remarks (required)</label>
+                                <textarea id="return_remarks_popup" class="form-custom-multi-input" rows="3" placeholder="Enter remarks for retracting this voucher"></textarea>
                             </div>
                         </div>
                     </div>
@@ -2737,6 +2737,11 @@ $forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJs
 ?>
 <script src="../../protected/js/amount_helper.js"></script>
 <script src="../../protected/js/forward_slip.js?v=<?= $forwardSlipJsVer ?>"></script>
+<?php
+$voucherActionConfirmJsPath = __DIR__ . '/../../protected/js/voucher_action_confirm.js';
+$voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemtime($voucherActionConfirmJsPath) : time();
+?>
+<script src="../../protected/js/voucher_action_confirm.js?v=<?= $voucherActionConfirmJsVer ?>"></script>
 <script>
     (function() {
         var popup = document.getElementById('returnOptionsPopup');
@@ -2779,19 +2784,48 @@ $forwardSlipJsVer = is_file($forwardSlipJsPath) ? (int) filemtime($forwardSlipJs
                 var remarksInput = document.querySelector('#encoded_voucher_form .remarks');
                 var form = document.getElementById('encoded_voucher_form');
 
-                if (remarksInput) {
-                    remarksInput.value = remarksValue === '' ? 'NULL' : remarksValue;
-                }
-                if (form) {
-                    form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
-                    var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
-                    if (hiddenRetractSubmit) {
-                        hiddenRetractSubmit.click();
-                    } else {
-                        form.submit();
+                if (remarksValue === '') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Please enter remarks before retracting this voucher.', 'error', 3000);
                     }
+                    var remarksField = document.getElementById('return_remarks_popup');
+                    if (remarksField) remarksField.focus();
+                    return;
                 }
-                hidePopup();
+
+                var processingNo = String((document.querySelector('#encoded_voucher_form .processing_no') || {}).value || '').trim();
+                var encodedBy = String((document.querySelector('#encoded_voucher_form .encoded_by') || {}).value || '').trim();
+                var encodedFrom = String((document.querySelector('#encoded_voucher_form .encoded_from') || {}).value || '').trim();
+                if (typeof showVoucherActionConfirm !== 'function') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Unable to confirm this action. Please refresh the page.', 'error', 3000);
+                    }
+                    return;
+                }
+
+                showVoucherActionConfirm({
+                    title: 'Confirm Retract',
+                    lead: 'Retract this voucher and return it to the encoder for re-use.',
+                    processingNo: processingNo,
+                    user: encodedBy,
+                    unit: encodedFrom,
+                    confirmLabel: 'Retract',
+                    onConfirm: function() {
+                        if (remarksInput) {
+                            remarksInput.value = remarksValue;
+                        }
+                        if (form) {
+                            form.setAttribute('action', '../../protected/handler/voucher_return_module/voucher_retract_handler.php');
+                            var hiddenRetractSubmit = document.getElementById('hidden_retract_submit');
+                            if (hiddenRetractSubmit) {
+                                hiddenRetractSubmit.click();
+                            } else {
+                                form.submit();
+                            }
+                        }
+                        hidePopup();
+                    }
+                });
             });
         }
     })();

@@ -1328,9 +1328,17 @@ function voucher_status_report_resolve_location(
         $destUsers = voucher_status_report_users_from_udc_list($pdo, $destUdcList);
         $destUser = $destUsers[0] ?? null;
         $isReturnedUnreceived = !empty($entry['is_returned']) && $receivingRow === [];
+        $encoderName = voucher_status_report_person_name((string) ($entry['encoded_by'] ?? ''));
         $singleReturnTarget = '';
         if ($isReturnedUnreceived) {
-            if (count($destUdcs) === 1) {
+            $destNames = voucher_status_report_user_display_names($destUsers);
+            $destIsEncoder = $encoderName !== '' && $destNames !== [] && array_filter(
+                $destNames,
+                static fn(string $name): bool => strcasecmp($name, $encoderName) === 0
+            ) !== [];
+            if ($destIsEncoder) {
+                $singleReturnTarget = $encoderName;
+            } elseif (count($destUdcs) === 1) {
                 $singleReturnTarget = voucher_status_report_person_name((string) ($destUser['display_name'] ?? ''));
             }
             if ($singleReturnTarget === '') {
@@ -1339,6 +1347,9 @@ function voucher_status_report_resolve_location(
                     (string) ($lastHeld['user'] ?? ''),
                     $destUsers
                 );
+            }
+            if ($singleReturnTarget === '' && $encoderName !== '' && $destUsers === []) {
+                $singleReturnTarget = $encoderName;
             }
         }
         $isSpecificPerson = count($destUsers) === 1;
@@ -1353,6 +1364,10 @@ function voucher_status_report_resolve_location(
         if ($forwardedTo === '' && $forwardedOffice !== '') {
             $forwardedTo = $forwardedOffice;
             $forwardedOffice = '';
+        }
+        if ($forwardedTo === '' && $isReturnedUnreceived && $singleReturnTarget !== '' && $encoderName !== ''
+            && strcasecmp($singleReturnTarget, $encoderName) === 0) {
+            $forwardedTo = 'Encoder';
         }
         $forwardedUsers = $singleReturnTarget !== ''
             ? [$singleReturnTarget]

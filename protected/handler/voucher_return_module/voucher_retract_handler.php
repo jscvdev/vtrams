@@ -38,6 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $temp_dump['empty_data'] = 'Processing number is required.';
             }
 
+            $remarksTrim = trim($remarks);
+            if ($remarksTrim === '' || strcasecmp($remarksTrim, 'NULL') === 0) {
+                $temp_dump['remarks'] = 'Remarks are required to retract a voucher.';
+            }
+
             $locatedSource = voucher_retract_locate_source($pdo, $processing_no, $retract_source);
             if ($locatedSource !== 'tracking' && !voucher_retract_source_exists($pdo, $processing_no, $locatedSource)) {
                 $temp_dump['voucher_missing'] = 'Voucher not found in the current queue.';

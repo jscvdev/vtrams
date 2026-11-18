@@ -817,6 +817,71 @@
     z-index: 10004 !important;
 }
 
+.popup-form.voucher-premium-modal.voucher-action-confirm-modal {
+    max-width: 520px;
+    width: min(520px, calc(100vw - 1.5rem));
+    z-index: 10012;
+}
+
+#voucherActionConfirmOverlay {
+    z-index: 10011;
+}
+
+.voucher-action-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.voucher-action-confirm__lead {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: #0f172a;
+}
+
+.voucher-action-confirm__details {
+    margin: 0;
+    padding: 4px 0;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.voucher-action-confirm__row {
+    display: grid;
+    grid-template-columns: 132px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.voucher-action-confirm__row:last-child {
+    border-bottom: none;
+}
+
+.voucher-action-confirm__row dt {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    padding-top: 2px;
+}
+
+.voucher-action-confirm__row dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
 #signatoryModal,
 #coaOptionsModalForward {
     z-index: 10001;

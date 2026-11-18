@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $return_previous_validation_error = '';
 
         if (!empty($return_destination) && $return_destination === 'encoder') {
-            // Re-insert into vouchers on return; production DBs may lack AUTO_INCREMENT on id.
+            // Route to the encoder Incoming queue so they must receive the returned voucher.
             vouchers_ensure_ors_no_column($pdo);
             vouchers_ensure_id_auto_increment($pdo);
 
@@ -227,11 +227,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'office_from' => $office_from,
                         'office_to' => $office_to,
                         'sender_udc' => $sender_udc,
+                        'receiver_udc' => $receiver_udc,
                         'datetime_encoded' => $datetime_encoded,
                     ];
-                    if (empty($return_destination) || $return_destination !== 'encoder') {
-                        $variables_to_check['receiver_udc'] = $receiver_udc;
-                    }
 
                     //TAKES IN AN ASSOCIATIVE ARRAY (KEY=>VALUE PAIRS)
                     $result = voucher_incoming_return_required_data_empty($variables_to_check);
@@ -289,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $office_to = $returnHop['office_to'];
                         $isEncoderReturn = !empty($return_destination) && $return_destination === 'encoder';
 
-                        if (!empty($return_destination) && $return_destination === 'encoder') {
+                        if ($isEncoderReturn) {
                             $retained = voucher_return_encoder_retention_values($pdo, $processing_no, $return_source, [
                                 'ors_no' => $ors_no,
                                 'dv_no' => $dv_no,
@@ -315,43 +313,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $amount = $retained['amount'];
                             $voucher_type = $retained['voucher_type'];
                             $voucher_date = $retained['voucher_date'];
-                            $retained_coa_options = voucher_field_is_placeholder($retained['coa_options']) ? null : $retained['coa_options'];
-                            $retained_coa_category = voucher_field_is_placeholder($retained['coa_category']) ? null : $retained['coa_category'];
-                            $retained_coa_subsection = voucher_field_is_placeholder($retained['coa_subsection']) ? null : $retained['coa_subsection'];
                             voucher_sync_tracking_identifiers($pdo, $processing_no, $ors_no, $dv_no, $ada_check_no);
                         }
 
-                        if ($isEncoderReturn) {
-                            voucher_incoming_sent_return_document(
-                                $pdo,
-                                $processing_no,
-                                $ors_no,
-                                $dv_no,
-                                $ada_check_no,
-                                $payee,
-                                $address,
-                                $particulars,
-                                $tin_employee_no,
-                                $amount,
-                                $voucher_type,
-                                $voucher_date,
-                                $encoded_by,
-                                $encoded_from,
-                                $datetime_encoded,
-                                $retained_coa_options ?? null,
-                                $retained_coa_category ?? null,
-                                $retained_coa_subsection ?? null
-                            );
-                            voucher_retract_clear_all_queues($pdo, $processing_no);
-                            voucher_return_sync_dv_entry_for_encoder_return(
-                                $pdo,
-                                $processing_no,
-                                $encoded_from,
-                                $ors_no,
-                                $dv_no,
-                                $ada_check_no
-                            );
-                        } elseif ($return_source === 'forwarding') {
+                        if ($return_source === 'forwarding') {
                             voucher_forwarding_return_move_to_incoming(
                                 $pdo,
                                 $processing_no,
@@ -394,6 +359,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $return_remarks_for_incoming
                             );
                             incoming_voucher_remove_from_sent($pdo, $processing_no);
+                        }
+                        if ($isEncoderReturn) {
+                            $pendingStmt = $pdo->prepare('DELETE FROM vouchers WHERE processing_no = :processing_no');
+                            $pendingStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+                            $pendingStmt->execute();
+                            voucher_return_sync_dv_entry_for_encoder_return(
+                                $pdo,
+                                $processing_no,
+                                $encoded_from,
+                                $ors_no,
+                                $dv_no,
+                                $ada_check_no
+                            );
                         }
                         $return_active_status = 'returned';
                         voucher_incoming_return_update_document_tracking($pdo, $processing_no, $action, $datetime_action, $combined_remarks, $return_active_status);

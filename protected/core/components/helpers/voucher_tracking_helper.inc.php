@@ -272,6 +272,19 @@ function voucher_tracking_is_pending_return_reply(?array $tracking_row): bool
     return $returnerName === '' || strcasecmp($lastActorAfter, $returnerName) !== 0;
 }
 
+/** True after anyone has received, returned, processed, or archived the voucher. */
+function voucher_tracking_history_has_processing_hop(string $process_history): bool
+{
+    foreach (voucher_tracking_parse_process_history_lines($process_history) as $line) {
+        $kind = voucher_tracking_action_kind((string) ($line['action'] ?? ''));
+        if (in_array($kind, ['receive', 'return', 'process', 'archive'], true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * @param list<string> $processingNos
  * @return array<string, array<string, mixed>>

@@ -5,6 +5,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'voucher_sent.model.inc.php';
     require_once 'voucher_sent.ctrl.inc.php';
     require_once __DIR__ . '/../voucher_return_module/voucher_return.model.inc.php';
+    require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
 
     // Check if token is valid
     if (isset($_POST['token']) && $_POST['token'] === $_SESSION['token']) {
@@ -162,7 +163,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         die();
                     } else {
                         // DATABASE STATEMENTS VIA MODE/CTRL
-                        if ($encoded_by == $_SESSION['logged_user_emp_name']) {
+                        $sentTracking = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no) ?? [];
+                        $sentHistory = trim((string) ($sentTracking['process_history'] ?? ''));
+                        $encoderRecallToPending = strcasecmp(trim((string) $encoded_by), trim((string) ($_SESSION['logged_user_emp_name'] ?? ''))) === 0
+                            && !voucher_tracking_history_has_processing_hop($sentHistory);
+                        if ($encoderRecallToPending) {
                             voucher_sent_return_document(
                                 $pdo,
                                 $processing_no,
