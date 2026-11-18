@@ -255,8 +255,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $returnTrackingRow = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no);
-                    if (voucher_tracking_is_pending_return_reply($returnTrackingRow)) {
-                        $temp_dump['return_blocked'] = 'This returned voucher cannot be sent back with Return. Receive it if it is still incoming, then use Forward.';
+                    if (
+                        $return_source === 'forwarding'
+                        && voucher_tracking_is_pending_return_reply($returnTrackingRow)
+                    ) {
+                        $temp_dump['return_blocked'] = 'This returned voucher cannot be sent back with Return. Use Forward to send it on.';
                     }
 
                     if ($return_previous_validation_error !== '') {
@@ -358,8 +361,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $combined_remarks,
                                 $return_remarks_for_incoming
                             );
-                            incoming_voucher_remove_from_sent($pdo, $processing_no);
                         }
+                        voucher_return_place_in_sent($pdo, $processing_no);
                         if ($isEncoderReturn) {
                             $pendingStmt = $pdo->prepare('DELETE FROM vouchers WHERE processing_no = :processing_no');
                             $pendingStmt->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);

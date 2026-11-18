@@ -31,6 +31,11 @@ function incoming_voucher_remove_from_sent(object $pdo, string $processing_no)
     incoming_voucher_delete_from_sent($pdo, $processing_no);
 }
 
+function voucher_return_place_in_sent(object $pdo, string $processing_no): void
+{
+    voucher_return_copy_incoming_to_sent($pdo, $processing_no);
+}
+
 function voucher_incoming_check_if_returned_exists(object $pdo, $processing_no)
 {
     if (voucher_incoming_return_get_document_id($pdo, $processing_no)){

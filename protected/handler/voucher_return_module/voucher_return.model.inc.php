@@ -31,6 +31,123 @@ function incoming_voucher_delete_from_sent(object $pdo, string $processing_no) {
     return $statement->rowCount() > 0;
 }
 
+/**
+ * Mirror a returned voucher into Sent so the returner can recall a routing mistake
+ * until the target receives it.
+ */
+function voucher_return_copy_incoming_to_sent(object $pdo, string $processing_no): bool
+{
+    incoming_voucher_delete_from_sent($pdo, $processing_no);
+
+    $select = $pdo->prepare('SELECT * FROM voucher_incoming WHERE processing_no = :processing_no LIMIT 1');
+    $select->bindValue(':processing_no', $processing_no, PDO::PARAM_STR);
+    $select->execute();
+    $row = $select->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return false;
+    }
+
+    $processHistory = (string) ($row['process_history'] ?? '');
+    if ($processHistory === '' && function_exists('voucher_tracking_fetch_process_history')) {
+        $processHistory = voucher_tracking_fetch_process_history($pdo, $processing_no);
+    }
+
+    $query = 'INSERT INTO voucher_sent (
+                    processing_no,
+                    dv_no,
+                    ors_no,
+                    ada_check_no,
+                    payee,
+                    address,
+                    particulars,
+                    amount,
+                    charged_amount,
+                    voucher_type,
+                    voucher_date,
+                    tin_employee_no,
+                    datetime_forwarded,
+                    sender_udc,
+                    receiver_udc,
+                    office_from,
+                    office_to,
+                    encoded_by,
+                    encoded_from,
+                    datetime_encoded,
+                    forwarded_by,
+                    process_status,
+                    remarks,
+                    sender_remarks,
+                    supporting_documents,
+                    coa_options,
+                    coa_category,
+                    coa_subsection,
+                    process_history
+                ) VALUES (
+                    :processing_no,
+                    :dv_no,
+                    :ors_no,
+                    :ada_check_no,
+                    :payee,
+                    :address,
+                    :particulars,
+                    :amount,
+                    :charged_amount,
+                    :voucher_type,
+                    :voucher_date,
+                    :tin_employee_no,
+                    :datetime_forwarded,
+                    :sender_udc,
+                    :receiver_udc,
+                    :office_from,
+                    :office_to,
+                    :encoded_by,
+                    :encoded_from,
+                    :datetime_encoded,
+                    :forwarded_by,
+                    :process_status,
+                    :remarks,
+                    :sender_remarks,
+                    :supporting_documents,
+                    :coa_options,
+                    :coa_category,
+                    :coa_subsection,
+                    :process_history
+                )';
+    $statement = $pdo->prepare($query);
+    $statement->bindValue(':processing_no', (string) ($row['processing_no'] ?? $processing_no), PDO::PARAM_STR);
+    $statement->bindValue(':dv_no', (string) ($row['dv_no'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':ors_no', (string) ($row['ors_no'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':ada_check_no', (string) ($row['ada_check_no'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':payee', (string) ($row['payee'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':address', (string) ($row['address'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':particulars', (string) ($row['particulars'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':amount', (string) ($row['amount'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':charged_amount', $row['charged_amount'] ?? null);
+    $statement->bindValue(':voucher_type', (string) ($row['voucher_type'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':voucher_date', (string) ($row['voucher_date'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':tin_employee_no', (string) ($row['tin_employee_no'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':datetime_forwarded', (string) ($row['datetime_forwarded'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':sender_udc', (string) ($row['sender_udc'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':receiver_udc', (string) ($row['receiver_udc'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':office_from', (string) ($row['office_from'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':office_to', (string) ($row['office_to'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':encoded_by', (string) ($row['encoded_by'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':encoded_from', (string) ($row['encoded_from'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':datetime_encoded', (string) ($row['datetime_encoded'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':forwarded_by', (string) ($row['forwarded_by'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':process_status', (string) ($row['process_status'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':remarks', (string) ($row['remarks'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':sender_remarks', (string) ($row['sender_remarks'] ?? ''), PDO::PARAM_STR);
+    $statement->bindValue(':supporting_documents', $row['supporting_documents'] ?? null);
+    $statement->bindValue(':coa_options', $row['coa_options'] ?? null);
+    $statement->bindValue(':coa_category', $row['coa_category'] ?? null);
+    $statement->bindValue(':coa_subsection', $row['coa_subsection'] ?? null);
+    $statement->bindValue(':process_history', $processHistory, PDO::PARAM_STR);
+    $statement->execute();
+
+    return $statement->rowCount() > 0;
+}
+
 function voucher_incoming_sent_to_receiving(object $pdo, string $ors_no, string $ada_check_no, string $processing_no, string $dv_no, string $payee, string $address, string $particulars, string $tin_employee_no, string $amount, string $voucher_type, string $voucher_date, string $datetime_action, string $office_from, string $office_to, string $sender_udc, string $receiver_udc, 
 string $encoded_by, string $encoded_from, string $datetime_encoded, string $process_status, string $combined_remarks) {
     $grossAmount = $amount;
@@ -560,8 +677,8 @@ function voucher_return_fetch_process_history(object $pdo, string $processing_no
     }
 
     $tables = $return_source === 'forwarding'
-        ? ['voucher_receiving', 'voucher_tracking']
-        : ['voucher_incoming', 'voucher_tracking'];
+        ? ['voucher_tracking', 'voucher_receiving']
+        : ['voucher_tracking', 'voucher_incoming'];
 
     foreach ($tables as $table) {
         $stmt = $pdo->prepare('SELECT process_history FROM ' . $table . ' WHERE processing_no = :processing_no LIMIT 1');

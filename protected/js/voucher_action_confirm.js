@@ -8,11 +8,13 @@
         el.textContent = value == null ? '' : String(value);
     }
 
-    function setRowVisible(row, value) {
+    function setRowVisible(row, value, label) {
         if (!row) return;
         var text = String(value || '').trim();
         row.hidden = text === '';
+        var dt = row.querySelector('dt');
         var dd = row.querySelector('dd');
+        if (dt && label) dt.textContent = label;
         if (dd) dd.textContent = text || '—';
     }
 
@@ -93,9 +95,9 @@
 
         setText(document.getElementById('voucherActionConfirmTitle'), opts.title || 'Confirm Action');
         setText(document.getElementById('voucherActionConfirmLead'), opts.lead || '');
-        setRowVisible(popup.querySelector('[data-confirm-row="processingNo"]'), opts.processingNo);
-        setRowVisible(popup.querySelector('[data-confirm-row="user"]'), opts.user);
-        setRowVisible(popup.querySelector('[data-confirm-row="unit"]'), opts.unit);
+        setRowVisible(popup.querySelector('[data-confirm-row="processingNo"]'), opts.processingNo, 'Processing No.');
+        setRowVisible(popup.querySelector('[data-confirm-row="user"]'), opts.user, opts.userLabel || 'User');
+        setRowVisible(popup.querySelector('[data-confirm-row="unit"]'), opts.unit, opts.unitLabel || 'Section / Unit');
 
         if (yesBtn) {
             yesBtn.textContent = opts.confirmLabel || 'Confirm';

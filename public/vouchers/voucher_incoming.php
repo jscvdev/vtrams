@@ -1062,9 +1062,7 @@ $incoming_is_accounting_role = in_array('Accounting Unit', $target, true)
                                     <?php if ($_SESSION["acl"] >= 3) : ?>
                                         <button class="btn pPop voucher-table-action-btn voucher-table-action-btn--receive" id="openPopup" name="btn-receive" type="button" aria-label="Receive" title="Receive"><i class="ri-inbox-archive-line" aria-hidden="true"></i><span>Receive</span></button>
                                     <?php endif; ?>
-                                    <?php if (!$incomingReturnedPending) : ?>
                                     <button class="btn voucher-table-action-btn voucher-table-action-btn--return" name="btn-return" type="button" aria-label="Return" title="Return"><i class="ri-arrow-go-back-line" aria-hidden="true"></i><span>Return</span></button>
-                                    <?php endif; ?>
                                 </div>
                             </td>
                             <td data-label="voucher_type" class="hidden"><?php echo $row['voucher_type']; ?></td>
@@ -2071,13 +2069,6 @@ $voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemt
                     chargedStringInput.readOnly = false;
                 }
             } else if (name === "btn-return") {
-                var incomingNeedsReturnForward = (row.querySelector('[data-label="needs_return_forward"]')?.textContent || '').trim() === '1';
-                if (incomingNeedsReturnForward) {
-                    if (typeof showNotify === 'function') {
-                        showNotify('This returned voucher cannot be sent back with Return. Receive it first, then use Forward if you need to send it on.', 'warning', 4200);
-                    }
-                    return;
-                }
                 setVoucherPortalViewMode(false);
                 document.getElementById("myIncomingForm").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("dv_no").required = false;

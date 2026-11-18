@@ -2385,25 +2385,12 @@ if ($showCashierArchiveCol) {
 
     // Prevent forwarding for Budget Unit / Budget Officer when ORS No. is empty or "TBD"
     const forwardingForm = document.getElementById("myForm_Forwarding");
+    var skipReturnForwardConfirm = false;
     if (forwardingForm) {
         forwardingForm.addEventListener("submit", function(e) {
             const isBudgetRole = targetArray2.includes("Budget Unit") || targetArray2.includes("Budget Officer");
             const actionButton = document.querySelector(".btn-dynamic");
             const actionName = actionButton ? actionButton.getAttribute("name") : "";
-
-            if (actionName === "forward_voucher" && docToSelect && docToSelect.dataset.needsReturnConfirm === '1' && !selectedForwardIsReturner()) {
-                var selectedLabel = '';
-                if (docToSelect.selectedIndex >= 0 && docToSelect.options[docToSelect.selectedIndex]) {
-                    selectedLabel = String(docToSelect.options[docToSelect.selectedIndex].textContent || '').trim()
-                        || String(docToSelect.value || '').trim();
-                }
-                var returnerLabel = String(docToSelect.dataset.returnForwardLabel || docToSelect.dataset.returnForwardName || 'the person who returned it').trim();
-                var confirmMsg = 'This voucher was returned by ' + returnerLabel + '. Forward to ' + (selectedLabel || 'the selected destination') + ' instead?';
-                if (!window.confirm(confirmMsg)) {
-                    e.preventDefault();
-                    return;
-                }
-            }
 
             if (isBudgetRole && actionName === "forward_voucher") {
                 const orsInput = document.getElementById("ors_no");
@@ -2413,8 +2400,57 @@ if ($showCashierArchiveCol) {
                         e.preventDefault();
                         showNotify("Please enter a valid ORS No. before forwarding. Empty or 'TBD' is not allowed.", 'error', 3500);
                         orsInput.focus();
+                        return;
                     }
                 }
+            }
+
+            if (actionName === "forward_voucher" && docToSelect && docToSelect.dataset.needsReturnConfirm === '1' && !selectedForwardIsReturner()) {
+                if (skipReturnForwardConfirm) {
+                    skipReturnForwardConfirm = false;
+                    return;
+                }
+                e.preventDefault();
+                var selectedLabel = '';
+                if (docToSelect.selectedIndex >= 0 && docToSelect.options[docToSelect.selectedIndex]) {
+                    selectedLabel = String(docToSelect.options[docToSelect.selectedIndex].textContent || '').trim()
+                        || String(docToSelect.value || '').trim();
+                }
+                var returnerName = String(docToSelect.dataset.returnForwardName || '').trim();
+                var returnerDest = String(docToSelect.dataset.returnForwardLabel || docToSelect.dataset.returnForwardValue || '').trim();
+                var returnedByDisplay = returnerName;
+                if (returnerName && returnerDest && returnerName.toLowerCase() !== returnerDest.toLowerCase()) {
+                    returnedByDisplay = returnerName + ' · ' + returnerDest;
+                } else if (!returnedByDisplay) {
+                    returnedByDisplay = returnerDest || 'the person who returned it';
+                }
+                var processingNo = String((document.getElementById('processing_no') || {}).value || '').trim();
+                if (typeof showVoucherActionConfirm !== 'function') {
+                    if (typeof showNotify === 'function') {
+                        showNotify('Unable to confirm this action. Please refresh the page.', 'error', 3000);
+                    }
+                    return;
+                }
+                showVoucherActionConfirm({
+                    title: 'Confirm Forward',
+                    lead: 'This voucher was returned. Forward it to a different destination instead of the returner.',
+                    processingNo: processingNo,
+                    user: returnedByDisplay,
+                    userLabel: 'Returned by',
+                    unit: selectedLabel,
+                    unitLabel: 'Forward to',
+                    confirmLabel: 'Forward',
+                    confirmClass: 'success',
+                    onConfirm: function() {
+                        skipReturnForwardConfirm = true;
+                        var btn = forwardingForm.querySelector('.btn-dynamic');
+                        if (btn) {
+                            btn.click();
+                        } else {
+                            forwardingForm.submit();
+                        }
+                    }
+                });
             }
         });
     }

@@ -227,9 +227,15 @@ function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing
 /**
  * True while the current holder received a return and has not forwarded it yet.
  * After the returner gets the voucher back (or anyone forwards after the return), Return is allowed again.
+ * Returning to self is not a pending reply — Return stays available.
  */
-function voucher_tracking_is_pending_return_reply(?array $tracking_row): bool
+function voucher_tracking_is_pending_return_reply(?array $tracking_row, ?string $logged_user_name = null): bool
 {
+    $status = (string) (($tracking_row ?? [])['voucher_status'] ?? '');
+    if (voucher_tracking_is_self_return($status, $logged_user_name)) {
+        return false;
+    }
+
     $history = trim((string) (($tracking_row ?? [])['process_history'] ?? ''));
     $lines = voucher_tracking_parse_process_history_lines($history);
     $lastReturnIdx = -1;
@@ -244,6 +250,11 @@ function voucher_tracking_is_pending_return_reply(?array $tracking_row): bool
 
     if ($lastReturnIdx < 0) {
         return voucher_tracking_normalize_active_status((string) (($tracking_row ?? [])['active_status'] ?? '')) === 'returned';
+    }
+
+    $logged = trim((string) ($logged_user_name ?? ($_SESSION['logged_user_emp_name'] ?? '')));
+    if ($returnerName !== '' && $logged !== '' && strcasecmp($returnerName, $logged) === 0) {
+        return false;
     }
 
     $forwardedAfterReturn = false;
@@ -383,14 +394,15 @@ function voucher_tracking_lookup_user_by_display_name(object $pdo, string $displ
         return null;
     }
 
+    $normalizedName = strtolower(preg_replace('/\s+/', ' ', $name) ?? $name);
     $stmt = $pdo->prepare(
         'SELECT udc, designation, section, office,
-            TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) AS display_name
+            TRIM(CONCAT_WS(\' \', NULLIF(TRIM(emp_fn), \'\'), NULLIF(TRIM(emp_mi), \'\'), NULLIF(TRIM(emp_ln), \'\'))) AS display_name
          FROM user_group
-         WHERE TRIM(CONCAT(COALESCE(emp_fn, \'\'), \' \', COALESCE(emp_mi, \'\'), \' \', COALESCE(emp_ln, \'\'))) = :name
+         WHERE LOWER(TRIM(CONCAT_WS(\' \', NULLIF(TRIM(emp_fn), \'\'), NULLIF(TRIM(emp_mi), \'\'), NULLIF(TRIM(emp_ln), \'\')))) = :name
          LIMIT 1'
     );
-    $stmt->bindValue(':name', $name, PDO::PARAM_STR);
+    $stmt->bindValue(':name', $normalizedName, PDO::PARAM_STR);
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
