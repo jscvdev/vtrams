@@ -977,9 +977,8 @@ function voucher_status_report_current_holder_names(
     string $office,
     string $fallbackName = ''
 ): array {
-    $isSpecificProcessor = count($resolvedUsers) === 1
-        && voucher_tracking_user_has_designation($resolvedUsers[0], 'Processor');
-    $isIcu = !$isSpecificProcessor && (
+    $isSpecificPerson = count($resolvedUsers) === 1;
+    $isIcu = !$isSpecificPerson && (
         strcasecmp(trim($unit), 'ICU') === 0
         || voucher_status_report_is_icu_user_set($resolvedUsers)
     );
@@ -1013,9 +1012,8 @@ function voucher_status_report_users_for_location(
         return $names;
     }
 
-    $isSpecificProcessor = count($resolvedUsers) === 1
-        && voucher_tracking_user_has_designation($resolvedUsers[0], 'Processor');
-    $isIcuTarget = !$isSpecificProcessor && (
+    $isSpecificPerson = count($resolvedUsers) === 1;
+    $isIcuTarget = !$isSpecificPerson && (
         strcasecmp($unit, 'ICU') === 0
         || voucher_status_report_is_icu_user_set($resolvedUsers)
     );
@@ -1023,7 +1021,7 @@ function voucher_status_report_users_for_location(
         $unit = 'ICU';
     }
 
-    if ($isSpecificProcessor) {
+    if ($isSpecificPerson) {
         return $names;
     }
     if ($unit === '') {
@@ -1196,14 +1194,15 @@ function voucher_status_report_last_held_location(PDO $pdo, array $lines, array 
 
         $section = voucher_status_report_unit_from_history_line($pdo, $line, $userCache);
         $office = trim((string) ($line['office'] ?? ''));
-        if ($section === '' && $office === '') {
+        $user = voucher_status_report_person_name((string) ($line['name'] ?? ''));
+        if ($section === '' && $office === '' && $user === '') {
             continue;
         }
 
         return [
             'section' => $section,
             'office' => $office,
-            'user' => voucher_status_report_person_name((string) ($line['name'] ?? '')),
+            'user' => $user,
         ];
     }
 
@@ -1284,6 +1283,44 @@ function voucher_status_report_resolve_location(
         if ($currentSection === '') {
             $currentSection = 'Paid';
         }
+    } elseif ($receivingRow !== []) {
+        $holders = voucher_status_report_users_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
+        $holder = $holders[0] ?? null;
+        $isSpecificPerson = count($holders) === 1;
+        $isIcuTarget = !$isSpecificPerson && voucher_status_report_is_icu_user_set($holders);
+        $heldSection = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($holder);
+        if ($heldSection === '') {
+            $heldSection = trim((string) ($lastHeld['section'] ?? ''));
+        }
+        if ($heldSection !== '') {
+            $currentSection = $heldSection;
+        }
+        $heldOffice = trim((string) ($receivingRow['office_to'] ?? ''));
+        if ($heldOffice === '' && $holder !== null) {
+            $heldOffice = trim((string) ($holder['office'] ?? ''));
+        }
+        if ($heldOffice === '') {
+            $heldOffice = trim((string) ($lastHeld['office'] ?? ''));
+        }
+        if ($heldOffice !== '') {
+            $currentOffice = $heldOffice;
+        }
+        $heldName = voucher_status_report_person_name((string) ($lastHeld['user'] ?? $currentUser));
+        if ($heldName !== '') {
+            $currentUsers = [$heldName];
+            $currentUser = $heldName;
+            $locationUsersLocked = true;
+        } elseif ($holders !== []) {
+            $currentUsers = voucher_status_report_current_holder_names(
+                $pdo,
+                $holders,
+                $currentSection,
+                $currentOffice,
+                $currentUser
+            );
+            $currentUser = $currentUsers[0] ?? $currentUser;
+            $locationUsersLocked = true;
+        }
     } elseif ($incomingRow !== [] || ($lastKind === 'forward' && $pendingRow !== [])) {
         $queue = $incomingRow !== [] ? $incomingRow : $pendingRow;
         $destUdcList = (string) ($queue['receiver_udc'] ?? '');
@@ -1304,10 +1341,9 @@ function voucher_status_report_resolve_location(
                 );
             }
         }
-        $isSpecificProcessor = count($destUsers) === 1
-            && voucher_tracking_user_has_designation($destUser, 'Processor');
+        $isSpecificPerson = count($destUsers) === 1;
         $isIcuTarget = $singleReturnTarget === ''
-            && !$isSpecificProcessor
+            && !$isSpecificPerson
             && voucher_status_report_is_icu_user_set($destUsers);
         $forwardedTo = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($destUser);
         $forwardedOffice = trim((string) ($queue['office_to'] ?? ''));
@@ -1347,34 +1383,6 @@ function voucher_status_report_resolve_location(
             $locationUsersLocked = true;
         } elseif ($currentSection === '' && $currentOffice === '') {
             $currentSection = 'In transit';
-        }
-    } elseif ($receivingRow !== []) {
-        $holders = voucher_status_report_users_from_udc_list($pdo, (string) ($receivingRow['receiver_udc'] ?? ''));
-        $holder = $holders[0] ?? null;
-        $isSpecificProcessor = count($holders) === 1
-            && voucher_tracking_user_has_designation($holder, 'Processor');
-        $isIcuTarget = !$isSpecificProcessor && voucher_status_report_is_icu_user_set($holders);
-        $heldSection = $isIcuTarget ? 'ICU' : voucher_status_report_unit_label_from_user($holder);
-        if ($heldSection !== '') {
-            $currentSection = $heldSection;
-        }
-        $heldOffice = trim((string) ($receivingRow['office_to'] ?? ''));
-        if ($heldOffice === '' && $holder !== null) {
-            $heldOffice = trim((string) ($holder['office'] ?? ''));
-        }
-        if ($heldOffice !== '') {
-            $currentOffice = $heldOffice;
-        }
-        if ($holders !== []) {
-            $currentUsers = voucher_status_report_current_holder_names(
-                $pdo,
-                $holders,
-                $currentSection,
-                $currentOffice,
-                $currentUser
-            );
-            $currentUser = $currentUsers[0] ?? $currentUser;
-            $locationUsersLocked = true;
         }
     } elseif (!empty($entry['is_returned'])) {
         $encoderName = voucher_status_report_person_name((string) ($entry['encoded_by'] ?? ''));
