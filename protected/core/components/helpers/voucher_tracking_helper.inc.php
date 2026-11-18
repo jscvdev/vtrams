@@ -225,11 +225,51 @@ function voucher_tracking_fetch_by_processing_no(object $pdo, string $processing
 }
 
 /**
- * True while a returned voucher still needs to be sent back to the returner.
+ * True while the current holder received a return and has not forwarded it yet.
+ * After the returner gets the voucher back (or anyone forwards after the return), Return is allowed again.
  */
 function voucher_tracking_is_pending_return_reply(?array $tracking_row): bool
 {
-    return voucher_tracking_normalize_active_status((string) (($tracking_row ?? [])['active_status'] ?? '')) === 'returned';
+    $history = trim((string) (($tracking_row ?? [])['process_history'] ?? ''));
+    $lines = voucher_tracking_parse_process_history_lines($history);
+    $lastReturnIdx = -1;
+    $returnerName = '';
+    foreach ($lines as $index => $line) {
+        if (voucher_tracking_action_kind((string) ($line['action'] ?? '')) !== 'return') {
+            continue;
+        }
+        $lastReturnIdx = $index;
+        $returnerName = trim((string) ($line['name'] ?? ''));
+    }
+
+    if ($lastReturnIdx < 0) {
+        return voucher_tracking_normalize_active_status((string) (($tracking_row ?? [])['active_status'] ?? '')) === 'returned';
+    }
+
+    $forwardedAfterReturn = false;
+    $lastKindAfter = '';
+    $lastActorAfter = '';
+    for ($i = $lastReturnIdx + 1, $n = count($lines); $i < $n; $i++) {
+        $kind = voucher_tracking_action_kind((string) ($lines[$i]['action'] ?? ''));
+        $name = trim((string) ($lines[$i]['name'] ?? ''));
+        if ($kind === 'forward') {
+            $forwardedAfterReturn = true;
+        }
+        if (in_array($kind, ['receive', 'forward', 'process', 'encode'], true)) {
+            $lastKindAfter = $kind;
+            $lastActorAfter = $name;
+        }
+    }
+
+    if ($forwardedAfterReturn) {
+        return false;
+    }
+
+    if ($lastKindAfter === '') {
+        return true;
+    }
+
+    return $returnerName === '' || strcasecmp($lastActorAfter, $returnerName) !== 0;
 }
 
 /**

@@ -107,8 +107,8 @@ function voucher_move_to_receiving(
 }
 
 //UPDATE THE DOCUMENT FORWARDED LOG IN DOCUMENT TRACKING
-function update_incoming_forwarded_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $status)
+function update_incoming_forwarded_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $status, string $active_status = 'yes')
 {
-    update_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
+    update_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status, $active_status);
 }
 

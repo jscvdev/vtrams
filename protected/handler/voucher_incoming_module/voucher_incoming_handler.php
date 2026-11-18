@@ -128,6 +128,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $processHistoryForStatus,
                         $pdo
                     );
+                    $trackingRowForReceive = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no) ?? [];
+                    if (trim((string) ($trackingRowForReceive['process_history'] ?? '')) === '' && trim((string) $processHistoryForStatus) !== '') {
+                        $trackingRowForReceive['process_history'] = $processHistoryForStatus;
+                    }
+                    $receiveActiveStatus = voucher_tracking_is_pending_return_reply($trackingRowForReceive)
+                        ? 'returned'
+                        : 'yes';
 
                     $variables_to_check = [
                         'processing_no' => $processing_no,
@@ -260,7 +267,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $remarks,
                                 $coa_options,
                                 $coa_category,
-                                $coa_subsection
+                                $coa_subsection,
+                                $receiveActiveStatus
                             ) {
                                 voucher_move_to_receiving(
                                     $pdo,
@@ -292,7 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $coa_category,
                                     $coa_subsection
                                 );
-                                update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status);
+                                update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetime_action, $status, $receiveActiveStatus);
                                 voucher_log_user_action(
                                     $pdo,
                                     $processing_no,

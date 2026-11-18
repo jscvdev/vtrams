@@ -653,19 +653,20 @@ function voucher_return_resolve_previous_sender_target(
             }
 
             $validated = voucher_filter_udcs_by_user_group_office($pdo, $udc, $targetOffice);
-            $validated = voucher_udcs_excluding($validated !== '' ? $validated : $udc, $returner_udc);
-            if ($validated !== '') {
-                $result['receiver_udc'] = $validated;
-
+            $candidate = $validated !== '' ? $validated : $udc;
+            $withoutSelf = voucher_udcs_excluding($candidate, $returner_udc);
+            $result['receiver_udc'] = $withoutSelf !== '' ? $withoutSelf : $candidate;
+            if ($result['receiver_udc'] !== '') {
                 return $result;
             }
         }
 
         foreach (['Liaison Officer', 'Liaison'] as $liaisonDesignation) {
             $resolved = voucher_return_resolve_receiver_udc($pdo, $liaisonDesignation, $targetOffice);
-            $resolved = voucher_udcs_excluding($resolved, $returner_udc);
-            if ($resolved !== '') {
-                $result['receiver_udc'] = $resolved;
+            $withoutSelf = voucher_udcs_excluding($resolved, $returner_udc);
+            $picked = $withoutSelf !== '' ? $withoutSelf : $resolved;
+            if ($picked !== '') {
+                $result['receiver_udc'] = $picked;
 
                 return $result;
             }
@@ -673,22 +674,26 @@ function voucher_return_resolve_previous_sender_target(
 
         if ($previous_sender_udc !== '') {
             $filtered = voucher_filter_udcs_by_user_group_office($pdo, $previous_sender_udc, $targetOffice);
-            $filtered = voucher_udcs_excluding($filtered, $returner_udc);
-            if ($filtered !== '') {
-                $result['receiver_udc'] = $filtered;
-            }
+            $candidate = $filtered !== '' ? $filtered : $previous_sender_udc;
+            $withoutSelf = voucher_udcs_excluding($candidate, $returner_udc);
+            $result['receiver_udc'] = $withoutSelf !== '' ? $withoutSelf : $candidate;
         }
 
         return $result;
     }
 
     $resolveOffice = trim($logged_user_office);
-    $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination, $resolveOffice);
+    $historyActorUdc = voucher_return_previous_process_actor_udc($pdo, $process_history, $destination);
+    $receiver_udc = $historyActorUdc;
+    if ($receiver_udc === '') {
+        $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination, $resolveOffice);
+    }
     if ($receiver_udc === '') {
         $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $destination, '');
     }
     if ($receiver_udc === '' && $previous_sender_udc !== '') {
-        $receiver_udc = voucher_udcs_excluding($previous_sender_udc, $returner_udc);
+        $withoutSelf = voucher_udcs_excluding($previous_sender_udc, $returner_udc);
+        $receiver_udc = $withoutSelf !== '' ? $withoutSelf : $previous_sender_udc;
     }
 
     $receiverOffice = voucher_tracking_lookup_office_by_udc($pdo, $receiver_udc);
@@ -702,6 +707,48 @@ function voucher_return_resolve_previous_sender_target(
     $result['receiver_udc'] = $receiver_udc;
 
     return $result;
+}
+
+/**
+ * Most recent history actor for a previous-process unit (may be the returner).
+ */
+function voucher_return_previous_process_actor_udc(
+    object $pdo,
+    string $process_history,
+    string $destination
+): string {
+    $destination = trim($destination);
+    if ($destination === '' || !function_exists('voucher_tracking_parse_process_history_lines')) {
+        return '';
+    }
+
+    $destinationKey = strtolower($destination);
+    $lines = voucher_tracking_parse_process_history_lines($process_history);
+    foreach (array_reverse($lines) as $line) {
+        $kind = function_exists('voucher_tracking_action_kind')
+            ? voucher_tracking_action_kind((string) ($line['action'] ?? ''))
+            : '';
+        if (!in_array($kind, ['receive', 'process', 'forward', 'encode'], true)) {
+            continue;
+        }
+        $section = trim((string) ($line['section'] ?? ''));
+        $sectionKey = strtolower($section);
+        $matches = $sectionKey !== '' && (
+            $sectionKey === $destinationKey
+            || str_contains($sectionKey, $destinationKey)
+            || str_contains($destinationKey, $sectionKey)
+        );
+        if (!$matches) {
+            continue;
+        }
+        $user = voucher_tracking_lookup_user_by_display_name($pdo, (string) ($line['name'] ?? ''));
+        $udc = trim((string) (($user['udc'] ?? '')));
+        if ($udc !== '') {
+            return $udc;
+        }
+    }
+
+    return '';
 }
 
 /**

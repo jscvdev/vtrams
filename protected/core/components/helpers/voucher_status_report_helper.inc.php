@@ -256,16 +256,11 @@ function voucher_status_report_warm_archived_cache(PDO $pdo): void
 
 function voucher_status_report_is_returned(array $row): bool
 {
-    if (voucher_tracking_is_returned_active_status((string) ($row['active_status'] ?? ''))) {
+    if (voucher_tracking_parse_returned_by((string) ($row['voucher_status'] ?? '')) !== '') {
         return true;
     }
 
-    // Back in workflow (e.g. returner received again) — not currently returned.
-    if (voucher_tracking_normalize_active_status((string) ($row['active_status'] ?? '')) === 'yes') {
-        return false;
-    }
-
-    return voucher_tracking_parse_returned_by((string) ($row['voucher_status'] ?? '')) !== '';
+    return voucher_tracking_is_returned_active_status((string) ($row['active_status'] ?? ''));
 }
 
 /** Whether a voucher_tracking row belongs on the transmitted status report. */
@@ -321,7 +316,7 @@ function voucher_status_report_returned_sql(string $alias = 'vt'): string
 {
     $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'vt';
 
-    return "(LOWER(TRIM({$alias}.active_status)) = 'returned' OR (LOWER(TRIM({$alias}.active_status)) <> 'yes' AND {$alias}.voucher_status LIKE 'Returned by:%'))";
+    return "(LOWER(TRIM({$alias}.active_status)) = 'returned' OR {$alias}.voucher_status LIKE 'Returned by:%')";
 }
 
 function voucher_status_report_like_contains(string $term): string
@@ -510,6 +505,7 @@ function voucher_status_report_classify_row(PDO $pdo, array $row, array $scope):
         'status' => trim((string) ($row['status'] ?? '')),
         'datetime_status' => trim((string) ($row['datetime_status'] ?? '')),
         'datetime_encoded' => trim((string) ($row['datetime_encoded'] ?? '')),
+        'encoded_by' => trim((string) ($row['encoded_by'] ?? '')),
         'remarks' => trim((string) ($row['remarks'] ?? '')),
         'process_history' => voucher_tracking_normalize_process_history((string) ($row['process_history'] ?? '')),
         'categories' => $categories,
@@ -1381,7 +1377,20 @@ function voucher_status_report_resolve_location(
             $locationUsersLocked = true;
         }
     } elseif (!empty($entry['is_returned'])) {
-        if ($currentSection === '') {
+        $encoderName = voucher_status_report_person_name((string) ($entry['encoded_by'] ?? ''));
+        if ($encoderName !== '') {
+            $currentSection = 'Encoder';
+            $encoderOffice = trim((string) ($entry['origin_office'] ?? $entry['office_from'] ?? ''));
+            if ($encoderOffice !== '') {
+                $currentOffice = $encoderOffice;
+            }
+            $currentUsers = [$encoderName . ' (Not yet received)'];
+            $currentUser = $currentUsers[0];
+            $forwardedTo = 'Encoder';
+            $forwardedOffice = $encoderOffice;
+            $forwardedUsers = [$encoderName];
+            $locationUsersLocked = true;
+        } elseif ($currentSection === '') {
             $currentSection = 'Returned';
         }
     }

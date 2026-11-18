@@ -460,7 +460,14 @@ $tx = db_transaction(
 
             );
 
-            update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetimeAction, $status);
+            $trackingRowForReceive = voucher_tracking_fetch_by_processing_no($pdo, (string) $processing_no) ?? [];
+            if (trim((string) ($trackingRowForReceive['process_history'] ?? '')) === '' && trim((string) $process_history) !== '') {
+                $trackingRowForReceive['process_history'] = $process_history;
+            }
+            $receiveActiveStatus = voucher_tracking_is_pending_return_reply($trackingRowForReceive)
+                ? 'returned'
+                : 'yes';
+            update_incoming_forwarded_voucher($pdo, $processing_no, $action, $datetimeAction, $status, $receiveActiveStatus);
 
             voucher_log_user_action(
 

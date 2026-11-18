@@ -4480,7 +4480,6 @@ if ($showCashierArchiveCol) {
                 if (!line) continue;
                 var parsed = parseProcessHistoryLine(line);
                 if (isPersonInvolved(parsed.user, parsed.action, encodedBy)) continue;
-                if (isPersonInvolved(parsed.user, parsed.action, currentUserName)) continue;
                 if (!parsed.section) continue;
                 var mapped = normalizeUnitLabel(parsed.section);
                 if (mapped && !seen[mapped]) {
@@ -4499,8 +4498,7 @@ if ($showCashierArchiveCol) {
             selectEl.innerHTML = '<option value="" disabled selected>Select previous process</option>';
             if (containerEl) containerEl.style.display = 'none';
 
-            // Same unit is allowed when another employee handled that history step.
-            // parseProcessHistory skips lines where the current user or encoder was the employee.
+            // Same unit is allowed, including the current processor's own prior step.
             var offices = parseProcessHistory(processHistory || '', encodedBy);
             offices = offices.filter(function(office) {
                 return isReturnPreviousUnitAllowed(office);

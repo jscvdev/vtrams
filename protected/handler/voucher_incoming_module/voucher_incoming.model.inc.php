@@ -204,15 +204,19 @@ function voucher_insert_into_receving(
     return $statement->rowCount() > 0;
 }
 
-function update_forwarded_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $status)
+function update_forwarded_voucher(object $pdo, string $processing_no, string $action, string $datetime_action, string $status, string $active_status = 'yes')
 {
-    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, status = :status WHERE processing_no = :processing_no";
+    if (!in_array($active_status, ['no', 'yes', 'returned'], true)) {
+        $active_status = 'yes';
+    }
+    $query = "UPDATE voucher_tracking SET voucher_status = :voucher_status, datetime_status = :datetime_status, status = :status, active_status = :active_status WHERE processing_no = :processing_no";
 
     $statement = $pdo->prepare($query);
 
     $statement->bindParam(":voucher_status",$action);
     $statement->bindParam(":datetime_status",$datetime_action);
     $statement->bindParam(":status",$status);
+    $statement->bindParam(":active_status",$active_status);
     $statement->bindParam(":processing_no",$processing_no);
 
     $statement->execute();
