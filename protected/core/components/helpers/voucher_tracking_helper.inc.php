@@ -3194,6 +3194,45 @@ function voucher_forward_encoder_default_target(
 }
 
 /**
+ * Default next hop for encoder / basic-user forwards from Routing utilities.
+ *
+ * @param list<string> $user_designations
+ * @return array{value: string, label: string}
+ */
+function voucher_forward_normal_route_option(
+    object $pdo,
+    string $voucher_type,
+    string $office,
+    array $user_designations
+): array {
+    if (voucher_user_has_designation($user_designations, 'Liaison Officer')) {
+        return ['value' => 'ICU', 'label' => 'ICU'];
+    }
+
+    $office = trim($office);
+    $voucher_type = trim($voucher_type);
+
+    if ($office !== '' && voucher_encoder_forwards_to_liaison_first($pdo, $office)) {
+        return ['value' => 'Liaison Officer', 'label' => 'Liaison Officer'];
+    }
+
+    if (
+        $voucher_type !== ''
+        && voucher_type_is_engp($voucher_type)
+        && !voucher_special_access_routes_to_accounting($pdo, $voucher_type)
+    ) {
+        return ['value' => 'TSD-ENGP', 'label' => 'TSD-ENGP'];
+    }
+
+    $target = voucher_forward_encoder_default_target($pdo, $office, $voucher_type);
+    if ($target !== '') {
+        return ['value' => $target, 'label' => $target];
+    }
+
+    return ['value' => '', 'label' => ''];
+}
+
+/**
  * @return array{receiver_udc: string, forwarded_to: string, temp_errors: array<string, string>}
  */
 function voucher_forward_receiver_udcs_for_designation(

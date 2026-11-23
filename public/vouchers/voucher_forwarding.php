@@ -174,6 +174,7 @@ $liaisonOnlyIcu = $isLiaisonOfficer && (
     )
 );
 $unit_forward_select_html = utilities_unit_forward_options_select_html($unit_forward_select_options, $liaisonOnlyIcu);
+$includeEncoderNormalRoute = $unit_forward_select_options === [] && !$liaisonOnlyIcu;
 $bulkForwardToken = (string) ($_SESSION['token'] ?? '');
 $showCashierArchiveCol = in_array("Cashiers Unit", $target, true) || in_array("Cashier", $target, true);
 $isCashierBulkPay = $showCashierArchiveCol;
@@ -1302,6 +1303,16 @@ if ($showCashierArchiveCol) {
                             $historyForParticipant .= "\n" . $forwarding_process_history;
                         }
                         $canRerouteReturnedRow = $needsReturnForwardRow;
+                        $normalForwardOption = $includeEncoderNormalRoute
+                            ? voucher_forward_normal_route_option(
+                                $pdo,
+                                (string) ($row['voucher_type'] ?? ''),
+                                $loggedUserOffice !== ''
+                                    ? $loggedUserOffice
+                                    : (string) ($row['encoded_from'] ?? ''),
+                                $target
+                            )
+                            : ['value' => '', 'label' => ''];
                     ?>
                         <tr>
                             <?php if ($isLiaisonOfficer && $showForwardCol) : ?>
@@ -1539,6 +1550,8 @@ if ($showCashierArchiveCol) {
                             <td data-label="return_forward_label" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="return_forward_designation" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['designation'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="return_forward_name" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['returned_by'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="normal_forward_value" class="hidden"><?php echo htmlspecialchars((string) ($normalForwardOption['value'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td data-label="normal_forward_label" class="hidden"><?php echo htmlspecialchars((string) ($normalForwardOption['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php
                     }
@@ -2226,7 +2239,59 @@ if ($showCashierArchiveCol) {
         });
     }
 
-    function applyReturnForwardOptionsForProcessUser(label, designation, returnedBy) {
+    function findForwardOption(value, text) {
+        if (!docToSelect) {
+            return null;
+        }
+        value = String(value || '').trim();
+        text = String(text || '').trim();
+        return Array.from(docToSelect.options).find(function(option) {
+            var optionValue = String(option.value || '').trim();
+            var optionText = String(option.textContent || '').trim();
+            if (optionValue === '') {
+                return false;
+            }
+            return (value !== '' && (
+                    optionValue.localeCompare(value, undefined, { sensitivity: 'accent' }) === 0
+                    || optionText.localeCompare(value, undefined, { sensitivity: 'accent' }) === 0
+                ))
+                || (text !== '' && (
+                    optionValue.localeCompare(text, undefined, { sensitivity: 'accent' }) === 0
+                    || optionText.localeCompare(text, undefined, { sensitivity: 'accent' }) === 0
+                ));
+        }) || null;
+    }
+
+    function upsertForwardOption(value, text, insertAfterPlaceholder) {
+        if (!docToSelect) {
+            return null;
+        }
+        value = String(value || '').trim();
+        text = String(text || value).trim();
+        if (!value) {
+            return null;
+        }
+        var option = findForwardOption(value, text);
+        if (option) {
+            if (text) {
+                option.textContent = text;
+            }
+            option.classList.remove('hidden');
+            option.style.display = '';
+            return option;
+        }
+        option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        if (insertAfterPlaceholder && docToSelect.options.length && String(docToSelect.options[0].value || '') === '') {
+            docToSelect.insertBefore(option, docToSelect.options[1] || null);
+        } else {
+            docToSelect.appendChild(option);
+        }
+        return option;
+    }
+
+    function applyReturnForwardOptionsForProcessUser(label, designation, returnedBy, normalValue, normalLabel) {
         restoreForwardDestinationOptions();
         if (!docToSelect) {
             return;
@@ -2236,31 +2301,17 @@ if ($showCashierArchiveCol) {
         if (!value) {
             return;
         }
-        var returnerOption = Array.from(docToSelect.options).find(function(option) {
-            var optionValue = String(option.value || '').trim();
-            var optionText = String(option.textContent || '').trim();
-            return optionValue !== '' && (
-                optionValue.localeCompare(value, undefined, { sensitivity: 'accent' }) === 0
-                || optionText.localeCompare(text, undefined, { sensitivity: 'accent' }) === 0
-            );
-        });
-        if (returnerOption) {
-            returnerOption.textContent = text;
-        } else {
-            returnerOption = document.createElement('option');
-            returnerOption.value = value;
-            returnerOption.textContent = text;
-            if (docToSelect.options.length && String(docToSelect.options[0].value || '') === '') {
-                docToSelect.insertBefore(returnerOption, docToSelect.options[1] || null);
-            } else {
-                docToSelect.insertBefore(returnerOption, docToSelect.firstChild);
-            }
+        var returnerOption = upsertForwardOption(value, text, true);
+        var normalRouteValue = String(normalValue || '').trim();
+        var normalRouteLabel = String(normalLabel || normalRouteValue).trim();
+        if (normalRouteValue && (!value || normalRouteValue.localeCompare(value, undefined, { sensitivity: 'accent' }) !== 0)) {
+            upsertForwardOption(normalRouteValue, normalRouteLabel, false);
         }
-        returnerOption.classList.remove('hidden');
-        returnerOption.style.display = '';
-        Array.from(docToSelect.options).forEach(function(option) {
-            option.selected = option === returnerOption;
-        });
+        if (returnerOption) {
+            Array.from(docToSelect.options).forEach(function(option) {
+                option.selected = option === returnerOption;
+            });
+        }
         docToSelect.required = true;
         docToSelect.disabled = false;
         docToSelect.dataset.needsReturnConfirm = '1';
@@ -2894,10 +2945,18 @@ $voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemt
                 var returnForwardLabel = (row.querySelector('[data-label="return_forward_label"]')?.textContent || '').trim();
                 var returnForwardDesignation = (row.querySelector('[data-label="return_forward_designation"]')?.textContent || '').trim();
                 var returnForwardName = (row.querySelector('[data-label="return_forward_name"]')?.textContent || '').trim();
+                var normalForwardValue = (row.querySelector('[data-label="normal_forward_value"]')?.textContent || '').trim();
+                var normalForwardLabel = (row.querySelector('[data-label="normal_forward_label"]')?.textContent || '').trim();
                 if (docToForward) {
                     docToForward.required = true;
                     if (needsReturnForward && (returnForwardLabel || returnForwardDesignation)) {
-                        applyReturnForwardOptionsForProcessUser(returnForwardLabel, returnForwardDesignation, returnForwardName);
+                        applyReturnForwardOptionsForProcessUser(
+                            returnForwardLabel,
+                            returnForwardDesignation,
+                            returnForwardName,
+                            normalForwardValue,
+                            normalForwardLabel
+                        );
                     } else if (isLiaisonOfficer) {
                         docToForward.value = 'ICU';
                     } else {
