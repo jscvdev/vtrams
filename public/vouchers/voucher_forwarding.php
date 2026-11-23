@@ -1295,12 +1295,6 @@ if ($showCashierArchiveCol) {
                             $target,
                             $loggedForwarderName
                         );
-                        // Only a true pending return-reply blocks Return; encoder re-forward
-                        // preselect can still apply after self-return/receive cycles.
-                        $blockReturnRow = voucher_tracking_is_pending_return_reply(
-                            $rowTracking,
-                            $loggedForwarderName
-                        );
                         $historyForParticipant = trim((string) ($rowTracking['process_history'] ?? ''));
                         if ($historyForParticipant === '') {
                             $historyForParticipant = $forwarding_process_history;
@@ -1499,9 +1493,7 @@ if ($showCashierArchiveCol) {
                             ?>
                             <td class="voucher-table-actions-cell" data-label="actions">
                                 <div class="voucher-table-actions-group">
-                                    <?php if (!$blockReturnRow) : ?>
                                     <button class="btn voucher-table-action-btn voucher-table-action-btn--return" name="btn-return" type="button" aria-label="Return" title="Return"><i class="ri-arrow-go-back-line" aria-hidden="true"></i><span>Return</span></button>
-                                    <?php endif; ?>
                                     <?php if ($showEditCol) : ?>
                                         <button class="btn voucher-table-action-btn pPop" id="openPopup" name="btn-edit_amount" type="button" aria-label="Edit" title="Edit"><i class="ri-edit-line" aria-hidden="true"></i><span>Edit</span></button>
                                     <?php endif; ?>
@@ -1543,7 +1535,6 @@ if ($showCashierArchiveCol) {
                             <td data-label="coa_subsection" class="hidden"><?php echo isset($row['coa_subsection']) ? htmlspecialchars((string)$row['coa_subsection'], ENT_QUOTES, 'UTF-8') : ''; ?></td>
                             <td data-label="charged_amount" class="hidden"><?php echo isset($row['charged_amount']) ? htmlspecialchars((string)$row['charged_amount']) : ''; ?></td>
                             <td data-label="needs_return_forward" class="hidden"><?php echo $needsReturnForwardRow ? '1' : '0'; ?></td>
-                            <td data-label="block_return" class="hidden"><?php echo $blockReturnRow ? '1' : '0'; ?></td>
                             <td data-label="return_forward_can_reroute" class="hidden"><?php echo $canRerouteReturnedRow ? '1' : '0'; ?></td>
                             <td data-label="return_forward_label" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td data-label="return_forward_designation" class="hidden"><?php echo htmlspecialchars((string) ($returnForwardTarget['designation'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
@@ -2851,11 +2842,6 @@ $voucherActionConfirmJsVer = is_file($voucherActionConfirmJsPath) ? (int) filemt
             setVoucherPortalViewMode(false);
 
             if (name === "btn-return") {
-                var blockReturnOnPending = (row.querySelector('[data-label="block_return"]')?.textContent || '').trim() === '1';
-                if (blockReturnOnPending) {
-                    showNotify('This returned voucher cannot be sent back with Return. Receive it if it is still incoming, then use Forward.', 'warning', 4200);
-                    return;
-                }
                 restoreForwardDestinationOptions();
                 document.getElementById("myForm_Forwarding").setAttribute('action', '../../protected/handler/voucher_return_module/voucher_return_handler.php');
                 document.getElementById("document_to").required = false;
