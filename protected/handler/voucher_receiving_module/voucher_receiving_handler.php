@@ -274,15 +274,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $trackingStatus = (string) ($tracking_row['voucher_status'] ?? '');
                     $trackingHistory = (string) ($tracking_row['process_history'] ?? '');
                     $loggedForwarderName = trim((string) ($_SESSION['logged_user_emp_name'] ?? ''));
-                    $needsReturnForward = voucher_tracking_is_pending_return_reply($tracking_row);
+                    $returnTarget = voucher_tracking_return_forward_target(
+                        $pdo,
+                        $trackingStatus,
+                        $trackingHistory,
+                        $loggedForwarderName
+                    );
+                    $needsReturnForward = voucher_tracking_should_apply_return_forward_target(
+                        $tracking_row,
+                        $returnTarget,
+                        voucher_logged_user_designations(),
+                        $loggedForwarderName
+                    );
                     $reroutedReturnedVoucher = false;
                     if ($needsReturnForward) {
-                        $returnTarget = voucher_tracking_return_forward_target(
-                            $pdo,
-                            $trackingStatus,
-                            $trackingHistory,
-                            $loggedForwarderName
-                        );
                         $selectedIsReturner = voucher_forward_destination_matches_return_target(
                             (string) $document_to,
                             $returnTarget

@@ -1289,7 +1289,12 @@ if ($showCashierArchiveCol) {
                             (string) ($rowTracking['process_history'] ?? $rawForwardingHistory),
                             $loggedForwarderName
                         );
-                        $needsReturnForwardRow = voucher_tracking_is_pending_return_reply($rowTracking);
+                        $needsReturnForwardRow = voucher_tracking_should_apply_return_forward_target(
+                            $rowTracking,
+                            $returnForwardTarget,
+                            $target,
+                            $loggedForwarderName
+                        );
                         $historyForParticipant = trim((string) ($rowTracking['process_history'] ?? ''));
                         if ($historyForParticipant === '') {
                             $historyForParticipant = $forwarding_process_history;

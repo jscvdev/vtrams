@@ -681,6 +681,24 @@ function voucher_tracking_resolve_returned_by(?string $voucher_status, string $p
 }
 
 /**
+ * True when a history return line is from a processing unit (Budget/Accounting/etc.).
+ *
+ * @param array{action?: string, name?: string, section?: string, office?: string} $line
+ */
+function voucher_tracking_history_line_is_processing_unit_return(array $line): bool
+{
+    $section = trim((string) ($line['section'] ?? ''));
+    if ($section === '') {
+        return false;
+    }
+
+    $normalized = voucher_tracking_normalize_section_label($section);
+    $candidates = array_values(array_filter([$normalized, $section], static fn(string $v): bool => $v !== ''));
+
+    return $candidates !== [] && voucher_tracking_user_has_workflow_process_role($candidates);
+}
+
+/**
  * Resolve who returned the voucher for encoder re-forward routing.
  * Skips encoder self-recalls (e.g. Sent queue) and uses the latest processing-unit return.
  */
@@ -691,12 +709,8 @@ function voucher_tracking_resolve_returned_by_for_encoder_reforward(
 ): string {
     $encoder = trim((string) ($encoder_name ?? ($_SESSION['logged_user_emp_name'] ?? '')));
 
-    $fromStatus = voucher_tracking_parse_returned_by($tracking_voucher_status);
-    if ($fromStatus !== '' && !voucher_tracking_is_self_return('Returned by: ' . $fromStatus, $encoder)) {
-        return $fromStatus;
-    }
-
     $lines = voucher_tracking_parse_process_history_lines($process_history);
+    $fallback = '';
     for ($i = count($lines) - 1; $i >= 0; $i--) {
         $line = $lines[$i];
         if (stripos((string) ($line['action'] ?? ''), 'Returned by') === false) {
@@ -709,11 +723,83 @@ function voucher_tracking_resolve_returned_by_for_encoder_reforward(
         if ($encoder !== '' && strcasecmp($name, $encoder) === 0) {
             continue;
         }
+        if (voucher_tracking_history_line_is_processing_unit_return($line)) {
+            return $name;
+        }
+        if ($fallback === '') {
+            $fallback = $name;
+        }
+    }
 
-        return $name;
+    if ($fallback !== '') {
+        return $fallback;
+    }
+
+    $fromStatus = voucher_tracking_parse_returned_by($tracking_voucher_status);
+    if ($fromStatus !== '' && !voucher_tracking_is_self_return('Returned by: ' . $fromStatus, $encoder)) {
+        return $fromStatus;
     }
 
     return '';
+}
+
+/**
+ * Whether Forward To should default to the return-forward target.
+ * Pending return replies always qualify. Non-process users (encoders, etc.) also keep
+ * the latest processor returner after self-return/receive cycles clear the pending flag.
+ *
+ * @param array{designation?: string, label?: string, returned_by?: string, udc?: string, office?: string} $return_target
+ * @param list<string> $logged_user_designations
+ */
+function voucher_tracking_should_apply_return_forward_target(
+    ?array $tracking_row,
+    array $return_target,
+    array $logged_user_designations,
+    ?string $logged_user_name = null
+): bool {
+    if (voucher_tracking_is_pending_return_reply($tracking_row, $logged_user_name)) {
+        return true;
+    }
+
+    if (voucher_tracking_user_has_workflow_process_role($logged_user_designations)) {
+        return false;
+    }
+
+    $returnedBy = trim((string) ($return_target['returned_by'] ?? ''));
+    if ($returnedBy === '') {
+        return false;
+    }
+
+    $logged = trim((string) ($logged_user_name ?? ($_SESSION['logged_user_emp_name'] ?? '')));
+    if ($logged !== '' && strcasecmp($returnedBy, $logged) === 0) {
+        return false;
+    }
+
+    $designation = trim((string) ($return_target['designation'] ?? ''));
+    if ($designation !== '' && voucher_tracking_user_has_workflow_process_role([$designation])) {
+        return true;
+    }
+
+    $history = trim((string) (($tracking_row ?? [])['process_history'] ?? ''));
+    if ($history === '') {
+        return false;
+    }
+
+    $lines = voucher_tracking_parse_process_history_lines($history);
+    for ($i = count($lines) - 1; $i >= 0; $i--) {
+        $line = $lines[$i];
+        if (stripos((string) ($line['action'] ?? ''), 'Returned by') === false) {
+            continue;
+        }
+        $name = trim((string) ($line['name'] ?? ''));
+        if ($name === '' || strcasecmp($name, $returnedBy) !== 0) {
+            continue;
+        }
+
+        return voucher_tracking_history_line_is_processing_unit_return($line);
+    }
+
+    return false;
 }
 
 /** Office recorded on the most recent return line for a specific returner. */
