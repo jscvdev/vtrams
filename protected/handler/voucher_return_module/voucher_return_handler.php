@@ -114,32 +114,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $return_previous_validation_error = '';
+        $encoderTarget = ['receiver_udc' => '', 'office_to' => ''];
+        $isEncoderReturn = !empty($return_destination) && $return_destination === 'encoder';
 
-        if (!empty($return_destination) && $return_destination === 'encoder') {
+        if ($isEncoderReturn) {
             // Route to the encoder Incoming queue so they must receive the returned voucher.
             vouchers_ensure_ors_no_column($pdo);
             vouchers_ensure_id_auto_increment($pdo);
 
-            // Route back to the encoder's unit; keep the original encoded_from.
-            $encoder_destination = trim((string) $encoded_from);
-            $office_to = $encoder_destination;
-            $penro_office = $logged_user_office;
-            $receiver_udc = '';
-            if (!empty($encoded_by)) {
-                $enc_stmt = $pdo->prepare(
-                    "SELECT udc FROM user_group
-                     WHERE TRIM(CONCAT(COALESCE(emp_fn,''), ' ', COALESCE(emp_mi,''), ' ', COALESCE(emp_ln,''))) = :encoded_by
-                     LIMIT 1"
-                );
-                $enc_stmt->bindParam(':encoded_by', $encoded_by);
-                $enc_stmt->execute();
-                $enc_row = $enc_stmt->fetch(PDO::FETCH_ASSOC);
-                if ($enc_row && !empty($enc_row['udc'])) {
-                    $receiver_udc = trim((string) $enc_row['udc']);
-                }
+            $encoderTarget = voucher_return_resolve_encoder_target(
+                $pdo,
+                (string) $encoded_by,
+                (string) $encoded_from,
+                $logged_user_office
+            );
+            if ($encoderTarget['office_to'] !== '') {
+                $office_to = $encoderTarget['office_to'];
             }
-            if ($receiver_udc === '' && $encoder_destination !== '') {
-                $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $encoder_destination, $penro_office);
+            if ($encoderTarget['receiver_udc'] !== '') {
+                $receiver_udc = $encoderTarget['receiver_udc'];
             }
         } elseif (!empty($return_destination) && $return_destination === 'previous_sender') {
             $destination_designation = trim((string) (
@@ -280,7 +273,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         $office_from = $returnHop['office_from'];
                         $office_to = $returnHop['office_to'];
-                        $isEncoderReturn = !empty($return_destination) && $return_destination === 'encoder';
+                        if ($isEncoderReturn) {
+                            $encoderOffice = trim((string) ($encoderTarget['office_to'] !== ''
+                                ? $encoderTarget['office_to']
+                                : $encoded_from));
+                            if (
+                                $encoderOffice !== ''
+                                && (
+                                    $office_to === ''
+                                    || (
+                                        $logged_user_office !== ''
+                                        && voucher_tracking_offices_match($office_to, $logged_user_office)
+                                        && !voucher_tracking_offices_match($encoderOffice, $logged_user_office)
+                                    )
+                                )
+                            ) {
+                                $office_to = $encoderOffice;
+                            }
+                        }
 
                         if ($isEncoderReturn) {
                             $retained = voucher_return_encoder_retention_values($pdo, $processing_no, $return_source, [

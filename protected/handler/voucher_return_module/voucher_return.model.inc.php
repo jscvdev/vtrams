@@ -580,6 +580,59 @@ function voucher_return_update_incoming_routing(
 }
 
 /**
+ * Incoming routing for return-to-encoder: encoder office and UDC, never the returner's office.
+ *
+ * Incoming queues filter receiver_udc AND office_to = logged office, so a cross-office
+ * return that leaves office_to as the returner is invisible to the encoder.
+ *
+ * @return array{receiver_udc: string, office_to: string}
+ */
+function voucher_return_resolve_encoder_target(
+    object $pdo,
+    string $encoded_by,
+    string $encoded_from,
+    string $returner_office
+): array {
+    if (!function_exists('voucher_tracking_lookup_user_by_display_name')) {
+        require_once __DIR__ . '/../../core/components/helpers/voucher_tracking_helper.inc.php';
+    }
+
+    $encoded_by = trim($encoded_by);
+    $encoded_from = trim($encoded_from);
+    $returner_office = trim($returner_office);
+
+    $receiver_udc = '';
+    $encoder_office = '';
+    if ($encoded_by !== '') {
+        $user = voucher_tracking_lookup_user_by_display_name($pdo, $encoded_by);
+        if ($user !== null) {
+            $receiver_udc = trim((string) ($user['udc'] ?? ''));
+            $encoder_office = trim((string) ($user['office'] ?? ''));
+        }
+    }
+
+    $office_to = voucher_pick_field($encoder_office, $encoded_from);
+    if (
+        $returner_office !== ''
+        && $encoded_from !== ''
+        && function_exists('voucher_tracking_offices_match')
+        && voucher_tracking_offices_match($office_to, $returner_office)
+        && !voucher_tracking_offices_match($encoded_from, $returner_office)
+    ) {
+        $office_to = $encoded_from;
+    }
+
+    if ($receiver_udc === '' && $office_to !== '') {
+        $receiver_udc = voucher_return_resolve_receiver_udc($pdo, $office_to, $office_to);
+    }
+
+    return [
+        'receiver_udc' => $receiver_udc,
+        'office_to' => $office_to,
+    ];
+}
+
+/**
  * Point office_from/sender at the returner and office_to/receiver at the return target.
  *
  * @return array{sender_udc: string, office_from: string, office_to: string}
@@ -597,7 +650,14 @@ function voucher_return_apply_returner_hop(
     }
     $targetOffice = voucher_tracking_lookup_office_by_udc($pdo, $receiver_udc);
     if ($targetOffice !== '') {
-        $office_to = $targetOffice;
+        $collapsesToReturner = $returnerOffice !== ''
+            && function_exists('voucher_tracking_offices_match')
+            && voucher_tracking_offices_match($targetOffice, $returnerOffice)
+            && $office_to !== ''
+            && !voucher_tracking_offices_match($office_to, $returnerOffice);
+        if (!$collapsesToReturner) {
+            $office_to = $targetOffice;
+        }
     }
 
     return [
